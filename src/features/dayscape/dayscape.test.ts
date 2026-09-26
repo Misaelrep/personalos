@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { tuesday } from '../../data/routines/tuesday'
+import { routineForDate } from '../../data/routine'
+import { block as defineBlock } from '../../data/routine/define'
+import { tuesday } from '../../data/routine/tuesday'
 import { buildDayView } from '../../domain/schedule'
 import { formatClock, toMinutes } from '../../domain/time'
-import type { DayRoutine, DayState } from '../../domain/types'
+import type { BlockCategory, DayRoutine, DayState } from '../../domain/types'
 import { dayReducer, emptyDay } from '../../state/dayReducer'
-import { routineFor, routines } from '../../data/routines'
 import { CONTINUE_AT, EXIT, EXIT_STAGES, NAME, NAME_S, cleanAt, continueAt, exploreMorphs, nameAt, nameOpacity, releaseAtMs } from './choreography'
 import { hitTest, layoutDayscape, placeNames, selectionPoses, targetOf, type Measure } from './layout'
 import { buildDayscape, getVisualRole, stateLabel } from './model'
@@ -26,50 +27,58 @@ describe('DAYSCAPE — model', () => {
     const m = scape('10:14')
     expect(m.activities.map((a) => a.id)).toEqual(tuesday.blocks.map((b) => b.id))
     expect(m.activities).toHaveLength(18)
-    expect(m.current.id).toBe('paginas-web')
+    expect(m.current.id).toBe('tue-web-1000')
   })
 
-  it('derives the visual role of every block from its kind; explicit roles win', () => {
+  it('derives the visual role of every block from its category; explicit roles win', () => {
     const view = buildDayView(tuesday, emptyDay('2026-09-22'), toMinutes('10:14'))
     const role = Object.fromEntries(view.timeline.map((b) => [b.id, getVisualRole(b, tuesday.meditation?.blockId)]))
-    expect(role).toMatchObject({ merkaba: 'medium', 'breathwork-am': 'micro', hermana: 'space', 'paginas-web': 'major', dormir: 'endpoint' })
-    const routine: DayRoutine = { ...tuesday, blocks: tuesday.blocks.map((b) => (b.id === 'velocity' ? { ...b, visualRole: 'major' } : b)) }
-    expect(byId(scape('10:14', undefined, routine), 'velocity').role).toBe('major')
+    expect(role).toMatchObject({
+      'tue-merkaba-0600': 'medium',
+      'tue-breathwork-0825': 'micro',
+      'tue-transfer-0630': 'space',
+      'tue-meal-1220': 'space',
+      'tue-web-1000': 'major',
+      'tue-gym-1600': 'major',
+      'tue-sleep-2200': 'endpoint',
+    })
+    const routine: DayRoutine = { ...tuesday, blocks: tuesday.blocks.map((b) => (b.id === 'tue-velocity-1200' ? { ...b, dayscapeRole: 'major' } : b)) }
+    expect(byId(scape('10:14', undefined, routine), 'tue-velocity-1200').role).toBe('major')
   })
 
   it('time is depth: planes by distance, the past going back sooner than the future', () => {
     const m = scape('10:14')
-    expect(byId(m, 'lectura').plane).toBe('fg')
-    expect(byId(m, 'velocity').plane).toBe('fg')
-    expect(byId(m, 'escritura').plane).toBe('mid')
-    expect(byId(m, 'wellness-1').plane).toBe('mid')
-    expect(byId(m, 'merkaba').plane).toBe('bg')
-    expect(byId(m, 'dormir').plane).toBe('bg')
-    expect(byId(m, 'ingles').z).toBeGreaterThan(byId(m, 'lectura').z)
+    expect(byId(m, 'tue-reading-0930').plane).toBe('fg')
+    expect(byId(m, 'tue-velocity-1200').plane).toBe('fg')
+    expect(byId(m, 'tue-writing-0800').plane).toBe('mid')
+    expect(byId(m, 'tue-wellness-1400').plane).toBe('mid')
+    expect(byId(m, 'tue-merkaba-0600').plane).toBe('bg')
+    expect(byId(m, 'tue-sleep-2200').plane).toBe('bg')
+    expect(byId(m, 'tue-english-0835').z).toBeGreaterThan(byId(m, 'tue-reading-0930').z)
   })
 
   it('field labels are short and never two alike', () => {
     const m = scape('10:14')
-    expect(byId(m, 'hermana').label).toBe('Llevar hermana')
-    expect(byId(m, 'breathwork-am').label).toBe('Breathwork')
-    expect(byId(m, 'breathwork-pm').label).toBe('Breathwork relajante')
-    expect(byId(m, 'wellness-1').label).toBe('Marca Wellness')
-    expect(byId(m, 'wellness-1').title).toBe('Nueva marca de bienestar')
+    expect(byId(m, 'tue-transfer-0630').label).toBe('Llevar hermana')
+    expect(byId(m, 'tue-breathwork-0825').label).toBe('Breathwork')
+    expect(byId(m, 'tue-breathwork-relax-2145').label).toBe('Breathwork relajante')
+    expect(byId(m, 'tue-wellness-1400').label).toBe('Marca Wellness')
+    expect(byId(m, 'tue-wellness-1400').title).toBe('Nueva Marca Wellness')
   })
 
   it('passed time is never assumed completed; real records show, independent of time', () => {
-    expect(stateLabel(byId(scape('10:14'), 'ingles'))).toBe('Sin registrar')
-    expect(stateLabel(byId(scape('10:14'), 'wellness-1'))).toBe('Próximo')
+    expect(stateLabel(byId(scape('10:14'), 'tue-english-0835'))).toBe('Sin registrar')
+    expect(stateLabel(byId(scape('10:14'), 'tue-wellness-1400'))).toBe('Próximo')
     let s = emptyDay('2026-09-22')
-    s = dayReducer(s, { type: 'complete', blockId: 'escritura' })
-    s = dayReducer(s, { type: 'close', blockId: 'paginas-web', outcome: 'parcial', note: 'Faltan pruebas' })
-    s = dayReducer(s, { type: 'skip', blockId: 'ingles' })
+    s = dayReducer(s, { type: 'complete', blockId: 'tue-writing-0800' })
+    s = dayReducer(s, { type: 'close', blockId: 'tue-web-1000', outcome: 'parcial', note: 'Faltan pruebas' })
+    s = dayReducer(s, { type: 'skip', blockId: 'tue-english-0835' })
     const before = JSON.stringify(s)
     const m = scape('15:00', s)
-    expect(stateLabel(byId(m, 'escritura'))).toBe('Completado')
-    expect(stateLabel(byId(m, 'paginas-web'))).toBe('Parcial')
-    expect(stateLabel(byId(m, 'ingles'))).toBe('Omitido')
-    expect(byId(m, 'paginas-web').side).toBe('past')
+    expect(stateLabel(byId(m, 'tue-writing-0800'))).toBe('Completado')
+    expect(stateLabel(byId(m, 'tue-web-1000'))).toBe('Parcial')
+    expect(stateLabel(byId(m, 'tue-english-0835'))).toBe('Omitido')
+    expect(byId(m, 'tue-web-1000').side).toBe('past')
     expect(JSON.stringify(s)).toBe(before)
   })
 
@@ -93,12 +102,12 @@ describe('DAYSCAPE — progressive reveal', () => {
   const waveOf = (id: string) => byId(m, id).wave
 
   it('the day forms in six waves, morning first', () => {
-    expect([waveOf('merkaba'), waveOf('hermana')]).toEqual([0, 0])
-    expect(['escritura', 'breathwork-am', 'substack'].map(waveOf)).toEqual([1, 1, 1])
-    expect(['ingles', 'pausa', 'lectura'].map(waveOf)).toEqual([2, 2, 2])
-    expect(['paginas-web', 'velocity', 'alimentacion'].map(waveOf)).toEqual([3, 3, 3])
-    expect(['wellness-1', 'gimnasio', 'comida-ducha'].map(waveOf)).toEqual([4, 4, 4])
-    expect(['wellness-2', 'cierre-digital', 'breathwork-pm', 'dormir'].map(waveOf)).toEqual([5, 5, 5, 5])
+    expect([waveOf('tue-merkaba-0600'), waveOf('tue-transfer-0630')]).toEqual([0, 0])
+    expect(['tue-writing-0800', 'tue-breathwork-0825', 'tue-substack-0830'].map(waveOf)).toEqual([1, 1, 1])
+    expect(['tue-english-0835', 'tue-pause-0915', 'tue-reading-0930'].map(waveOf)).toEqual([2, 2, 2])
+    expect(['tue-web-1000', 'tue-velocity-1200', 'tue-meal-1220'].map(waveOf)).toEqual([3, 3, 3])
+    expect(['tue-wellness-1400', 'tue-gym-1600', 'tue-shower-1800'].map(waveOf)).toEqual([4, 4, 4])
+    expect(['tue-wellness-1900', 'tue-screens-off-2050', 'tue-breathwork-relax-2145', 'tue-sleep-2200'].map(waveOf)).toEqual([5, 5, 5, 5])
   })
 
   it('each wave stays inside its window and never forms in lockstep', () => {
@@ -112,7 +121,7 @@ describe('DAYSCAPE — progressive reveal', () => {
   })
 
   it('each name is readable about 1.5–2 s, then dissolves in place', () => {
-    const lectura = byId(m, 'lectura')
+    const lectura = byId(m, 'tue-reading-0930')
     const readable = (a: typeof lectura) => {
       let s = 0
       for (let t = 0; t < 20; t += 0.01) if (nameOpacity(a, t) >= 0.5) s += 0.01
@@ -128,11 +137,11 @@ describe('DAYSCAPE — progressive reveal', () => {
     let most = 0
     for (let t = 0; t < 16; t += 0.05) most = Math.max(most, m.activities.filter((a) => nameOpacity(a, t) >= 0.5).length)
     expect(most).toBeLessThanOrEqual(7)
-    const first = byId(m, 'merkaba')
-    const last = byId(m, 'dormir')
+    const first = byId(m, 'tue-merkaba-0600')
+    const last = byId(m, 'tue-sleep-2200')
     expect(nameOpacity(first, nameAt(last))).toBe(0)
-    const secondWave = byId(m, 'escritura')
-    const fourthWave = byId(m, 'paginas-web')
+    const secondWave = byId(m, 'tue-writing-0800')
+    const fourthWave = byId(m, 'tue-web-1000')
     expect(nameAt(secondWave) + NAME_S).toBeGreaterThan(fourthWave.revealAt - 1.6)
   })
 
@@ -150,9 +159,9 @@ describe('DAYSCAPE — progressive reveal', () => {
 
   it('leaving: far first, then middle, then near; the present last', () => {
     const at = (id: string) => releaseAtMs(byId(m, id))
-    expect(at('merkaba')).toBeLessThan(at('escritura') + 300)
+    expect(at('tue-merkaba-0600')).toBeLessThan(at('tue-writing-0800') + 300)
     expect(Math.max(...m.activities.filter((a) => a.plane === 'bg').map(releaseAtMs))).toBeLessThan(EXIT.release.fg + EXIT.jitter)
-    expect(at('paginas-web')).toBe(EXIT.nowBreak)
+    expect(at('tue-web-1000')).toBe(EXIT.nowBreak)
     expect(Math.max(...m.activities.filter((a) => a.side !== 'current').map(releaseAtMs))).toBeLessThan(EXIT.nowBreak)
     expect(EXIT.gather - EXIT.calm).toBeGreaterThanOrEqual(2000)
     expect(EXIT.gather - EXIT.calm).toBeLessThanOrEqual(3200)
@@ -192,8 +201,8 @@ describe('DAYSCAPE — composition', () => {
       expect(p.opacity).toBeLessThanOrEqual(0.84)
       if (p.a.plane !== 'fg') expect(p.blur).toBeGreaterThanOrEqual(0.75)
     }
-    const poses = selectionPoses(phone, 'ingles')
-    expect(poses.get('paginas-web')!.opacity).toBeGreaterThanOrEqual(0.7)
+    const poses = selectionPoses(phone, 'tue-english-0835')
+    expect(poses.get('tue-web-1000')!.opacity).toBeGreaterThanOrEqual(0.7)
   })
 
   it('three planes: far is smaller, softer and higher', () => {
@@ -230,8 +239,8 @@ describe('DAYSCAPE — composition', () => {
 
   it('a tap goes to the nearest activity whose target contains it, or to none', () => {
     const items = phone.items.map((p) => ({ id: p.a.id, x: p.x, y: p.y, hit: p.hit }))
-    const ingles = phone.items.find((p) => p.a.id === 'ingles')!
-    expect(hitTest(items, ingles.x + 14, ingles.y - 12)).toBe('ingles')
+    const ingles = phone.items.find((p) => p.a.id === 'tue-english-0835')!
+    expect(hitTest(items, ingles.x + 14, ingles.y - 12)).toBe('tue-english-0835')
     expect(hitTest(items, 200, 790)).toBeNull()
   })
 
@@ -253,33 +262,27 @@ describe('DAYSCAPE — composition', () => {
   })
 
   it('inspection: the activity comes forward, the rest steps back; neighbours in time stay more present', () => {
-    const poses = selectionPoses(phone, 'ingles')
-    const ingles = phone.items.find((p) => p.a.id === 'ingles')!
+    const poses = selectionPoses(phone, 'tue-english-0835')
+    const ingles = phone.items.find((p) => p.a.id === 'tue-english-0835')!
     const target = targetOf(phone, ingles)
-    const own = poses.get('ingles')!
+    const own = poses.get('tue-english-0835')!
     expect(ingles.x + own.dx).toBeCloseTo(target.x)
     expect(own.grow).toBeGreaterThan(1.5)
     expect(own.opacity).toBe(1)
     expect(own.blur).toBe(0)
-    const pausa = poses.get('pausa')!
-    const velocity = poses.get('velocity')!
-    expect(pausa.opacity / phone.items.find((p) => p.a.id === 'pausa')!.opacity).toBeGreaterThan(
-      velocity.opacity / phone.items.find((p) => p.a.id === 'velocity')!.opacity,
+    const pausa = poses.get('tue-pause-0915')!
+    const velocity = poses.get('tue-velocity-1200')!
+    expect(pausa.opacity / phone.items.find((p) => p.a.id === 'tue-pause-0915')!.opacity).toBeGreaterThan(
+      velocity.opacity / phone.items.find((p) => p.a.id === 'tue-velocity-1200')!.opacity,
     )
-    const now = poses.get('paginas-web')!
+    const now = poses.get('tue-web-1000')!
     expect(now.opacity).toBeGreaterThan(0.5)
   })
 })
 
 describe('DAYSCAPE — any day', () => {
-  const block = (id: string, start: string, end: string | undefined, kind: DayRoutine['blocks'][number]['kind'] = 'practice') => ({
-    id,
-    start,
-    end,
-    title: `Actividad ${id}`,
-    kind,
-    energy: 'focus' as const,
-  })
+  const block = (id: string, start: string, end: string | undefined, category: BlockCategory = 'learning') =>
+    defineBlock(id, start, end, `Actividad ${id}`, category, 'focus')
   const day = (blocks: DayRoutine['blocks'], time: string) => {
     const routine: DayRoutine = { weekday: 3, dayName: 'Miércoles', theme: '', blocks }
     const now = toMinutes(time)
@@ -304,20 +307,8 @@ describe('DAYSCAPE — any day', () => {
     return l
   }
 
-  it('a registered day without blocks falls back to a routine instead of breaking', () => {
-    const wednesday = new Date(2026, 8, 23, 10, 14)
-    routines[3] = { ...tuesday, weekday: 3, blocks: [] }
-    try {
-      const { routine, isFallback } = routineFor(wednesday)
-      expect(isFallback).toBe(true)
-      expect(routine.blocks.length).toBeGreaterThan(0)
-    } finally {
-      delete routines[3]
-    }
-  })
-
   it('a single activity: AHORA alone, formed quickly, CONTINUAR soon after', () => {
-    const m = day([block('a', '10:00', '12:00', 'deep')], '10:14')
+    const m = day([block('a', '10:00', '12:00', 'deep_work')], '10:14')
     expect(m.activities).toHaveLength(1)
     expect(m.current.id).toBe('a')
     expect(m.current.revealAt).toBeLessThan(3)
@@ -340,7 +331,7 @@ describe('DAYSCAPE — any day', () => {
     const blocks = Array.from({ length: 30 }, (_, i) => {
       const s = 6 * 60 + i * 30
       const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
-      return block(`b${i}`, hhmm(s), hhmm(s + 25), i % 4 === 0 ? 'deep' : 'practice')
+      return block(`b${i}`, hhmm(s), hhmm(s + 25), i % 4 === 0 ? 'deep_work' : 'learning')
     })
     const m = day(blocks, '12:40')
     expect(m.activities.length).toBeGreaterThanOrEqual(30)
@@ -350,7 +341,51 @@ describe('DAYSCAPE — any day', () => {
 
   it('a transition happening now is AHORA too', () => {
     const m = scape('09:20')
-    expect(m.current.id).toBe('pausa')
+    expect(m.current.id).toBe('tue-pause-0915')
     sane(m, 390, 844)
+  })
+})
+
+describe('DAYSCAPE — the V3 week, from the same dataset', () => {
+  const DATES = ['2026-09-28', '2026-09-29', '2026-09-30', '2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04']
+  const weekScape = (date: string, time: string) => {
+    const now = toMinutes(time)
+    return buildDayscape(buildDayView(routineForDate(date).routine, emptyDay(date), now), now)
+  }
+
+  it('every day composes on screen without overlaps, phone to desktop', () => {
+    for (const date of DATES) {
+      const m = weekScape(date, '12:30')
+      expect(m.activities.map((a) => a.id).filter((id) => !id.startsWith('gap-'))).toEqual(
+        routineForDate(date).routine.blocks.map((b) => b.id),
+      )
+      for (const [w, h] of [[320, 568], [390, 844], [1440, 900]]) {
+        const l = layoutDayscape(m, w, h)
+        placeNames(l, measure, formatClock)
+        for (const p of l.items) {
+          expect(p.x - p.R).toBeGreaterThan(0)
+          expect(p.x + p.R).toBeLessThan(w)
+          expect(p.y - p.R).toBeGreaterThan(0)
+          expect(p.y + p.R).toBeLessThan(h)
+          for (const q of l.items) if (p !== q) expect(Math.hypot(p.x - q.x, p.y - q.y)).toBeGreaterThan((p.R + q.R) * 0.9)
+        }
+      }
+    }
+  })
+
+  it('Thursday is sparse: few objects, its open time drawn as space', () => {
+    const thu = weekScape('2026-10-01', '14:00')
+    const tue = weekScape('2026-09-29', '14:00')
+    expect(thu.activities.length).toBeLessThan(tue.activities.length * 0.6)
+    expect(thu.activities.filter((a) => a.category === 'free').every((a) => a.role === 'space')).toBe(true)
+    expect(thu.activities.filter((a) => a.role === 'major').map((a) => a.id)).toEqual(['thu-gym-1600'])
+  })
+
+  it('Sunday afternoon and evening are its deep mass', () => {
+    const sun = weekScape('2026-10-04', '17:30')
+    expect(sun.activities.filter((a) => a.role === 'major').map((a) => a.id)).toEqual([
+      'sun-gym-1030', 'sun-rotation-1300', 'sun-wellness-1700', 'sun-wellness-1930',
+    ])
+    expect(sun.current.id).toBe('sun-wellness-1700')
   })
 })

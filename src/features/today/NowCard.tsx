@@ -4,7 +4,7 @@ import { ActiveMatrix } from '../../components/dot/ActiveMatrix'
 import { Button } from '../../components/ui/Button'
 import { Label } from '../../components/ui/Label'
 import { StatusGlyph } from '../../components/ui/StatusGlyph'
-import { blockDescription, isPassive, resolutionLine } from '../../domain/labels'
+import { alternativeLine, blockDescription, isPassive, resolutionLine } from '../../domain/labels'
 import { formatClock, formatDuration, formatRange, minutesOfDay } from '../../domain/time'
 import type { ScheduledBlock } from '../../domain/types'
 import { fade, fadeGroup, morph, transition } from '../../motion/tokens'
@@ -43,7 +43,7 @@ export function NowCard({ onStartFocus, focusing = false }: NowCardProps) {
           </span>
         </div>
         <span className="tabular text-[14px] text-ink-2 sm:text-[15px]">
-          {block.kind === 'sleep' ? `hasta ${formatClock(block.endMin)}` : formatRange(block.startMin, block.endMin)}
+          {block.category === 'sleep' ? `hasta ${formatClock(block.endMin)}` : formatRange(block.startMin, block.endMin)}
         </span>
       </div>
 
@@ -66,6 +66,7 @@ export function NowCard({ onStartFocus, focusing = false }: NowCardProps) {
             {block.title}
           </h2>
           <p className="mt-3.5 text-[16px] text-ink-2 sm:text-[18px]">{blockDescription(block)}</p>
+          {block.secondaryOption && <p className="mt-2 text-[13px] text-ink-3">{alternativeLine(block)}</p>}
 
           <m.div
             animate={{ opacity: focusing ? 0 : 1 }}
@@ -136,7 +137,8 @@ function Body({ block, onStartFocus }: { block: ScheduledBlock; onStartFocus: (i
 
   if (isPassive(block)) return null
 
-  const deep = block.kind === 'deep'
+  // Only deep production opens Focus; everything else is simply completed or skipped.
+  const deep = block.focusEligible
 
   return (
     <m.div variants={fadeGroup(0.06)} initial="hidden" animate="visible">

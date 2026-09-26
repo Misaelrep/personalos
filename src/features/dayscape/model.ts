@@ -1,4 +1,4 @@
-import { kindLabel } from '../../domain/labels'
+import { alternativeLine, natureLabel } from '../../domain/labels'
 import type { DayView } from '../../domain/schedule'
 import type { EnergyState, ScheduledBlock } from '../../domain/types'
 import type { FormId } from './forms'
@@ -25,14 +25,16 @@ export interface Activity {
   /** Full name, for inspection. */
   title: string
   role: VisualRole
-  kind: ScheduledBlock['kind']
+  category: ScheduledBlock['category']
   energy: EnergyState
   startMin: number
   endMin: number
   side: TemporalSide
   execution: Execution
-  /** What the block is: "Trabajo profundo", "Práctica diaria"… */
-  kindLabel: string
+  /** What the block is: "Trabajo profundo", "Aprendizaje"… */
+  natureLabel: string
+  /** Inspection only: the block's secondary option, never a second object in the field. */
+  alternative?: string
   objective?: string
   /** Minutes between the block and now (0 for the present). */
   delta: number
@@ -59,14 +61,17 @@ export interface DayscapeModel {
 
 const SHORT_MINUTES = 10
 
-/** How a block is drawn. Explicit `visualRole` in the routine wins. */
+/** How a block is drawn: an explicit `dayscapeRole` in the routine wins, then its category. */
 export function getVisualRole(block: ScheduledBlock, meditationBlockId?: string): VisualRole {
-  if (block.visualRole) return block.visualRole
-  if (block.kind === 'sleep') return 'endpoint'
-  if (block.kind === 'transition' || block.synthetic) return 'space'
-  if (block.kind === 'deep' || block.kind === 'body') return 'major'
-  if (block.kind === 'recovery') return 'medium'
-  if (block.kind === 'ritual') return block.id === meditationBlockId ? 'medium' : 'micro'
+  if (block.dayscapeRole) return block.dayscapeRole
+  if (block.category === 'sleep') return 'endpoint'
+  // Pauses, meals and open time are space between objects, not objects.
+  if (block.synthetic || block.category === 'transition' || block.category === 'free' || block.category === 'recovery') return 'space'
+  if (block.category === 'deep_work') return 'major'
+  // The gym is a mass of the day; a short walk is not.
+  if (block.category === 'body') return block.endMin - block.startMin >= 60 ? 'major' : 'medium'
+  if (block.category === 'creative_practice' && block.focusEligible) return 'major'
+  if (block.category === 'ritual') return block.id === meditationBlockId ? 'medium' : 'micro'
   return block.endMin - block.startMin <= SHORT_MINUTES ? 'micro' : 'medium'
 }
 
@@ -180,13 +185,14 @@ export function buildDayscape(view: DayView, now: number): DayscapeModel {
       label: labels[order],
       title: b.title,
       role: getVisualRole(b, meditationId),
-      kind: b.kind,
+      category: b.category,
       energy: b.energy,
       startMin: b.startMin,
       endMin: b.endMin,
       side,
       execution: getExecution(b),
-      kindLabel: kindLabel(b),
+      natureLabel: natureLabel(b),
+      alternative: alternativeLine(b),
       objective: b.objective,
       delta,
       f,

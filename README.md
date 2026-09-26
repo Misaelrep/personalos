@@ -1,6 +1,6 @@
-# PERSONAL OS — Iteración 1: HOY + FOCUS
+# PERSONAL OS — HOY + FOCUS + DAYSCAPE · Rutina maestra V3
 
-Aplicación web de rutina semanal. Esta iteración contiene **solo** la pantalla HOY y el modo FOCUS, con el martes como dataset real.
+Aplicación web de rutina semanal. Contiene la entrada diaria (DAYSCAPE), la pantalla HOY y el modo FOCUS, alimentados por **una sola fuente de verdad**: la RUTINA MAESTRA V3, de lunes a domingo (`src/data/routine/`).
 
 ```bash
 npm install
@@ -13,12 +13,28 @@ npm run build      # typecheck + build de producción
 
 | Parámetro | Efecto |
 | --- | --- |
-| `?t=10:14` | El reloj arranca a esa hora y sigue corriendo desde ahí. |
+| `?t=10:14` | El reloj arranca a esa hora (de hoy) y sigue corriendo desde ahí. |
+| `?date=2026-09-28` | El reloj arranca en esa fecha, a la hora actual. Combinado con `?t=` fija el momento exacto: `?date=2026-09-28&t=10:30`. Fechas imposibles (`2026-02-31`) se ignoran. Sin parámetros, el reloj es el real: producción no cambia. |
 | `?motion=completo` · `sutil` · `reducido` | Fuerza un nivel de movimiento (por defecto: `reducido` si el sistema pide `prefers-reduced-motion`, si no `completo`). |
 | `?entry=full` · `micro` · `none` | Fuerza la entrada diaria completa, la micro entrada o ninguna, ignorando las reglas de sesión (no guarda nada). |
 | `?field=collapse` · `fast` · `hold` | Revisión de DAYSCAPE: `collapse` acorta el mensaje, forma el día de golpe (sin nombres) y sale solo tras 1,2 s para revisar FORMAS → FRAGMENTOS → PARTÍCULAS → CONVERGENCIA → HOY a velocidad normal; `fast` acelera toda la entrada; `hold` impide la salida automática de `collapse`. Se pueden combinar (`fast,collapse`). Sin el parámetro, nada cambia: DAYSCAPE solo sale con CONTINUAR. |
 
-Momentos útiles: `06:10` (meditación activa), `07:10` (meditación pendiente → ¿mover a las 9:30?), `08:29` (transición entre bloques), `10:14` (Páginas Web, bloque profundo con objetivo), `12:05` (recuperación), `14:10` (bloque profundo sin objetivo), `17:00` (cuerpo), `19:30` (segundo pico), `21:00` (cierre, atmósfera profunda), `04:00` (noche).
+Semana de referencia: lunes `2026-09-28` · martes `2026-09-29` · miércoles `2026-09-30` · jueves `2026-10-01` · viernes `2026-10-02` · sábado `2026-10-03` · domingo `2026-10-04`.
+
+Momentos útiles (añade `&entry=none` para ir directo a HOY):
+
+| URL | Qué se ve |
+| --- | --- |
+| `?date=2026-09-28&t=10:30` | Lunes · Nueva Marca Wellness (incluye AI Polaris) |
+| `?date=2026-09-29&t=10:14` | Martes · Páginas Web → Velocity → Alimentación / recuperación |
+| `?date=2026-09-29&t=07:10` | Martes · Merkaba pendiente → *¿Mover a las 09:30?* |
+| `?date=2026-09-30&t=14:30` | Miércoles · Páginas Web |
+| `?date=2026-10-01&t=14:00` | Jueves · Regeneración / libre (sin acciones) |
+| `?date=2026-10-02&t=08:30` | Viernes · Páginas Web |
+| `?date=2026-10-03&t=12:30` | Sábado · TouchDesigner, *Alternativa: Biotron* |
+| `?date=2026-10-03&t=13:35` | Sábado · Finanzas personales (15 min) |
+| `?date=2026-10-04&t=17:30` | Domingo · Nueva Marca Wellness (y `19:15` Descanso) |
+| `?date=2026-09-29&t=23:30` · `?date=2026-09-30&t=04:00` | La noche: Dormir sigue siendo AHORA a ambos lados de medianoche |
 
 El estado del día se guarda en `localStorage` por fecha (`personal-os:day:YYYY-MM-DD`), así una recarga no pierde lo marcado y cada día empieza limpio. Para reiniciar un día, borra esa clave.
 
@@ -41,11 +57,12 @@ ABRIR APP → MENSAJE → EL MENSAJE SE DISUELVE → DAYSCAPE (el día entero se
 
 Todo el día a la vez, alrededor del presente (arquitectura D aprobada: radial alrededor de AHORA + profundidad y parallax). No hay línea ni trayectoria: el tiempo es **profundidad y materia**.
 
-- **Mismos datos que HOY** (`buildDayView`): las 18 actividades del martes, transiciones incluidas (los huecos sintéticos no). Nada fijado al martes.
+- **Mismos datos que HOY** (`buildDayView` sobre la rutina de la fecha): todas las actividades del día, transiciones incluidas (los huecos sintéticos no). No hay lista propia de objetos: forma, tamaño y nombre salen de la hora, la categoría, `dayscapeRole`, el estado temporal y el de ejecución. Los días con menos bloques (jueves) se ven, a propósito, menos densos.
+- **Papel visual por categoría**: `deep_work` y gimnasio (cuerpo ≥ 60 min) → masa mayor; práctica creativa con Focus (TouchDesigner) → mayor; ritual → micro (la meditación del día, media); transición, recuperación, libre y huecos → espacio; dormir → extremo. Un `dayscapeRole` explícito en el bloque gana. La inspección de un bloque con `secondaryOption` añade, discreta, *Alternativa: …* (nunca un segundo objeto).
 - **Tres planos**: primer plano (hasta 1 h de pasado / ~2 h de futuro), plano medio y fondo; lo lejano es más pequeño, más difuso y está más alto. El pasado está erosionado (plata, suelta materia); el futuro, todavía formándose (hielo, incompleto). **AHORA** es el centro perceptivo: destaca por nitidez, materialidad, escala y estabilidad (no hace morph ni deriva), con un azul hielo-plata poco saturado.
 - **Cinco Aperturas** (Cardinal, Órbita, Disolvente, Eje, Prisma): la misma materia en cinco configuraciones; AHORA es el Prisma. Explorando, un único morph lento a la vez.
 - **Tiempo y ejecución separados**: completado, parcial, omitido y sin registrar salen solo del estado guardado (núcleo de cada forma). Un bloque pasado sin registro nunca se muestra como hecho.
-- **Revelado progresivo** en seis oleadas (0–2 s Merkaba, Hermana · 2–3,5 s Escritura, Breathwork, Substack · 3,5–5 s Inglés, Pausa, Lectura · 5–7 s Páginas Web, Velocity, Alimentación · 7–9 s Marca Wellness, Gimnasio, Comida / ducha · 9–11 s Marca Wellness, Cierre digital, Breathwork relajante, Dormir). Cada actividad: forma → Astral Fade → nombre → horario. **Cada nombre se lee ~1,5–2 s** y se disuelve en su sitio; las oleadas se solapan, así nunca están las 18 etiquetas a la vez. Después solo queda **AHORA / nombre / horario**, permanente.
+- **Revelado progresivo** en seis oleadas (ejemplo del martes: 0–2 s Merkaba, Hermana · 2–3,5 s Escritura, Breathwork, Substack · 3,5–5 s Inglés, Pausa, Lectura · 5–7 s Páginas Web, Velocity, Alimentación · 7–9 s Marca Wellness, Gimnasio, Comida / ducha · 9–11 s Marca Wellness, Cierre digital, Breathwork relajante, Dormir). Cada actividad: forma → Astral Fade → nombre → horario. **Cada nombre se lee ~1,5–2 s** y se disuelve en su sitio; las oleadas se solapan, así nunca están las 18 etiquetas a la vez. Después solo queda **AHORA / nombre / horario**, permanente.
 - **Pista**: con el campo limpio aparece, muy discreto, `TOCA PARA EXPLORAR · ARRASTRA PARA RECORRER`. Se va con la primera interacción y no vuelve ese día (`dayscapeHintDate`).
 - **Arrastrar** recorre el día con parallax: primer plano 100 %, medio 52 %, fondo 20 %, atmósfera 2–10 % (cada masa con su propio factor). Límites suaves e inercia.
 - **Tocar** una actividad la trae al frente (tamaño de primer plano, nítida, recupera algo de materia) y la información se materializa a su alrededor —nombre y horario encima; ✦, tipo y estado debajo— sobre una neblina refractiva, **sin tarjeta**. El resto se aparta y baja, sin oscurecer; una masa de luz se acerca, muy despacio, a lo inspeccionado. Sus vecinas en el tiempo quedan menos atenuadas (preparado para deslizar a la anterior / siguiente más adelante). Tocar fuera o Esc lo devuelve todo a su sitio.
@@ -59,7 +76,7 @@ Todo el día a la vez, alrededor del presente (arquitectura D aprobada: radial a
   - **Acciones**: la pista lleva un gesto mínimo (un punto que toca y arrastra); CONTINUAR tiene más contraste, una línea que respira y una flecha que se inclina hacia delante. Ambos sobre una neblina perla, sin botones.
   - **Transición a HOY** más compacta (6,6 s → 5,3 s) y sin estados casi idénticos: calma 0,4 s → fragmentos → partículas → AHORA se rompe (2 s) → convergencia (2,7 s) difusa → reconocible → estructurada (el módulo gana nitidez, contraste y se asienta) → nombrada (3,45 s) → HOY (3,9 s).
   - **HOY**: el tiempo restante destaca, *Cerrar bloque* y *Omitir* quedan claramente por debajo de INICIAR FOCUS, y SIGUIENTE es inequívocamente secundario (nombre más pequeño y en tinta más suave).
-- **Cualquier día**: el revelado y CONTINUAR se ajustan al número real de actividades (≈ 11 s y 14 s para un día completo, antes para uno ligero, algo más para uno muy lleno); en días muy llenos las formas secundarias son algo más pequeñas y los nombres nunca salen de la pantalla. El tiempo restante de AHORA sigue el reloj mientras DAYSCAPE está abierto. Un día registrado sin bloques usa la rutina de respaldo.
+- **Cualquier día**: el revelado y CONTINUAR se ajustan al número real de actividades (≈ 11 s y 14 s para un día completo, antes para uno ligero, algo más para uno muy lleno); en días muy llenos las formas secundarias son algo más pequeñas y los nombres nunca salen de la pantalla. El tiempo restante de AHORA sigue el reloj mientras DAYSCAPE está abierto. Un día sin rutina (o sin bloques) no usa otro día: la app muestra un error de rutina explícito.
 - Código: `src/features/dayscape/` — `model.ts` (modelo y oleadas), `choreography.ts` (tiempos), `layout.ts` (composición D, nombres, inspección, dianas), `forms.ts` (las cinco formas), `morph.ts`, `matter.ts` (fragmentos → partículas → convergencia), `atmosphere.ts` (vidas de las masas de luz), `Aperture.tsx`, `MassField.tsx`, `MatterCanvas.tsx`, `DayscapeAtmosphere.tsx`, `Dayscape.tsx`.
 
 ## Arquitectura
@@ -67,11 +84,12 @@ Todo el día a la vez, alrededor del presente (arquitectura D aprobada: radial a
 ```
 src/
   domain/          modelo puro, sin React
-    types.ts       Rutina, bloques, estados (PRÓXIMO, ACTIVO, EN FOCUS, COMPLETADO, PARCIAL, OMITIDO)
-    schedule.ts    buildDayView(rutina, estado, hora) → ahora / siguiente / después / camino / progreso
+    types.ts       Rutina, bloques, categorías, estados (PRÓXIMO, ACTIVO, EN FOCUS, COMPLETADO, PARCIAL, OMITIDO, SIN REGISTRAR)
+    routine.ts     resolveDay(semana, fecha, config) → rutina de esa fecha (rotaciones + overrides) · validateWeek
+    schedule.ts    buildDayView(rutina, estado, hora, {ayer, mañana}) → ahora / siguiente / después / camino / progreso
     time.ts, labels.ts, energy.ts
   data/
-    routines/      una rutina por día + registro semanal (index.ts)
+    routine/       RUTINA MAESTRA V3: un archivo por día, config.ts (decisiones abiertas), rules.ts, index.ts
     profile.ts
   state/           reloj, reducer del día, persistencia, DayProvider
   motion/          vocabulario de movimiento (tokens.ts) y niveles COMPLETO / SUTIL / REDUCIDO
@@ -86,20 +104,76 @@ src/
   layout/          navegación lateral (desktop) y secciones
 ```
 
-**Añadir un día:** crea `src/data/routines/lunes.ts` con la misma forma que `tuesday.ts` y regístralo en `src/data/routines/index.ts` (`1: lunes`). La UI no contiene datos de rutina.
+La UI no contiene datos de rutina: ni horas, ni títulos, ni objetivos. Todo sale de `src/data/routine/` (ver abajo).
+
+## Rutina maestra V3 — única fuente de verdad
+
+```
+WEEKLY_ROUTINE (src/data/routine/index.ts)  ← monday.ts … sunday.ts
+      │  routineForDate('2026-10-04')  =  resolveDay(semana, fecha, RESOLVE_CONFIG)
+      ▼            aplica rotaciones (domingo) y overrides (jueves sin gym, fechas sueltas)
+RUTINA DE LA FECHA
+      │  buildDayView(rutina, estado de esa fecha, minuto, { ayer, mañana })
+      ▼
+DAYVIEW  →  AHORA · SIGUIENTE · DESPUÉS · camino · progreso
+      ├── HOY       (NowCard, NextUp, DayPath)
+      ├── DAYSCAPE  (buildDayscape(view))
+      └── FOCUS     (el bloque de la vista con ese id)
+```
+
+`DayProvider` resuelve hoy, ayer y mañana (así Dormir no se rompe a medianoche) y construye una única `DayView` que consumen las tres vistas.
+
+**Dónde editar:** `src/data/routine/<día>.ts`. Cada bloque es una línea:
+
+```ts
+block('tue-web-1000', '10:00', '12:00', 'Páginas Web', 'deep_work', 'focus', {
+  subtitle: 'MVP / Testeo', descriptor: 'Trabajo profundo', project: 'web', dayscapeRole: 'major',
+})
+//     id              inicio   fin      título         categoría   estado energético   extras
+```
+
+- **id**: `<día>-<slug>-<HHMM>` (`mon-meditation-0600`, `sat-touchdesigner-1200`). Estable y legible: el estado se guarda por **fecha real + id**, así completar un miércoles no marca los demás. Si cambias la hora de un bloque, cambia el id (el validador lo exige).
+- **fin** puede omitirse: el bloque dura hasta el siguiente (Dormir llega hasta la primera actividad del día siguiente).
+- **categoría** (`deep_work`, `learning`, `ritual`, `creative_practice`, `body`, `recovery`, `transition`, `admin`, `reflection`, `sleep`, `free`) fija por defecto `focusEligible` y `countsForProgress` (`define.ts → CATEGORY_DEFAULTS`); un bloque puede sobrescribirlos (TouchDesigner: `creative_practice` con `focusEligible: true`).
+  - Solo `deep_work` abre FOCUS por defecto. Transición, recuperación, libre y dormir nunca cuentan en el progreso.
+  - HOY: bloque con Focus → *Iniciar focus · Cerrar bloque · Omitir*; bloque que cuenta → *Completar · Omitir*; el resto (traslados, comidas, pausas, espacios libres, dormir) se muestra sin acciones.
+- **extras**: `shortTitle` (nombre corto en el camino y DAYSCAPE), `subtitle`, `descriptor` (sustituye a la etiqueta de la categoría), `project`, `dayscapeRole`, `secondaryOption`, `includes` (lo que ocurre dentro del bloque sin partirlo: AI Polaris ~1 h dentro de Wellness lunes y miércoles), `metadata` (p. ej. `publication: true` en Substack).
+- **objetivos**: no hay objetivos en los datos. El objetivo se escribe en HOY y se guarda por fecha + bloque (`defaultObjective` existe, pero ningún bloque lo usa).
+
+**Añadir un bloque:** una línea `block(...)` en su día, en orden de hora. **Añadir un día / reemplazarlo:** un archivo con `DayRoutine` (`weekday`, `dayName`, `theme`, `meditation`, `blocks`) registrado en `WEEKLY_ROUTINE`. En desarrollo, `validateWeek` avisa en consola de cualquier incoherencia (día que falta, id mal formado o repetido, solapes, Focus en un bloque que no es profundo, transición que cuenta…) y `npm test` falla.
+
+**Sin respaldo:** si falta un día, `routineForDate` lanza `RoutineMissingError` y la app muestra *Error de rutina* con el día y la fecha. Nunca se usa otro día.
+
+**`secondaryOption`:** una alternativa dentro del mismo bloque, nunca una segunda obligación. Sábado 12:00–13:20 es **TouchDesigner** (un solo bloque, un solo objeto en DAYSCAPE, FOCUS abre TouchDesigner) con `secondaryOption: Biotron · Sesión creativa / experimentación`, que aparece discreta bajo la descripción en HOY, en el detalle del camino y en la inspección de DAYSCAPE.
+
+**Overrides** (`config.ts`): cambios de una fecha concreta, `{ remove, patch, add }` sobre la rutina de ese día.
+- **Jueves sin gimnasio** (uno al mes): `THURSDAY_WITHOUT_GYM` (en `thursday.ts`) quita el gimnasio y el bloque libre de 18:00 y alarga *Regeneración / libre* hasta 20:50. Se aplica solo a las fechas de `THURSDAYS_WITHOUT_GYM` — hoy vacío: **no está decidido qué jueves**. Ej.: `THURSDAYS_WITHOUT_GYM = ['2026-10-15']`.
+- Cualquier otra excepción: `DATE_OVERRIDES['2026-10-12'] = { remove: [...], patch: {...}, add: [...] }`.
+
+**Rotaciones:** la definición vive con su día y la resolución de la semana en `config.ts`.
+- **Domingo 13:00–16:00** (`sun-rotation-1300`, `SUNDAY_DEEP_ROTATION` en `sunday.ts`): A = Newsletter, B = Páginas Web, alternando cada semana. `SUNDAY_ROTATION_ANCHOR` es un domingo en que toca **A**; hoy es `null` (**no está decidido**), así que el bloque se muestra como *Trabajo profundo rotativo · Newsletter / Páginas Web · Variante de esta semana sin definir* (con Focus). Ej.: `SUNDAY_ROTATION_ANCHOR = '2026-10-04'` → Newsletter el 4, Páginas Web el 11, Newsletter el 18… El id no cambia entre semanas.
+- **Domingo 17:00–21:00** es un único periodo profundo: Wellness 17:00–19:00, Descanso 19:00–19:30 (el único), Wellness 19:30–21:00. No insertar nada más.
+
+**Reglas globales** (`rules.ts`, informativas): dormir 22:00–06:00 · meditación 06:00 (martes: Merkaba) · SIN INPUTS 06:00–12:00 (domingo: correo 08:30–09:30) · pantallas OFF ~20:50 · bloques profundos ~120 min · Substack se publica lunes, martes, miércoles y sábado (viernes se trabaja, no se publica) · gimnasio L–J 16–18, V 18–20, D 10:30–12:30, sábado no.
+
+**Migración del estado guardado** (`storage.ts → migrateDay`, al cargar cada fecha):
+- Registros y Focus abierto con ids del martes de prueba (`merkaba`, `paginas-web`, `wellness-1`…) se **traducen** a sus ids V3 (`tue-merkaba-0600`, `tue-web-1000`, `tue-wellness-1400`…) en fechas que son martes.
+- En cualquier otra fecha esos ids se **descartan**: describían el martes de respaldo, no ese día.
+- Se conserva todo lo demás: registros con ids V3, objetivos, notas y `meditationMoved`. Nada se borra en bloque, y un registro V3 nunca se sobrescribe con uno antiguo.
+- `personal-os:entry` (memoria de la entrada diaria) no cambia.
 
 ## Decisiones de interpretación
 
 Puntos donde la especificación dejaba margen. Todos son fáciles de cambiar.
 
-- **Bloques pasados sin acción cuentan como cumplidos** (así el camino muestra ✓ como en el ejemplo, sin exigir confirmar cada bloque). Se pueden corregir desde el camino del día (desplegar el bloque → *Marcar omitido*). La meditación es la excepción: nunca se da por hecha.
-- **Meditación:** si su franja pasa sin marcarla, queda *pendiente* y aparece *¿Mover a las 09:30?* hasta el final de esa franja. *Sí* la mueve y sustituye a Lectura (Lectura no se reubica). Añadí *Ya la hice* por si se hizo sin marcarla. Si nadie responde antes de las 10:00, cuenta como omitida.
+- **Pasado ≠ completado:** un bloque cuya hora terminó sin registro queda *Sin registrar* (◌), en HOY y en DAYSCAPE, y no suma progreso. Desde el camino del día (desplegar el bloque) se puede *Marcar completado* o *Marcar omitido*.
+- **Meditación:** si su franja pasa sin marcarla, queda *pendiente* y aparece *¿Mover a las 09:30?* hasta el final de esa franja. *Sí* la mueve y sustituye a Lectura (Lectura no se reubica; nada más se mueve). Añadí *Ya la hice* por si se hizo sin marcarla. Si nadie responde antes de que acabe la Lectura, cuenta como omitida. El rescate solo existe donde la rutina lo permite sin desplazar nada: lunes, martes y miércoles (Lectura 09:30). Jueves a domingo la meditación no tiene franja de rescate.
 - **Resultado "No"** deja el bloque COMPLETADO (se trabajó) con resultado *no conseguido*; *Parcial* → estado PARCIAL con la nota de lo pendiente. Nada se reprograma.
-- **Transiciones** (llevar hermana, pausa, alimentación, comida/ducha y huecos cortos entre bloques) aparecen en AHORA cuando tocan, sin acciones, y no cuentan en el camino ni en el progreso. El progreso cuenta 13 bloques (todo el camino excepto Dormir).
-- **Acciones de AHORA:** bloque profundo → *Iniciar focus* · *Cerrar bloque* · *Omitir*; resto → *Completar* · *Omitir*. Tras cerrar, *Deshacer* permite corregir un toque accidental.
+- **Transiciones, recuperación, espacios libres** (traslados, pausas, comidas, descansos, *Regeneración / libre* y huecos entre bloques) aparecen en AHORA cuando tocan, sin acciones, y no cuentan en el camino ni en el progreso. El progreso cuenta los bloques con `countsForProgress` (martes: 12).
+- **Acciones de AHORA:** bloque con `focusEligible` → *Iniciar focus* · *Cerrar bloque* · *Omitir*; resto → *Completar* · *Omitir*. Tras cerrar, *Deshacer* permite corregir un toque accidental.
 - **FOCUS** tiene *Finalizar bloque* y, discreto, *Salir sin cerrar* (vuelve a HOY sin registrar resultado). El temporizador cuenta lo que queda del bloque; si se pasa, muestra el exceso con `+`.
 - **CIERRE** (20:50 en adelante) usa la atmósfera profunda también en HOY; el resto de estados son claros.
-- **Días sin rutina propia** muestran la del martes, con una nota discreta junto al tema del día.
+- **Sin respaldo de martes:** los siete días tienen rutina propia; si faltara uno, error de rutina explícito.
 - **Navegación:** en desktop aparecen Semana, Aprender y Sistema atenuadas y sin acción, solo para validar la estructura. Para ocultarlas, basta con quitarlas de `src/layout/sections.ts`. En móvil no hay navegación: solo existe HOY.
 - **Sin marca:** el único signo de identidad es una matriz de 3×3 puntos (placeholder).
 

@@ -498,7 +498,7 @@ export const Dayscape = memo(function Dayscape({
 
   const sel = selected ? layout.items.find((p) => p.a.id === selected) ?? null : null
   const target = sel ? (reduced ? { x: sel.x, y: sel.y, R: sel.R } : targetOf(layout, sel)) : null
-  const range = (p: Placed) => (p.a.kind === 'sleep' && p.a.side === 'current' ? `hasta ${formatClock(p.a.endMin)}` : rangeText(p.a, formatClock))
+  const range = (p: Placed) => (p.a.category === 'sleep' && p.a.side === 'current' ? `hasta ${formatClock(p.a.endMin)}` : rangeText(p.a, formatClock))
   const summary = `Resumen visual del día: ${model.activities.length} actividades. Ahora: ${model.current.title}, ${range(current)}.`
   const labelOpacity = useTransform(() => extra.nowLabel.get() * extra.labelDim.get())
   const dust = useMemo(() => dustPoints(width, height), [width, height])
@@ -595,7 +595,7 @@ export const Dayscape = memo(function Dayscape({
                 opacity={labelOpacity}
                 module={extra.moduleLabel}
                 range={range(p)}
-                endMin={p.a.kind === 'sleep' ? null : p.a.endMin}
+                endMin={p.a.category === 'sleep' ? null : p.a.endMin}
                 maxWidth={Math.max(96, width - 2 - (p.x + p.R + 14))}
               />
             )}
@@ -700,7 +700,8 @@ function Inspection({ p, target, speed, range }: { p: Placed; target: { x: numbe
         <span aria-hidden className="block text-[11px]" style={{ color: 'var(--ds-now-line)' }}>
           ✦
         </span>
-        <span className="mt-[9px] block text-[13px] leading-tight text-ink-2">{p.a.kindLabel}</span>
+        <span className="mt-[9px] block text-[13px] leading-tight text-ink-2">{p.a.natureLabel}</span>
+        {p.a.alternative && <span className="mt-[5px] block text-[11.5px] leading-tight text-ink-3">{p.a.alternative}</span>}
         <span className="label-spaced mt-[7px] block text-ink-3" style={{ fontSize: 9.5, letterSpacing: '0.3em' }}>
           {stateLabel(p.a)}
         </span>
@@ -719,7 +720,7 @@ function Target({ p, mo, pan, pressed, onSelect, range }: { p: Placed; mo: Apert
       type="button"
       className="ds-target"
       style={{ x, y, width: p.hit * 2, height: p.hit * 2 }}
-      aria-label={`${p.a.title}, ${range.replace('—', ' a ')}, ${p.a.kindLabel}, ${stateLabel(p.a)}`}
+      aria-label={`${p.a.title}, ${range.replace('—', ' a ')}, ${p.a.natureLabel}, ${stateLabel(p.a)}`}
       aria-pressed={pressed}
       onClick={() => onSelect(p.a.id)}
     />

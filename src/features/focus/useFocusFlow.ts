@@ -49,6 +49,8 @@ export function useFocusFlow(): FocusFlow {
 
   const start = useCallback(
     (blockId: string) => {
+      // Focus is only for deep production (focusEligible in the routine).
+      if (!view.timeline.find((b) => b.id === blockId)?.focusEligible) return
       clearTimers()
       dispatch({ type: 'startFocus', blockId, at: nowMs() })
       if (!cinematic) {
@@ -66,7 +68,7 @@ export function useFocusFlow(): FocusFlow {
         setStep(0)
       })
     },
-    [cinematic, dispatch],
+    [cinematic, dispatch, view.timeline],
   )
 
   const finish = useCallback(() => {

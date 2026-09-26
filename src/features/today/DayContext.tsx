@@ -9,7 +9,7 @@ import { useDay } from '../../state/DayProvider'
 
 /** A · Contexto del día: where am I. */
 export function DayContext() {
-  const { now, view, isFallback } = useDay()
+  const { now, view } = useDay()
   const weekday = now.toLocaleDateString('es', { weekday: 'long' })
   const date = now.toLocaleDateString('es', { day: 'numeric', month: 'long' })
 
@@ -41,7 +41,6 @@ export function DayContext() {
       </h1>
       <p className="mt-4 text-[15px] tracking-[-0.005em] text-ink-2 sm:mt-5 sm:text-[17px]">
         {view.routine.theme}
-        {isFallback && <span className="text-ink-4"> · rutina del {view.routine.dayName.toLowerCase()}</span>}
       </p>
     </header>
   )

@@ -3,7 +3,7 @@ import { useId, useState } from 'react'
 import { Button } from '../../components/ui/Button'
 import { Label } from '../../components/ui/Label'
 import { STATUS_LABEL, StatusGlyph } from '../../components/ui/StatusGlyph'
-import { blockDescription, blockName, resolutionLine } from '../../domain/labels'
+import { alternativeLine, blockDescription, blockName, resolutionLine } from '../../domain/labels'
 import { formatClock, formatRange, minutesOfDay } from '../../domain/time'
 import type { BlockStatus, ScheduledBlock } from '../../domain/types'
 import { expand } from '../../motion/tokens'
@@ -16,6 +16,7 @@ const TEXT: Record<BlockStatus, string> = {
   completado: 'text-ink-3',
   parcial: 'text-ink-3',
   omitido: 'text-ink-4 line-through decoration-[var(--line)]',
+  'sin-registrar': 'text-ink-3',
 }
 
 const GLYPH: Record<BlockStatus, string> = {
@@ -25,6 +26,7 @@ const GLYPH: Record<BlockStatus, string> = {
   completado: 'text-ink-3',
   parcial: 'text-ink-3',
   omitido: 'text-ink-4',
+  'sin-registrar': 'text-ink-4',
 }
 
 /** D + E · Camino del día with minimal progress. Subordinate to AHORA. */
@@ -89,7 +91,7 @@ export function DayPath({ defaultOpen }: { defaultOpen: boolean }) {
  * are the matrix's faint "off" dots, the active one glows.
  */
 function ProgressDots({ blocks }: { blocks: ScheduledBlock[] }) {
-  const counted = blocks.filter((b) => b.kind !== 'sleep')
+  const counted = blocks.filter((b) => b.countsForProgress)
   const pitch = 12
   return (
     <svg
@@ -171,9 +173,9 @@ function PathItem({ block }: { block: ScheduledBlock }) {
               <p>
                 <span className="tabular">{formatRange(block.startMin, block.endMin)}</span> · {blockDescription(block)}
               </p>
+              {block.secondaryOption && <p>{alternativeLine(block)}</p>}
               <p>
                 {block.record.status ? resolutionLine(block) : STATUS_LABEL[block.status]}
-                {block.implicit && block.status === 'completado' && <span className="text-ink-4"> · según la rutina</span>}
               </p>
               {block.objective && <p>Objetivo: {block.objective}</p>}
               {block.record.pendingNote && <p className="text-ink-2">Pendiente: {block.record.pendingNote}</p>}
@@ -201,11 +203,17 @@ function Correction({
       </Button>
     )
   }
-  if (block.status === 'completado') {
+  // Passed without a record: nothing is assumed, either answer can be given.
+  if (block.status === 'sin-registrar') {
     return (
-      <Button variant="quiet" className="-ml-4 h-8" onClick={() => onAction({ type: 'skip', blockId: block.id })}>
-        Marcar omitido
-      </Button>
+      <div className="-ml-4 flex gap-1">
+        <Button variant="quiet" className="h-8" onClick={() => onAction({ type: 'complete', blockId: block.id })}>
+          Marcar completado
+        </Button>
+        <Button variant="quiet" className="h-8" onClick={() => onAction({ type: 'skip', blockId: block.id })}>
+          Marcar omitido
+        </Button>
+      </div>
     )
   }
   return (

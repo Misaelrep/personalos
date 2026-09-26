@@ -1,9 +1,9 @@
 import { resolveDay, validateWeek, type ResolveConfig, type ResolvedDay, type WeeklyRoutine } from '../../domain/routine'
-import { DATE_OVERRIDES, SUNDAY_ROTATION_ANCHOR, THURSDAYS_WITHOUT_GYM } from './config'
+import { DATE_OVERRIDES, SUNDAY_ROTATION, SUNDAY_ROTATION_ANCHOR, THURSDAYS_WITHOUT_GYM } from './config'
 import { friday } from './friday'
 import { monday } from './monday'
 import { saturday } from './saturday'
-import { SUNDAY_DEEP_ROTATION, sunday } from './sunday'
+import { sunday, sundayDeepRotation } from './sunday'
 import { THURSDAY_WITHOUT_GYM, thursday } from './thursday'
 import { tuesday } from './tuesday'
 import { wednesday } from './wednesday'
@@ -23,6 +23,8 @@ export const WEEKLY_ROUTINE: WeeklyRoutine = {
   5: friday,
   6: saturday,
 }
+
+export const SUNDAY_DEEP_ROTATION = sundayDeepRotation(SUNDAY_ROTATION)
 
 export const RESOLVE_CONFIG: ResolveConfig = {
   rotations: [{ rotation: SUNDAY_DEEP_ROTATION, anchor: SUNDAY_ROTATION_ANCHOR }],

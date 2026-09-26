@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { tuesday } from '../data/routine/tuesday'
 import type { DayState } from '../domain/types'
-import { readOffset } from './clock'
-import { LEGACY_TUESDAY_IDS, migrateDay } from './storage'
+import { entryStorageKey } from '../features/entry/entryStorage'
+import { isSimulation, readOffset } from './clock'
+import { LEGACY_TUESDAY_IDS, dayStorageKey, migrateDay } from './storage'
 
 describe('clock — ?date= and ?t= simulation', () => {
   const real = new Date(2026, 8, 26, 15, 42, 10).getTime()
@@ -26,6 +27,13 @@ describe('clock — ?date= and ?t= simulation', () => {
   it('both together: that exact moment', () => {
     const d = moved('?date=2026-10-04&t=19:15')
     expect([d.getMonth(), d.getDate(), d.getDay(), d.getHours(), d.getMinutes()]).toEqual([9, 4, 0, 19, 15])
+  })
+
+  it('a simulated session keeps its own storage; the real one is never written', () => {
+    expect([isSimulation(''), isSimulation('?entry=none'), isSimulation('?t=10:30'), isSimulation('?date=2026-09-28')]).toEqual([false, false, true, true])
+    expect(dayStorageKey('2026-09-28', false)).toBe('personal-os:day:2026-09-28')
+    expect(dayStorageKey('2026-09-28', true)).toBe('personal-os:sim:day:2026-09-28')
+    expect([entryStorageKey(false), entryStorageKey(true)]).toEqual(['personal-os:entry', 'personal-os:sim:entry'])
   })
 
   it('malformed or impossible values are ignored, never rolled over', () => {

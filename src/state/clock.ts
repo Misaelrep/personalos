@@ -1,16 +1,29 @@
 import { useEffect, useState } from 'react'
 
 /**
- * App clock. For review only, two optional URL params move it:
+ * App clock: the browser's LOCAL date and time (its own time zone, never UTC).
+ * For review only, two optional URL params move it:
  *   `?t=HH:MM`           that time of day, today;
  *   `?date=YYYY-MM-DD`   that date, at the current time of day;
  *   both together        that exact moment (e.g. `?date=2026-09-28&t=10:30`).
  * The clock keeps ticking from there. Without them it is the real clock.
  */
-export function readOffset(search: string, realNow: number): number {
+function readParams(search: string) {
   const params = new URLSearchParams(search)
-  const t = params.get('t')?.match(/^(\d{1,2}):(\d{2})$/)
-  const date = params.get('date')?.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  return {
+    t: params.get('t')?.match(/^(\d{1,2}):(\d{2})$/),
+    date: params.get('date')?.match(/^(\d{4})-(\d{2})-(\d{2})$/),
+  }
+}
+
+/** A review session: the clock is simulated and persistence is kept apart (see storage). */
+export function isSimulation(search: string): boolean {
+  const { t, date } = readParams(search)
+  return Boolean(t || date)
+}
+
+export function readOffset(search: string, realNow: number): number {
+  const { t, date } = readParams(search)
   if (!t && !date) return 0
   const target = new Date(realNow)
   if (date) {
@@ -25,6 +38,7 @@ export function readOffset(search: string, realNow: number): number {
 }
 
 const OFFSET = typeof window === 'undefined' ? 0 : readOffset(window.location.search, Date.now())
+export const SIMULATED = typeof window !== 'undefined' && isSimulation(window.location.search)
 
 export function nowMs(): number {
   return Date.now() + OFFSET

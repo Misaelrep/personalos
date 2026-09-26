@@ -15,6 +15,13 @@ export const ROUTINE_RULES = {
     /** Sunday: email 08:30–09:30 (block `sun-email-0830`). */
     exceptions: [{ weekday: 0 as Weekday, from: '08:30', to: '09:30', what: 'Email' }],
   },
+  /**
+   * Breathwork energizante · 08:25 (3 min) when the day's routine schedules it —
+   * not a daily obligation. Not on Friday (08:00–10:00 Páginas Web is one
+   * continuous block) nor Saturday (its morning sequence is already set).
+   * The routine files are the truth; a test keeps this list in step with them.
+   */
+  breathworkEnergizing: { at: '08:25' as ClockTime, minutes: 3, scheduledDays: [0, 1, 2, 3, 4] as Weekday[] },
   /** Screens off, generally. */
   screensOff: '20:50' as ClockTime,
   /** Preferred length of a deep block. */

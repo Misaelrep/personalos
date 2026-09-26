@@ -11,9 +11,11 @@ npm run build      # typecheck + build de producción
 
 ## Revisar cualquier momento del día
 
+**Fecha y hora son siempre locales.** Sin parámetros, la app toma fecha, hora y día de la semana de la zona horaria del navegador / dispositivo (operaciones de fecha local: `getFullYear/getMonth/getDate/getDay/getHours`), nunca de UTC: con ellas decide la fecha activa, el día de la semana, AHORA, el cambio de día a medianoche local, la clave de persistencia diaria y la entrada del día. No se usa `toISOString()` para fechas. Probado en `src/state/timezone.test.ts` bajo UTC−6 y UTC+9, cerca de medianoche, donde la fecha UTC y la local no coinciden.
+
 | Parámetro | Efecto |
 | --- | --- |
-| `?t=10:14` | El reloj arranca a esa hora (de hoy) y sigue corriendo desde ahí. |
+| `?t=10:14` | El reloj arranca a esa hora local (de hoy) y sigue corriendo desde ahí. |
 | `?date=2026-09-28` | El reloj arranca en esa fecha, a la hora actual. Combinado con `?t=` fija el momento exacto: `?date=2026-09-28&t=10:30`. Fechas imposibles (`2026-02-31`) se ignoran. Sin parámetros, el reloj es el real: producción no cambia. |
 | `?motion=completo` · `sutil` · `reducido` | Fuerza un nivel de movimiento (por defecto: `reducido` si el sistema pide `prefers-reduced-motion`, si no `completo`). |
 | `?entry=full` · `micro` · `none` | Fuerza la entrada diaria completa, la micro entrada o ninguna, ignorando las reglas de sesión (no guarda nada). |
@@ -34,9 +36,13 @@ Momentos útiles (añade `&entry=none` para ir directo a HOY):
 | `?date=2026-10-03&t=12:30` | Sábado · TouchDesigner, *Alternativa: Biotron* |
 | `?date=2026-10-03&t=13:35` | Sábado · Finanzas personales (15 min) |
 | `?date=2026-10-04&t=17:30` | Domingo · Nueva Marca Wellness (y `19:15` Descanso) |
+| `?date=2026-09-27&t=13:30` · `?date=2026-10-04&t=13:30` | Domingo rotativo · Newsletter · Páginas Web |
+| `?date=2026-10-02&t=08:25` · `?date=2026-10-03&t=08:25` · `?date=2026-10-04&t=08:25` | Breathwork energizante: viernes no (Páginas Web sigue), sábado no, domingo sí |
 | `?date=2026-09-29&t=23:30` · `?date=2026-09-30&t=04:00` | La noche: Dormir sigue siendo AHORA a ambos lados de medianoche |
 
-El estado del día se guarda en `localStorage` por fecha (`personal-os:day:YYYY-MM-DD`), así una recarga no pierde lo marcado y cada día empieza limpio. Para reiniciar un día, borra esa clave.
+El estado del día se guarda en `localStorage` por fecha local (`personal-os:day:YYYY-MM-DD`), así una recarga no pierde lo marcado y cada día empieza limpio. Para reiniciar un día, borra esa clave.
+
+**La simulación no toca la persistencia real.** Con `?date=` o `?t=`, el estado de los días y la memoria de la entrada se guardan aparte (`personal-os:sim:day:YYYY-MM-DD`, `personal-os:sim:entry`): revisar otro día nunca marca nada en los días reales ni da por vista la entrada de hoy. Para limpiar la simulación, borra las claves `personal-os:sim:*`.
 
 ## Entrada diaria
 
@@ -151,10 +157,13 @@ block('tue-web-1000', '10:00', '12:00', 'Páginas Web', 'deep_work', 'focus', {
 - Cualquier otra excepción: `DATE_OVERRIDES['2026-10-12'] = { remove: [...], patch: {...}, add: [...] }`.
 
 **Rotaciones:** la definición vive con su día y la resolución de la semana en `config.ts`.
-- **Domingo 13:00–16:00** (`sun-rotation-1300`, `SUNDAY_DEEP_ROTATION` en `sunday.ts`): A = Newsletter, B = Páginas Web, alternando cada semana. `SUNDAY_ROTATION_ANCHOR` es un domingo en que toca **A**; hoy es `null` (**no está decidido**), así que el bloque se muestra como *Trabajo profundo rotativo · Newsletter / Páginas Web · Variante de esta semana sin definir* (con Focus). Ej.: `SUNDAY_ROTATION_ANCHOR = '2026-10-04'` → Newsletter el 4, Páginas Web el 11, Newsletter el 18… El id no cambia entre semanas.
+- **Domingo 13:00–16:00** (`sun-rotation-1300`): semana A = **Newsletter**, semana B = **Páginas Web**. Ancla: `SUNDAY_ROTATION_ANCHOR = '2026-09-27'` (Newsletter) en `config.ts`; la variante es `SUNDAY_ROTATION[semanasDesdeElAncla % 2]` (con módulo positivo, así las fechas anteriores al ancla siguen alternando): 27/09 Newsletter · 04/10 Páginas Web · 11/10 Newsletter · 18/10 Páginas Web… (y 20/09 Páginas Web). El bloque resuelto es trabajo profundo normal —título *Newsletter* o *Páginas Web*, *Trabajo profundo*, su proyecto, Focus, masa mayor en DAYSCAPE— y llega así a HOY, DAYSCAPE y FOCUS. El id no cambia entre semanas.
+  - **Cambiar el ancla:** pon en `SUNDAY_ROTATION_ANCHOR` cualquier domingo en que toque Newsletter.
+  - **Invertir Newsletter / Web:** cambia el orden en `SUNDAY_ROTATION = ['web', 'newsletter']` (o mueve el ancla una semana).
+  - Qué es cada variante (título, proyecto, descripción): `SUNDAY_DEEP_VARIANTS` en `sunday.ts`. Con `SUNDAY_ROTATION_ANCHOR = null` el bloque volvería a leerse *Trabajo profundo rotativo · Variante de esta semana sin definir*.
 - **Domingo 17:00–21:00** es un único periodo profundo: Wellness 17:00–19:00, Descanso 19:00–19:30 (el único), Wellness 19:30–21:00. No insertar nada más.
 
-**Reglas globales** (`rules.ts`, informativas): dormir 22:00–06:00 · meditación 06:00 (martes: Merkaba) · SIN INPUTS 06:00–12:00 (domingo: correo 08:30–09:30) · pantallas OFF ~20:50 · bloques profundos ~120 min · Substack se publica lunes, martes, miércoles y sábado (viernes se trabaja, no se publica) · gimnasio L–J 16–18, V 18–20, D 10:30–12:30, sábado no.
+**Reglas globales** (`rules.ts`, informativas): dormir 22:00–06:00 · meditación 06:00 (martes: Merkaba) · **Breathwork energizante 08:25 (3 min) cuando esté programado en la rutina del día** — no es universal: lunes, martes, miércoles, jueves y domingo; **viernes no** (08:00–10:00 Páginas Web es un bloque continuo) y **sábado no** (su mañana ya está definida: Inglés 07:00–08:15, Substack 08:30, desayuno) · SIN INPUTS 06:00–12:00 (domingo: correo 08:30–09:30) · pantallas OFF ~20:50 · bloques profundos ~120 min · Substack se publica lunes, martes, miércoles y sábado (viernes se trabaja, no se publica) · gimnasio L–J 16–18, V 18–20, D 10:30–12:30, sábado no.
 
 **Migración del estado guardado** (`storage.ts → migrateDay`, al cargar cada fecha):
 - Registros y Focus abierto con ids del martes de prueba (`merkaba`, `paginas-web`, `wellness-1`…) se **traducen** a sus ids V3 (`tue-merkaba-0600`, `tue-web-1000`, `tue-wellness-1400`…) en fechas que son martes.

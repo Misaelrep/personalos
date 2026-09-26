@@ -1,12 +1,15 @@
 import { weekdayOf } from '../domain/routine'
 import type { DayState } from '../domain/types'
+import { SIMULATED } from './clock'
 import { emptyDay } from './dayReducer'
 
 /**
- * The day's state lives in localStorage under its date, so a reload keeps
+ * The day's state lives in localStorage under its LOCAL date, so a reload keeps
  * the morning's decisions and the next day starts clean. No backend.
+ * A simulated session (`?date=` / `?t=`) keeps its own copy under
+ * `personal-os:sim:day:` and never touches the real days.
  */
-const PREFIX = 'personal-os:day:'
+export const dayStorageKey = (date: string, simulated = SIMULATED) => `personal-os:${simulated ? 'sim:' : ''}day:${date}`
 
 /**
  * Block ids of the routine before RUTINA MAESTRA V3 (a single Tuesday used for
@@ -59,7 +62,7 @@ export function migrateDay(state: DayState): DayState {
 
 export function loadDay(date: string): DayState {
   try {
-    const raw = window.localStorage.getItem(PREFIX + date)
+    const raw = window.localStorage.getItem(dayStorageKey(date))
     if (raw) {
       const parsed = JSON.parse(raw) as DayState
       if (parsed && parsed.date === date && parsed.records && typeof parsed.records === 'object') return migrateDay(parsed)
@@ -72,7 +75,7 @@ export function loadDay(date: string): DayState {
 
 export function saveDay(state: DayState): void {
   try {
-    window.localStorage.setItem(PREFIX + state.date, JSON.stringify(state))
+    window.localStorage.setItem(dayStorageKey(state.date), JSON.stringify(state))
   } catch {
     // Ignore: the session still works in memory.
   }

@@ -1,7 +1,12 @@
+import { SIMULATED } from '../../state/clock'
+
 /**
- * Entry memory, kept apart from the day state: it spans days.
+ * Entry memory, kept apart from the day state: it spans days. A simulated
+ * session (`?date=` / `?t=`) uses its own copy, so reviewing another day never
+ * marks the real day's entry as seen.
  */
-const KEY = 'personal-os:entry'
+export const entryStorageKey = (simulated = SIMULATED) => (simulated ? 'personal-os:sim:entry' : 'personal-os:entry')
+const KEY = entryStorageKey()
 
 export interface EntryMemory {
   /** Local date on which ENTRAR was pressed in the full daily entry. */

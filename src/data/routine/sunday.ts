@@ -1,5 +1,5 @@
 import type { Rotation } from '../../domain/routine'
-import type { DayRoutine } from '../../domain/types'
+import type { DayRoutine, RoutineBlock } from '../../domain/types'
 import { block } from './define'
 
 /**
@@ -22,7 +22,7 @@ export const sunday: DayRoutine = {
     block('sun-transition-1000', '10:00', '10:30', 'Transición', 'transition', 'activacion'),
     block('sun-gym-1030', '10:30', '12:30', 'Gimnasio', 'body', 'cuerpo'),
     block('sun-transition-1230', '12:30', '13:00', 'Transición', 'transition', 'recuperacion'),
-    // Its content comes from SUNDAY_DEEP_ROTATION for the week (see config.ts); this is how it reads while undecided.
+    // Resolved per date into Newsletter or Páginas Web (config.ts). This neutral reading only shows if no anchor is set.
     block('sun-rotation-1300', '13:00', '16:00', 'Trabajo profundo rotativo', 'deep_work', 'produccion', {
       shortTitle: 'Trabajo rotativo',
       subtitle: 'Newsletter / Páginas Web',
@@ -50,33 +50,31 @@ export const sunday: DayRoutine = {
   ],
 }
 
+export type SundayVariant = 'newsletter' | 'web'
+
 /**
- * DEFINITION of the Sunday 13:00–16:00 rotation: it alternates week by week,
- * A then B. WHICH week is A is not decided here — see config.ts.
+ * DEFINITION of the Sunday 13:00–16:00 rotation: what each week's variant is.
+ * WHICH week gets which (anchor and order) is decided in config.ts.
  */
-export const SUNDAY_DEEP_ROTATION: Rotation = {
+export const SUNDAY_DEEP_VARIANTS: Record<SundayVariant, Partial<RoutineBlock>> = {
+  newsletter: {
+    title: 'Newsletter',
+    shortTitle: 'Newsletter',
+    subtitle: undefined,
+    descriptor: 'Trabajo profundo',
+    project: 'newsletter',
+  },
+  web: {
+    title: 'Páginas Web',
+    shortTitle: 'Páginas Web',
+    subtitle: undefined,
+    descriptor: 'Trabajo profundo',
+    project: 'web',
+  },
+}
+
+export const sundayDeepRotation = (order: SundayVariant[]): Rotation => ({
   id: 'sunday-deep',
   blockId: 'sun-rotation-1300',
-  variants: [
-    {
-      key: 'newsletter',
-      patch: {
-        title: 'Newsletter',
-        shortTitle: 'Newsletter',
-        subtitle: 'Trabajo profundo rotativo',
-        descriptor: 'Trabajo profundo · creativo',
-        project: 'newsletter',
-      },
-    },
-    {
-      key: 'web',
-      patch: {
-        title: 'Páginas Web',
-        shortTitle: 'Páginas Web',
-        subtitle: 'Trabajo profundo rotativo',
-        descriptor: 'Trabajo profundo',
-        project: 'web',
-      },
-    },
-  ],
-}
+  variants: order.map((key) => ({ key, patch: SUNDAY_DEEP_VARIANTS[key] })),
+})

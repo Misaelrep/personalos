@@ -5,10 +5,10 @@ import { buildDayView } from '../../domain/schedule'
 import { toMinutes } from '../../domain/time'
 import type { DayRoutine, RoutineBlock, Weekday } from '../../domain/types'
 import { emptyDay } from '../../state/dayReducer'
-import { SUNDAY_ROTATION_ANCHOR, THURSDAYS_WITHOUT_GYM } from './config'
-import { RESOLVE_CONFIG, WEEKLY_ROUTINE, routineForDate } from './index'
+import { SUNDAY_ROTATION, SUNDAY_ROTATION_ANCHOR, THURSDAYS_WITHOUT_GYM } from './config'
+import { RESOLVE_CONFIG, SUNDAY_DEEP_ROTATION, WEEKLY_ROUTINE, routineForDate } from './index'
 import { ROUTINE_RULES } from './rules'
-import { SUNDAY_DEEP_ROTATION } from './sunday'
+import { sundayDeepRotation } from './sunday'
 import { THURSDAY_WITHOUT_GYM } from './thursday'
 
 /** A reference week: Monday 2026-09-28 … Sunday 2026-10-04. */
@@ -253,24 +253,109 @@ describe('Sunday — depth', () => {
     ])
   })
 
-  it('the 13:00–16:00 rotation stays open until its anchor is set — nothing invented', () => {
-    expect(SUNDAY_ROTATION_ANCHOR).toBeNull()
-    const { routine, notes } = routineForDate(DATE.sun)
+  it('an unset anchor would leave the block neutral — nothing invented', () => {
+    const config: ResolveConfig = { ...RESOLVE_CONFIG, rotations: [{ rotation: SUNDAY_DEEP_ROTATION, anchor: null }] }
+    const { routine, notes } = resolveDay(WEEKLY_ROUTINE, DATE.sun, config)
     const block = routine.blocks.find((b) => b.id === 'sun-rotation-1300')!
     expect(block.project).toBeUndefined()
     expect(block.descriptor).toBe('Variante de esta semana sin definir')
     expect(notes).toEqual([{ kind: 'rotation-unresolved', rotation: 'sunday-deep', blockId: 'sun-rotation-1300' }])
   })
+})
 
-  it('with an anchor it alternates Newsletter (A) ⇄ Páginas Web (B) week by week', () => {
-    const config: ResolveConfig = { ...RESOLVE_CONFIG, rotations: [{ rotation: SUNDAY_DEEP_ROTATION, anchor: DATE.sun }] }
-    const variant = (date: string) => resolveDay(WEEKLY_ROUTINE, date, config).routine.blocks.find((b) => b.id === 'sun-rotation-1300')!
-    expect(variant(DATE.sun)).toMatchObject({ title: 'Newsletter', project: 'newsletter', metadata: { variant: 'newsletter' } })
-    expect(variant(shiftDateKey(DATE.sun, 7))).toMatchObject({ title: 'Páginas Web', project: 'web' })
-    expect(variant(shiftDateKey(DATE.sun, 14))).toMatchObject({ title: 'Newsletter' })
-    expect(variant(shiftDateKey(DATE.sun, -7))).toMatchObject({ title: 'Páginas Web' })
-    // Same id every week: records stay attached to date + block.
-    expect(variant(shiftDateKey(DATE.sun, 7)).id).toBe('sun-rotation-1300')
+describe('V3.1 — Sunday 13:00–16:00 rotation, anchored', () => {
+  const rotating = (date: string) => routineForDate(date).routine.blocks.find((b) => b.id === 'sun-rotation-1300')!
+
+  it('anchor 2026-09-27 = Newsletter, then alternating Newsletter ⇄ Páginas Web', () => {
+    expect(SUNDAY_ROTATION_ANCHOR).toBe('2026-09-27')
+    expect(SUNDAY_ROTATION).toEqual(['newsletter', 'web'])
+    expect(routineForDate('2026-09-27').notes).toEqual([{ kind: 'rotation', rotation: 'sunday-deep', variant: 'newsletter' }])
+  })
+
+  // §6 — AHORA at 13:30, and DAYSCAPE = HOY = FOCUS on the resolved variant.
+  it.each([
+    ['2026-09-27', 'Newsletter', 'newsletter'],
+    ['2026-10-04', 'Páginas Web', 'web'],
+    ['2026-10-11', 'Newsletter', 'newsletter'],
+    ['2026-10-18', 'Páginas Web', 'web'],
+  ])('%s 13:30 → AHORA %s', (date, title, project) => {
+    const v = viewAt(date, '13:30')
+    expect(v.current).toMatchObject({
+      id: 'sun-rotation-1300',
+      title,
+      descriptor: 'Trabajo profundo',
+      project,
+      category: 'deep_work',
+      focusEligible: true,
+      dayscapeRole: 'major',
+      startMin: toMinutes('13:00'),
+      endMin: toMinutes('16:00'),
+    })
+    const scape = buildDayscape(v, toMinutes('13:30'))
+    expect(scape.current).toMatchObject({ id: v.current.id, title, natureLabel: 'Trabajo profundo', role: 'major' })
+    // FOCUS opens the block HOY shows: same id, same title, eligible.
+    const focus = v.timeline.find((b) => b.id === v.current.id)!
+    expect([focus.title, focus.focusEligible]).toEqual([title, true])
+  })
+
+  it('resolved Sundays never read "rotativo" or "sin definir"', () => {
+    for (let i = -8; i <= 8; i++) {
+      const b = rotating(shiftDateKey('2026-09-27', 7 * i))
+      const text = [b.title, b.shortTitle, b.subtitle, b.descriptor].join(' ')
+      expect(text).not.toMatch(/rotativo|sin definir/i)
+    }
+  })
+
+  // §7 — before the anchor: no negative-modulo failure, the alternation continues backwards.
+  it.each([
+    ['2026-09-20', 'Páginas Web'],
+    ['2026-09-13', 'Newsletter'],
+    ['2025-12-28', 'Páginas Web'],
+    ['2025-12-21', 'Newsletter'],
+  ])('%s (before the anchor) → %s', (date, title) => {
+    expect(rotating(date).title).toBe(title)
+  })
+
+  it('same block id every week: records stay attached to date + block', () => {
+    expect(new Set(['2026-09-27', '2026-10-04'].map((d) => rotating(d).id))).toEqual(new Set(['sun-rotation-1300']))
+  })
+
+  it('swapping the order in config inverts the cycle', () => {
+    const inverted: ResolveConfig = {
+      ...RESOLVE_CONFIG,
+      rotations: [{ rotation: sundayDeepRotation(['web', 'newsletter']), anchor: '2026-09-27' }],
+    }
+    const title = (date: string) => resolveDay(WEEKLY_ROUTINE, date, inverted).routine.blocks.find((b) => b.id === 'sun-rotation-1300')!.title
+    expect([title('2026-09-27'), title('2026-10-04')]).toEqual(['Páginas Web', 'Newsletter'])
+  })
+})
+
+describe('V3.1 — Breathwork energizante only where scheduled', () => {
+  const energizing = (date: string) => routineForDate(date).routine.blocks.filter((b) => b.title === 'Breathwork energizante')
+
+  it('scheduled Mon, Tue, Wed, Thu and Sun — not Fri, not Sat — and the rule says so', () => {
+    const days = ([0, 1, 2, 3, 4, 5, 6] as Weekday[]).filter((w) => day(w).blocks.some((b) => b.title === 'Breathwork energizante'))
+    expect(days).toEqual([0, 1, 2, 3, 4])
+    expect(ROUTINE_RULES.breathworkEnergizing.scheduledDays).toEqual(days)
+    expect(ROUTINE_RULES.breathworkEnergizing).toMatchObject({ at: '08:25', minutes: 3 })
+  })
+
+  it('Friday 08:25: Páginas Web runs 08:00–10:00 uninterrupted', () => {
+    expect(energizing(DATE.fri)).toEqual([])
+    const v = viewAt(DATE.fri, '08:25')
+    expect(v.current).toMatchObject({ id: 'fri-web-0800', startMin: toMinutes('08:00'), endMin: toMinutes('10:00') })
+    expect(viewAt(DATE.fri, '08:30').current.title).toBe('Páginas Web')
+  })
+
+  it('Saturday 08:25: no Breathwork added — Inglés has ended, Substack is next', () => {
+    expect(energizing(DATE.sat)).toEqual([])
+    const v = viewAt(DATE.sat, '08:25')
+    expect(v.current.title).not.toMatch(/Breathwork/)
+    expect(v.next?.id).toBe('sat-substack-0830')
+  })
+
+  it('Sunday 08:25: Breathwork energizante', () => {
+    expect(viewAt(DATE.sun, '08:25').current).toMatchObject({ id: 'sun-breathwork-0825', title: 'Breathwork energizante' })
   })
 })
 

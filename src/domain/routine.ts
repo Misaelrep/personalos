@@ -82,8 +82,9 @@ export function shiftDateKey(key: string, days: number): string {
 export function rotationVariant(rotation: Rotation, anchor: string | null, date: string): RotationVariant | null {
   if (!anchor) return null
   const n = rotation.variants.length
-  const weeks = Math.floor(daysBetween(anchor, date) / 7)
-  return rotation.variants[((weeks % n) + n) % n]
+  // Negative before the anchor; the double modulo keeps the alternation going backwards.
+  const weeksSinceAnchor = Math.floor(daysBetween(anchor, date) / 7)
+  return rotation.variants[((weeksSinceAnchor % n) + n) % n]
 }
 
 const byStart = (a: RoutineBlock, b: RoutineBlock) => toMinutes(a.start) - toMinutes(b.start)

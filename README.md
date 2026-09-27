@@ -1,6 +1,6 @@
-# PERSONAL OS — HOY + FOCUS + DAYSCAPE · Rutina maestra V3
+# PERSONAL OS — HOY + FOCUS + DAYSCAPE + SEMANA · Rutina maestra V3
 
-Aplicación web de rutina semanal. Contiene la entrada diaria (DAYSCAPE), la pantalla HOY y el modo FOCUS, alimentados por **una sola fuente de verdad**: la RUTINA MAESTRA V3, de lunes a domingo (`src/data/routine/`).
+Aplicación web de rutina semanal. Contiene la entrada diaria (DAYSCAPE), la pantalla HOY, el modo FOCUS y SEMANA, alimentados por **una sola fuente de verdad**: la RUTINA MAESTRA V3, de lunes a domingo (`src/data/routine/`).
 
 ```bash
 npm install
@@ -19,6 +19,7 @@ npm run build      # typecheck + build de producción
 | `?date=2026-09-28` | El reloj arranca en esa fecha, a la hora actual. Combinado con `?t=` fija el momento exacto: `?date=2026-09-28&t=10:30`. Fechas imposibles (`2026-02-31`) se ignoran. Sin parámetros, el reloj es el real: producción no cambia. |
 | `?motion=completo` · `sutil` · `reducido` | Fuerza un nivel de movimiento (por defecto: `reducido` si el sistema pide `prefers-reduced-motion`, si no `completo`). |
 | `?entry=full` · `micro` · `none` | Fuerza la entrada diaria completa, la micro entrada o ninguna, ignorando las reglas de sesión (no guarda nada). |
+| `?section=semana` | Abre directamente SEMANA (solo si no toca entrada: combínalo con `&entry=none`). Sin el parámetro, la app abre en HOY. |
 | `?field=collapse` · `fast` · `hold` | Revisión de DAYSCAPE: `collapse` acorta el mensaje, forma el día de golpe (sin nombres) y sale solo tras 1,2 s para revisar FORMAS → FRAGMENTOS → PARTÍCULAS → CONVERGENCIA → HOY a velocidad normal; `fast` acelera toda la entrada; `hold` impide la salida automática de `collapse`. Se pueden combinar (`fast,collapse`). Sin el parámetro, nada cambia: DAYSCAPE solo sale con CONTINUAR. |
 
 Semana de referencia: lunes `2026-09-28` · martes `2026-09-29` · miércoles `2026-09-30` · jueves `2026-10-01` · viernes `2026-10-02` · sábado `2026-10-03` · domingo `2026-10-04`.
@@ -43,6 +44,29 @@ Momentos útiles (añade `&entry=none` para ir directo a HOY):
 El estado del día se guarda en `localStorage` por fecha local (`personal-os:day:YYYY-MM-DD`), así una recarga no pierde lo marcado y cada día empieza limpio. Para reiniciar un día, borra esa clave.
 
 **La simulación no toca la persistencia real.** Con `?date=` o `?t=`, el estado de los días y la memoria de la entrada se guardan aparte (`personal-os:sim:day:YYYY-MM-DD`, `personal-os:sim:entry`): revisar otro día nunca marca nada en los días reales ni da por vista la entrada de hoy. Para limpiar la simulación, borra las claves `personal-os:sim:*`.
+
+## SEMANA (V0.2) — Archipiélago minimal
+
+*¿Cómo está diseñada mi semana?* — no *¿qué tengo a las 14:00?*. Siete objetos + una red de luz + una atmósfera compartida. Se abre desde la navegación (desktop: barra lateral; móvil: navegación inferior HOY · SEMANA) y muestra directamente la vista general: nunca repite la entrada diaria.
+
+**Datos.** `src/domain/week.ts`: `buildWeek(hoy, routineForDate)` resuelve lunes → domingo de la semana activa **por fecha real** (nada fijo como "28 sep – 4 oct"), cada día con el mismo resolvedor que HOY (rotación del domingo y overrides incluidos) y el mismo motor de horario. Deriva, sin horas: carga ponderada (profundo 1 · aprendizaje y cuerpo 0,6 · ritual y admin 0,3), espacio abierto, el bloque profundo más largo y tres regiones — mañana 06–12 · tarde 12–19 · noche 19–22 — nombradas por su trabajo profundo (o, si no lo hay, por sus dos actividades mayores; nunca una comida o un traslado). `buildWeek(hoy, …, ±1)` prepara la semana anterior / siguiente (sin UI todavía).
+
+**Forma** (`src/features/week/geometry.ts`, puro). Cada día es una lente de vidrio óptico moldeado, casi a la misma escala. La carga vive en el vidrio, no en el tamaño: grosor del canto, escarcha, niebla interior, anillo óptico. Jueves: fino, claro, casi vacío (espacio). Sábado: el más grueso y denso. Domingo: algo más largo, con un interior continuo y más hondo. HOY: punto modular 3 × 3 junto al nombre, canto algo más nítido y un reflejo que respira. Pasado: un poco más plateado · futuro: un poco más translúcido.
+
+**Composición.** Desktop: campo amplio, el orden se lee de izquierda a derecha pero ningún día comparte fila ni columna. Móvil: composición propia, de arriba abajo con desplazamientos laterales, profundidades y los nombres al lado del vidrio (nunca una lista). No se arrastra ni se desplaza como un mapa.
+
+**Red de luz.** Fibras curvas, incompletas, muy tenues entre días consecutivos y dos arcos largos; nunca todos con todos. Cada una respira, cambia un poco su curvatura y a veces transporta un brillo, en ciclos propios de 20–60 s.
+
+**Atmósfera.** Aurora Pearl sobre Pearl Ivory: exactamente tres velos (Champagne Mist, Soft Peach, Muted Mauve / Lavender) que derivan, se estiran, pierden y recuperan su borde refractado en ciclos de 40–90 s, sin sincronía. Solo CSS (transform / opacity).
+
+**Cuatro estados** (`weekFlow.ts`, máquina de estados pura):
+
+1. **General** — rango de la semana, siete nombres, una línea de función por día.
+2. **Día seleccionado** (tap / clic, ~700 ms) — el día avanza, se vuelve frontal y más plano; la semana retrocede; la red pierde presencia; su materia se ordena (~600 ms) en MAÑANA · TARDE · NOCHE, densidades de luz sin bandas. *VER DÍA →* (o tocar de nuevo el día). Tocar alrededor o `Esc` vuelve.
+3. **La cáscara se disuelve** (~900 ms) — el vidrio pierde cohesión, la materia queda suspendida en tres estratos, la luz se enfría y la materia se separa en profundidad; un punto frío marca la parte del día donde estará AHORA.
+4. **DAYSCAPE real** de esa fecha (~1 s después): el mismo `buildDayscape` y el mismo componente `Dayscape`, alojados en `WeekDayscape.tsx` como los aloja la entrada diaria. *← Semana* (o `Esc`) deshace el día en materia y devuelve la semana; si el día es hoy, *Continuar* hace la salida de siempre y aterriza en el AHORA de HOY.
+
+**Movimiento reducido.** Velos y fibras quietos, sin deriva ni brillos; la selección es un fundido suave; la apertura es un fundido simplificado. Los objetos se mantienen.
 
 ## Entrada diaria
 
@@ -93,6 +117,7 @@ src/
     types.ts       Rutina, bloques, categorías, estados (PRÓXIMO, ACTIVO, EN FOCUS, COMPLETADO, PARCIAL, OMITIDO, SIN REGISTRAR)
     routine.ts     resolveDay(semana, fecha, config) → rutina de esa fecha (rotaciones + overrides) · validateWeek
     schedule.ts    buildDayView(rutina, estado, hora, {ayer, mañana}) → ahora / siguiente / después / camino / progreso
+    week.ts        buildWeek(hoy, resolver, desplazamiento) → lunes–domingo: carga, espacio, mañana / tarde / noche
     time.ts, labels.ts, energy.ts
   data/
     routine/       RUTINA MAESTRA V3: un archivo por día, config.ts (decisiones abiertas), rules.ts, index.ts
@@ -107,7 +132,8 @@ src/
     closing/       pregunta de resultado (Sí / Parcial / No), compartida por HOY y FOCUS
     entry/         entrada diaria y micro entrada, reglas de sesión, mensaje del día
     dayscape/      DAYSCAPE: el día entero alrededor del presente, su atmósfera y su materia
-  layout/          navegación lateral (desktop) y secciones
+    week/          SEMANA: lentes, red de luz, velos, selección, apertura al DAYSCAPE de una fecha
+  layout/          navegación lateral (desktop), navegación inferior (móvil) y secciones
 ```
 
 La UI no contiene datos de rutina: ni horas, ni títulos, ni objetivos. Todo sale de `src/data/routine/` (ver abajo).
@@ -183,7 +209,8 @@ Puntos donde la especificación dejaba margen. Todos son fáciles de cambiar.
 - **FOCUS** tiene *Finalizar bloque* y, discreto, *Salir sin cerrar* (vuelve a HOY sin registrar resultado). El temporizador cuenta lo que queda del bloque; si se pasa, muestra el exceso con `+`.
 - **CIERRE** (20:50 en adelante) usa la atmósfera profunda también en HOY; el resto de estados son claros.
 - **Sin respaldo de martes:** los siete días tienen rutina propia; si faltara uno, error de rutina explícito.
-- **Navegación:** en desktop aparecen Semana, Aprender y Sistema atenuadas y sin acción, solo para validar la estructura. Para ocultarlas, basta con quitarlas de `src/layout/sections.ts`. En móvil no hay navegación: solo existe HOY.
+- **Navegación:** HOY y SEMANA están activas; Aprender y Sistema siguen atenuadas y sin acción en desktop, solo para validar la estructura (`src/layout/sections.ts`). En móvil, una navegación inferior discreta (HOY · SEMANA) muestra solo las secciones disponibles; se oculta durante la entrada, FOCUS y al abrir un día.
+- **DAYSCAPE de otro día (desde SEMANA):** se construye con la rutina y los registros guardados de esa fecha, a la **misma hora del día** que ahora — igual que `?date=` —, así que su AHORA es el bloque de esa fecha a esta hora. Para hoy es exactamente el DAYSCAPE en vivo.
 - **Sin marca:** el único signo de identidad es una matriz de 3×3 puntos (placeholder).
 
 ## Sistema de movimiento

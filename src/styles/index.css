@@ -1200,3 +1200,522 @@
 :root[data-motion='reducido'] .ds-name > span {
   animation-name: ds-name-still;
 }
+
+/* ---------------------------------------------------------------------- */
+/* SEMANA — ARCHIPIÉLAGO MINIMAL (Aurora Pearl)                             */
+/* ---------------------------------------------------------------------- */
+
+/* Once SEMANA fully covers HOY's atmosphere, that atmosphere is not painted underneath. */
+:root[data-semana-cover] .atmo {
+  visibility: hidden;
+}
+
+/* The week speaks Deep Ink at any hour: the shared chrome follows it while SEMANA is open. */
+:root[data-section='semana'] {
+  --ink: #172034;
+  --ink-2: rgba(23, 32, 52, 0.74);
+  --ink-3: rgba(23, 32, 52, 0.54);
+  --ink-4: rgba(23, 32, 52, 0.32);
+  --line: rgba(23, 32, 52, 0.08);
+}
+
+.semana {
+  --sm-ivory: #fbfaf8;
+  --sm-champagne: #e8ded0;
+  --sm-lavender: #d8d0e7;
+  --sm-mauve: #c7b8ce;
+  --sm-silver: #dde0e4;
+  --sm-peach: #f1d5c3;
+  --sm-ink: #172034;
+  --sm-ink-2: rgba(23, 32, 52, 0.74);
+  --sm-ink-3: rgba(23, 32, 52, 0.52);
+  --sm-ink-4: rgba(23, 32, 52, 0.3);
+  /* Cold light only where a day opens (VER DÍA, the present in its matter). */
+  --ds-now: #7f93b2;
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  overflow: hidden;
+  color: var(--sm-ink);
+  touch-action: manipulation;
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.sm-atmo {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.sm-ground {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(120% 90% at 50% 38%, #fcfbf9 0%, #fbfaf8 46%, #f5f3f1 100%),
+    #fbfaf8;
+}
+
+/* Three veils. Each: a diffuse body, a refractive edge that comes and goes, a silk sheen. */
+.sm-veil {
+  position: absolute;
+  will-change: transform;
+  animation: var(--veil-move) var(--veil-dur) ease-in-out infinite alternate;
+}
+
+.sm-veil > i {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+}
+
+.sm-veil-body {
+  background: radial-gradient(closest-side, var(--veil-core), var(--veil-mid) 46%, var(--veil-rim) 72%, transparent 100%);
+  animation: sm-veil-breathe var(--veil-breathe) ease-in-out var(--veil-delay) infinite alternate;
+}
+
+.sm-veil-edge {
+  /* Only an arc of the edge is lit, as light caught in the rim of a glass. */
+  background:
+    radial-gradient(closest-side at var(--edge-at), transparent 52%, rgba(255, 255, 255, 0.34) 64%, var(--veil-caustic) 72%, transparent 86%);
+  -webkit-mask-image: linear-gradient(var(--edge-arc), #000 8%, rgba(0, 0, 0, 0.35) 38%, transparent 62%);
+  mask-image: linear-gradient(var(--edge-arc), #000 8%, rgba(0, 0, 0, 0.35) 38%, transparent 62%);
+  animation: sm-veil-define var(--veil-define) ease-in-out var(--veil-delay) infinite;
+}
+
+.sm-veil-silk {
+  inset: -10% -30% !important;
+  border-radius: 0 !important;
+  background: linear-gradient(112deg, transparent 38%, rgba(255, 255, 255, 0.34) 47%, rgba(255, 255, 255, 0.08) 53%, transparent 62%);
+  -webkit-mask-image: radial-gradient(closest-side, #000 30%, transparent 78%);
+  mask-image: radial-gradient(closest-side, #000 30%, transparent 78%);
+  animation: sm-veil-silk var(--veil-silk) ease-in-out var(--veil-delay) infinite alternate;
+}
+
+.sm-veil-champagne {
+  --veil-core: rgba(226, 212, 192, 0.95);
+  --veil-mid: rgba(232, 222, 208, 0.72);
+  --veil-rim: rgba(232, 222, 208, 0.28);
+  --veil-caustic: rgba(241, 213, 195, 0.3);
+  --edge-at: 46% 44%;
+  --edge-arc: 200deg;
+  --veil-move: sm-veil-a;
+  --veil-dur: 68s;
+  --veil-breathe: 47s;
+  --veil-define: 53s;
+  --veil-silk: 61s;
+  --veil-delay: -11s;
+  left: -24vmax;
+  top: -26vmax;
+  width: 104vmax;
+  height: 70vmax;
+}
+
+.sm-veil-peach {
+  --veil-core: rgba(238, 200, 178, 0.82);
+  --veil-mid: rgba(241, 213, 195, 0.6);
+  --veil-rim: rgba(241, 213, 195, 0.22);
+  --veil-caustic: rgba(255, 244, 236, 0.4);
+  --edge-at: 54% 48%;
+  --edge-arc: 320deg;
+  --veil-move: sm-veil-b;
+  --veil-dur: 84s;
+  --veil-breathe: 59s;
+  --veil-define: 71s;
+  --veil-silk: 77s;
+  --veil-delay: -37s;
+  right: -30vmax;
+  bottom: -34vmax;
+  width: 96vmax;
+  height: 66vmax;
+}
+
+.sm-veil-mauve {
+  --veil-core: rgba(190, 174, 202, 0.7);
+  --veil-mid: rgba(208, 198, 226, 0.5);
+  --veil-rim: rgba(216, 208, 231, 0.2);
+  --veil-caustic: rgba(221, 224, 228, 0.45);
+  --edge-at: 44% 52%;
+  --edge-arc: 60deg;
+  --veil-move: sm-veil-c;
+  --veil-dur: 57s;
+  --veil-breathe: 43s;
+  --veil-define: 89s;
+  --veil-silk: 49s;
+  --veil-delay: -23s;
+  left: 34vw;
+  top: 14vh;
+  width: 88vmax;
+  height: 54vmax;
+}
+
+@keyframes sm-veil-a {
+  0% { transform: translate3d(0, 0, 0) rotate(-6deg) scale(1, 1); }
+  35% { transform: translate3d(9vw, 5vh, 0) rotate(2deg) scale(1.1, 0.9); }
+  70% { transform: translate3d(3vw, 12vh, 0) rotate(7deg) scale(0.96, 1.06); }
+  100% { transform: translate3d(14vw, 3vh, 0) rotate(-2deg) scale(1.14, 0.94); }
+}
+
+@keyframes sm-veil-b {
+  0% { transform: translate3d(0, 0, 0) rotate(8deg) scale(1, 1); }
+  40% { transform: translate3d(-12vw, -6vh, 0) rotate(-3deg) scale(1.12, 0.88); }
+  75% { transform: translate3d(-5vw, -14vh, 0) rotate(4deg) scale(0.94, 1.08); }
+  100% { transform: translate3d(-16vw, -4vh, 0) rotate(-6deg) scale(1.06, 0.96); }
+}
+
+@keyframes sm-veil-c {
+  0% { transform: translate3d(0, 0, 0) rotate(14deg) scale(1, 1); }
+  30% { transform: translate3d(-14vw, 10vh, 0) rotate(4deg) scale(1.16, 0.86); }
+  65% { transform: translate3d(-24vw, -4vh, 0) rotate(-8deg) scale(0.92, 1.1); }
+  100% { transform: translate3d(-8vw, 16vh, 0) rotate(10deg) scale(1.1, 0.92); }
+}
+
+@keyframes sm-veil-breathe {
+  0% { opacity: 0.72; }
+  50% { opacity: 1; }
+  100% { opacity: 0.58; }
+}
+
+/* The defined, refracted edge: present, lost, found again. */
+@keyframes sm-veil-define {
+  0%, 100% { opacity: 0.1; }
+  30% { opacity: 0.85; }
+  55% { opacity: 0.25; }
+  78% { opacity: 0.7; }
+}
+
+@keyframes sm-veil-silk {
+  0% { transform: translate3d(-18%, 4%, 0) rotate(-4deg); opacity: 0.2; }
+  50% { opacity: 0.85; }
+  100% { transform: translate3d(16%, -6%, 0) rotate(5deg); opacity: 0.35; }
+}
+
+.sm-grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.022;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+/* The light cools as a day opens: pearl ice over the veils. */
+.sm-cool {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+  background:
+    radial-gradient(70% 60% at 50% 50%, rgba(236, 241, 247, 0.9), rgba(233, 238, 245, 0.75) 60%, rgba(228, 234, 242, 0.85) 100%);
+}
+
+/* The light network: one small layer per fiber; only opacity and transform move. */
+.sm-fibers {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.sm-fiber {
+  position: absolute;
+  transform-origin: 50% 50%;
+  animation: sm-sway var(--sway) ease-in-out var(--delay) infinite alternate;
+}
+
+.sm-fiber-line {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  opacity: calc(var(--peak) * 0.3);
+  animation: sm-fiber-breathe var(--breathe) ease-in-out var(--delay) infinite;
+}
+
+.sm-glint {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 14px;
+  height: 3px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, #ffffff, rgba(255, 255, 255, 0.7) 45%, rgba(255, 255, 255, 0));
+  offset-rotate: auto;
+  offset-distance: var(--g0);
+  opacity: 0;
+  animation: sm-glint var(--glint) linear var(--delay) infinite;
+}
+
+@keyframes sm-sway {
+  0% { transform: rotate(-0.9deg) scale(1.02, 0.93); }
+  100% { transform: rotate(0.8deg) scale(0.98, 1.08); }
+}
+
+/* Mostly a whisper; now and then, briefly, a fiber of light. */
+@keyframes sm-fiber-breathe {
+  0%, 36%, 100% { opacity: calc(var(--peak) * 0.3); }
+  50% { opacity: var(--peak); }
+  60% { opacity: calc(var(--peak) * 0.6); }
+  70% { opacity: calc(var(--peak) * 0.3); }
+}
+
+@keyframes sm-glint {
+  0%, 56% { offset-distance: var(--g0); opacity: 0; }
+  60% { opacity: 0.95; }
+  82% { opacity: 0.8; }
+  88%, 100% { offset-distance: var(--g1); opacity: 0; }
+}
+
+/* A day: its glass. Almost still — a micro drift, never in step with the others. */
+.sm-drift {
+  animation: sm-drift var(--drift) ease-in-out var(--drift-delay) infinite alternate;
+}
+
+.sm-drift[data-still] {
+  animation-play-state: paused;
+}
+
+@keyframes sm-drift {
+  0% { transform: translate3d(-2.5px, 1.5px, 0) rotate(-0.35deg); }
+  100% { transform: translate3d(2.5px, -2px, 0) rotate(0.35deg); }
+}
+
+.sm-lens {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+  border-radius: 50%;
+  cursor: pointer;
+  background: transparent;
+  transition: transform 0.7s var(--ease-astral);
+}
+
+.sm-lens:focus-visible {
+  outline: 1px solid rgba(127, 147, 178, 0.6);
+  outline-offset: 10px;
+  border-radius: 50%;
+}
+
+.sm-lens-glass {
+  position: absolute;
+  left: 50%;
+  pointer-events: none;
+}
+
+.sm-glass {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transition: opacity 0.9s var(--ease-astral);
+}
+
+/* Past a touch more silver (in its colors); future a touch more translucent. */
+.sm-glass[data-tense='future'] {
+  opacity: 0.88;
+}
+
+.sm-spec {
+  opacity: 0.62;
+  transition: opacity 0.6s var(--ease-astral);
+}
+
+.sm-spec-dot {
+  opacity: 0.4;
+  transition: opacity 0.6s var(--ease-astral);
+}
+
+.sm-edge {
+  opacity: 0.88;
+  transition: opacity 0.6s var(--ease-astral);
+}
+
+/* Hover: more refraction, a sharper edge, the reflection wakes. */
+@media (hover: hover) {
+  .sm-lens:hover {
+    transform: translateY(-2px);
+  }
+  .sm-lens:hover .sm-spec {
+    opacity: 1;
+  }
+  .sm-lens:hover .sm-spec-dot {
+    opacity: 0.85;
+  }
+  .sm-lens:hover .sm-edge {
+    opacity: 1;
+  }
+  .sm-lens:hover .sm-ring {
+    filter: drop-shadow(0 0 0.6px rgba(255, 255, 255, 0.9));
+  }
+}
+
+/* HOY: its reflection breathes, very slowly. */
+.sm-glass[data-today] .sm-spec {
+  animation: sm-today 9s ease-in-out infinite;
+}
+
+@keyframes sm-today {
+  0%, 100% { opacity: 0.66; }
+  50% { opacity: 1; }
+}
+
+.sm-modular {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  margin-right: 9px;
+  vertical-align: -1px;
+  flex-shrink: 0;
+}
+
+.sm-day-name {
+  display: flex;
+  align-items: center;
+  font-size: 10.5px;
+  line-height: 1;
+  font-weight: 500;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--sm-ink);
+}
+
+.sm-day-theme {
+  display: block;
+  margin-top: 9px;
+  font-size: 12.5px;
+  line-height: 1.38;
+  letter-spacing: -0.003em;
+  color: var(--sm-ink-3);
+  text-wrap: balance;
+}
+
+.sm-backdrop {
+  position: absolute;
+  inset: -200px;
+  z-index: 1;
+  cursor: default;
+  background: transparent;
+}
+
+/* State 2: the day in words, inside its glass. */
+.sm-selected {
+  position: absolute;
+  z-index: 32;
+  pointer-events: none;
+}
+
+.sm-selected button {
+  pointer-events: auto;
+}
+
+.sm-selected-theme {
+  margin: 0 auto;
+  max-width: 68%;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: clamp(16px, 1.5vw, 20px);
+  line-height: 1.22;
+  font-weight: 300;
+  letter-spacing: -0.02em;
+  color: var(--sm-ink);
+  text-wrap: balance;
+}
+
+.sm-open {
+  position: relative;
+  padding: 12px 20px 16px;
+  font-size: 10.5px;
+  color: var(--sm-ink-2);
+}
+
+.sm-open:hover {
+  color: var(--sm-ink);
+}
+
+/* State 3: three suspended strata of matter; the present is a cold point. */
+.sm-stratum {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, var(--st-core), var(--st-mid) 55%, transparent 100%);
+  box-shadow: inset 0 0 0 0.6px rgba(255, 255, 255, 0.55);
+}
+
+.sm-stratum[data-part='manana'] { --st-core: rgba(228, 190, 170, 0.85); --st-mid: rgba(241, 213, 195, 0.45); }
+.sm-stratum[data-part='tarde'] { --st-core: rgba(182, 164, 196, 0.85); --st-mid: rgba(199, 184, 206, 0.45); }
+.sm-stratum[data-part='noche'] { --st-core: rgba(170, 164, 204, 0.85); --st-mid: rgba(216, 208, 231, 0.45); }
+
+.sm-stratum-cool {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(176, 196, 222, 0.8), rgba(206, 218, 234, 0.45) 55%, transparent 100%);
+}
+
+.sm-stratum-now {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  border-radius: 50%;
+  background: #7393c0;
+  box-shadow: 0 0 0 5px rgba(127, 156, 196, 0.16), 0 0 24px 8px rgba(150, 178, 214, 0.55);
+}
+
+/* Motion levels: `sutil` slows the air; `reducido` holds it still and keeps only fades. */
+.semana[data-ambient='off'] .sm-veil,
+.semana[data-ambient='off'] .sm-veil > i {
+  animation-duration: 160s;
+}
+
+.semana[data-motion='reducido'] .sm-veil,
+.semana[data-motion='reducido'] .sm-veil > i,
+.semana[data-motion='reducido'] .sm-fiber,
+.semana[data-motion='reducido'] .sm-fiber-line,
+.semana[data-motion='reducido'] .sm-drift,
+.semana[data-motion='reducido'] .sm-glass[data-today] .sm-spec,
+.semana[data-motion='reducido'] .ds-continue::after,
+.semana[data-motion='reducido'] .ds-continue-arrow {
+  animation: none;
+}
+
+.semana[data-motion='reducido'] .sm-fiber-line {
+  opacity: calc(var(--peak) * 0.4);
+}
+
+.semana[data-motion='reducido'] .sm-veil-edge {
+  opacity: 0.4;
+}
+
+/* Mobile navigation: HOY · SEMANA, quiet, at the bottom. */
+.bottom-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  justify-content: center;
+  padding: 0 0 max(env(safe-area-inset-bottom), 10px);
+  pointer-events: none;
+}
+
+@media (min-width: 1024px) {
+  .bottom-nav {
+    display: none;
+  }
+}
+
+.bottom-nav::before {
+  content: '';
+  position: absolute;
+  inset: -34px 0 0;
+  z-index: -1;
+  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--atmo-base) 90%, transparent) 42%, var(--atmo-base) 70%);
+  pointer-events: none;
+}
+
+:root[data-section='semana'] .bottom-nav::before {
+  background: linear-gradient(180deg, rgba(251, 250, 248, 0), rgba(251, 250, 248, 0.6) 50%, rgba(251, 250, 248, 0.85));
+}

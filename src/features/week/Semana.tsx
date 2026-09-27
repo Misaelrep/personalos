@@ -118,12 +118,12 @@ function WeekField({ week, onImmersive, onTodayHandoff, onTodayDone }: SemanaPro
   const { arch, sizes, extents, net } = useMemo(() => {
     const arch = archipelago(fieldW, fieldH)
     const sizes = arch.items.map((p) => arch.base * depthScale(p.z))
-    // What each glass occupies at rest, as seen.
+    // What each piece occupies at rest, as seen.
     const extents = forms.map((f, i) => {
       const b = viewLens(planeOutline(f), sizes[i], f.view, f.thickness).bounds
       return { rx: (b.right - b.left) / 2, ry: (b.bottom - b.top) / 2, top: b.top, bottom: b.bottom }
     })
-    return { arch, sizes, extents, net: network(arch, extents, fieldW, fieldH) }
+    return { arch, sizes, extents, net: network(arch, fieldW, fieldH) }
   }, [fieldW, fieldH, forms])
 
   // The chosen day comes to the middle of the field, nearer, turned a little toward us.
@@ -237,6 +237,8 @@ function WeekField({ week, onImmersive, onTodayHandoff, onTodayDone }: SemanaPro
           transition={{ duration: phase === 'returning' ? 1 : 0.7, ease: EASE }}
         >
           <Veils />
+          {/* A very faint veil in front of everything: light haze, never over the words. */}
+          <div aria-hidden className="sm-front" />
           {/* The light cools as the day opens. */}
           <m.div
             aria-hidden
@@ -326,6 +328,7 @@ function WeekField({ week, onImmersive, onTodayHandoff, onTodayDone }: SemanaPro
                   reduced={reduced}
                   sx={sx}
                   sy={sy}
+                  glow={Math.max(0, f.load - 0.5) * 2 * (1 - p.z)}
                   onSelect={() => (selected === i && phase === 'selected' ? open() : select(i))}
                   index={i}
                 />
@@ -379,11 +382,12 @@ interface DayObjectProps {
   reduced: boolean
   sx: MotionValue<number>
   sy: MotionValue<number>
+  glow: number
   onSelect: () => void
   index: number
 }
 
-function DayObject({ day, form, size, extent, place, label, mobile, mode, zoom, pose, reduced, sx, sy, onSelect, index }: DayObjectProps) {
+function DayObject({ day, form, size, extent, place, label, mobile, mode, zoom, pose, reduced, sx, sy, glow, onSelect, index }: DayObjectProps) {
   const today = day.tense === 'today'
   const facing = mode === 'selected' || mode === 'opening'
   // Parallax by depth; a chosen day is still.
@@ -427,7 +431,7 @@ function DayObject({ day, form, size, extent, place, label, mobile, mode, zoom, 
             }}
           >
             <span className="sm-lens-glass" style={{ ...depth, top: -extent.top } as CSSProperties}>
-              <Lens form={form} width={size} mode={mode} zoom={zoom} today={today} reduced={reduced} />
+              <Lens form={form} width={size} mode={mode} zoom={zoom} today={today} reduced={reduced} glow={glow} breathe={place.z < 0.6 ? 11 + ((index * 5) % 7) * 2.3 : 0} />
             </span>
           </button>
           {/* HOY: the modular point, resting on its glass. */}

@@ -13,12 +13,12 @@ const run = (actions: WeekFlowAction[], from: WeekFlowState = WEEK_FLOW_START) =
 const SAT = 5
 
 describe('SEMANA: load lives in the glass, not in its size', () => {
-  it('the seven share one scale', () => {
+  it('the seven share one family scale', () => {
     const widths = forms.map((f) => f.widthK)
-    expect(Math.max(...widths) / Math.min(...widths)).toBeLessThan(1.3)
+    expect(Math.max(...widths) / Math.min(...widths)).toBeLessThan(1.2)
   })
 
-  it('Thursday is clear and hollow: the thinnest, clearest glass, almost no matter, a strong optical ring', () => {
+  it('Thursday is a membrane: the thinnest, clearest glass, almost no matter, its inner contour visible', () => {
     const thu = forms[3]
     for (const f of forms.filter((_, i) => i !== 3)) {
       expect(thu.thickness).toBeLessThan(f.thickness)
@@ -26,125 +26,164 @@ describe('SEMANA: load lives in the glass, not in its size', () => {
       expect(thu.fog).toBeLessThan(f.fog)
       expect(thu.ring).toBeGreaterThan(f.ring)
     }
-    // Visible, not tiny.
-    expect(thu.widthK).toBeGreaterThanOrEqual(1)
+    expect(thu.widthK).toBeGreaterThanOrEqual(1) // visible, not tiny
   })
 
-  it('Saturday is the densest: thickest, most frosted, the most interior fog — not the biggest', () => {
+  it('Saturday is the densest — the most fog and the most milky glass — but not the largest', () => {
     const sat = forms[SAT]
     for (const f of forms.filter((_, i) => i !== SAT)) {
-      expect(sat.thickness).toBeGreaterThanOrEqual(f.thickness - 0.016) // Sunday's length adds a little edge
       expect(sat.fog).toBeGreaterThan(f.fog)
       expect(sat.frost).toBeGreaterThan(f.frost)
     }
     expect(sat.widthK).toBeLessThan(forms[6].widthK)
   })
 
-  it('Sunday is longer and deeper: elongated, with one continuous interior', () => {
+  it('Sunday is longer and deeper: one continuous interior, not a bigger Saturday', () => {
     const sun = forms[6]
     expect(sun.widthK).toBe(Math.max(...forms.map((f) => f.widthK)))
-    expect(sun.aspect).toBe(Math.min(...forms.map((f) => f.aspect)))
     expect(sun.depth).toBeGreaterThan(0)
     expect(forms.filter((f) => f.depth > 0)).toHaveLength(1)
     expect(sun.fog).toBeLessThan(forms[SAT].fog)
+    const aspect = (i: number) => {
+      const o = planeOutline(forms[i])
+      const xs = o.map((p) => p[0])
+      const ys = o.map((p) => p[1])
+      return (Math.max(...ys) - Math.min(...ys)) / (Math.max(...xs) - Math.min(...xs))
+    }
+    for (let i = 0; i < 6; i++) expect(aspect(6)).toBeLessThan(aspect(i))
   })
 
   it('HOY, past and future come from the date', () => {
     expect(forms.map((f) => f.tense)).toEqual(['past', 'past', 'today', 'future', 'future', 'future', 'future'])
   })
+
+  it('light falls differently: not every piece gets the same reflection', () => {
+    expect(new Set(forms.map((f) => `${f.light.kind}@${f.light.at}`)).size).toBe(7)
+    expect(new Set(forms.map((f) => f.light.kind)).size).toBeGreaterThanOrEqual(3)
+  })
 })
 
-describe('SEMANA: sculptural glass, never a disc, a pill or a circle', () => {
-  const radii = (pts: [number, number][]) => {
-    const cx = pts.reduce((s, p) => s + p[0], 0) / pts.length
-    const cy = pts.reduce((s, p) => s + p[1], 0) / pts.length
-    return pts.map(([x, y]) => Math.hypot(x - cx, y - cy))
-  }
+describe('SEMANA: sculptural pebbles, never a disc, a saucer or a circle', () => {
+  const outline = (i: number) => planeOutline(forms[i])
 
-  it('each outline is irregular: one family, seven individuals', () => {
-    const outlines = forms.map((f) => planeOutline(f))
-    for (const o of outlines) {
-      const r = radii(o)
-      expect(Math.max(...r) / Math.min(...r)).toBeGreaterThan(1.2) // not a circle
-    }
-    // No two alike.
-    const signature = (o: [number, number][]) => o.slice(0, 12).map(([x, y]) => `${x.toFixed(3)},${y.toFixed(3)}`).join(';')
-    expect(new Set(outlines.map(signature)).size).toBe(7)
-    expect(new Set(forms.map((f) => f.light.at.toFixed(3))).size).toBe(7)
+  it('seven real outlines of one family — not one shape rotated and scaled', () => {
+    // Normalize each outline (center, width 1, no rotation) and compare: they must differ.
+    const normalized = forms.map((f, i) => {
+      const o = outline(i).map(([x, y]) => [x * Math.cos(-f.rot) - y * Math.sin(-f.rot), x * Math.sin(-f.rot) + y * Math.cos(-f.rot)])
+      const xs = o.map((p) => p[0])
+      const w = Math.max(...xs) - Math.min(...xs)
+      return o.map(([x, y]) => [x / w, y / w])
+    })
+    for (let i = 0; i < 7; i++)
+      for (let j = i + 1; j < 7; j++) {
+        const d = normalized[i].reduce((s, p, k) => s + Math.hypot(p[0] - normalized[j][k][0], p[1] - normalized[j][k][1]), 0) / normalized[i].length
+        expect(d).toBeGreaterThan(0.01)
+      }
   })
 
-  it('seen at rest, the dome shows under the face; Saturday deepest, Thursday almost flat', () => {
-    const drop = (i: number) => {
-      const v = viewLens(planeOutline(forms[i]), 200, forms[i].view, forms[i].thickness)
-      return v.bounds.bottom - v.bounds.faceBottom
+  it('each is asymmetric: one end fuller than the other, top and bottom of different weight', () => {
+    for (let i = 0; i < 7; i++) {
+      if (i === 3) continue // Thursday is nearly even: a membrane
+      const o = outline(i)
+      const height = (side: number) => {
+        const pts = o.filter(([x]) => Math.sign(x) === side && Math.abs(x) > 0.25 * forms[i].widthK)
+        return Math.max(...pts.map((p) => p[1])) - Math.min(...pts.map((p) => p[1]))
+      }
+      expect(Math.abs(height(-1) - height(1)) / Math.max(height(-1), height(1))).toBeGreaterThan(0.04)
     }
-    expect(drop(SAT)).toBeGreaterThan(drop(0))
-    expect(drop(3)).toBeLessThan(4)
   })
 
-  it('chosen, Saturday is the same object turned toward us — larger face, never a circle', () => {
-    const rest = viewLens(planeOutline(forms[SAT]), 200, forms[SAT].view, forms[SAT].thickness).bounds
+  it('seen at rest it is a pebble: its dome rises above the rim and its lower curve falls below it', () => {
+    const f = forms[SAT]
+    const plane = outline(SAT)
+    const flat = viewLens(plane, 200, f.view, 0).bounds
+    const thick = viewLens(plane, 200, f.view, f.thickness).bounds
+    expect(thick.top).toBeLessThan(flat.top)
+    expect(thick.bottom).toBeGreaterThan(flat.bottom)
+    // Saturday deeper than Monday, Thursday almost flat.
+    const depth = (i: number) => {
+      const v = viewLens(outline(i), 200, forms[i].view, forms[i].thickness).bounds
+      const z = viewLens(outline(i), 200, forms[i].view, 0).bounds
+      return v.bottom - v.top - (z.bottom - z.top)
+    }
+    expect(depth(SAT)).toBeGreaterThan(depth(0))
+    expect(depth(3)).toBeLessThan(4)
+  })
+
+  it('chosen, Saturday is the same piece turned toward us — larger face, never a circle', () => {
+    const rest = viewLens(outline(SAT), 200, forms[SAT].view, forms[SAT].thickness).bounds
     const chosen = selectedView(forms[SAT], 200).bounds
     const w = chosen.right - chosen.left
     expect(chosen.right - chosen.left).toBeCloseTo(rest.right - rest.left, 0)
-    expect(chosen.faceBottom - chosen.top).toBeGreaterThan((rest.faceBottom - rest.top) * 1.5)
+    expect(chosen.faceBottom - chosen.top).toBeGreaterThan((rest.faceBottom - rest.top) * 1.3)
     expect((chosen.bottom - chosen.top) / w).toBeLessThan(0.9)
   })
 })
 
-describe('SEMANA: a small galaxy, never a row, a column or a list', () => {
-  it('desktop: the week drifts left → right with an eddy; near and far, never a line', () => {
+describe('SEMANA: a field, never a row, a ring or a list', () => {
+  it('desktop: the reference composition — voids, a near pair, isolated pieces, three depths', () => {
     const a = archipelago(1440, 900)
     const xs = a.items.map((p) => p.x)
     const ys = a.items.map((p) => p.y)
     expect(xs[0]).toBe(Math.min(...xs)) // Monday opens the field…
     expect(xs[6]).toBe(Math.max(...xs)) // …Sunday closes it
     expect(xs[3]).toBeLessThan(xs[2]) // Thursday falls back into open air
-    // No shared rows or columns, no even spacing.
     for (let i = 0; i < 7; i++)
       for (let j = i + 1; j < 7; j++) expect(Math.abs(xs[i] - xs[j]) > 40 || Math.abs(ys[i] - ys[j]) > 40).toBe(true)
     const gaps = xs.slice(1).map((x, i) => Math.abs(x - xs[i]))
     expect(Math.max(...gaps) / Math.min(...gaps)).toBeGreaterThan(1.5)
-    // Clear foreground, middle ground and background.
+    // Two far, three in the middle, two near.
     const zs = a.items.map((p) => p.z)
-    expect(zs.some((z) => z < 0.15)).toBe(true)
-    expect(zs.some((z) => z > 0.35 && z < 0.65)).toBe(true)
-    expect(zs.some((z) => z > 0.7)).toBe(true)
+    expect(zs.filter((z) => z >= 0.7).length).toBe(2)
+    expect(zs.filter((z) => z > 0.3 && z < 0.7).length).toBe(3)
+    expect(zs.filter((z) => z <= 0.3).length).toBe(2)
+    // No center: the pieces do not sit around a common point.
+    const cx = xs.reduce((s, x) => s + x, 0) / 7
+    const cy = ys.reduce((s, y) => s + y, 0) / 7
+    const d = a.items.map((p) => Math.hypot(p.x - cx, p.y - cy))
+    expect(Math.max(...d) / Math.min(...d)).toBeGreaterThan(2)
   })
 
-  it('mobile: read top → bottom in loose pairs at different depths, never one day per line', () => {
+  it('mobile: a vertical field, not a list — the eye goes left, right, center', () => {
     const a = archipelago(390, 612)
-    const ys = a.items.map((p) => p.y)
-    const xs = a.items.map((p) => p.x)
-    expect(ys[0]).toBe(Math.min(...ys))
-    expect(ys[6]).toBe(Math.max(...ys))
-    // At least three pairs of days share a band of the screen, side by side.
-    const pairs = [0, 2, 4].filter((i) => Math.abs(ys[i + 1] - ys[i]) < 612 * 0.12 && Math.abs(xs[i + 1] - xs[i]) > 390 * 0.3)
-    expect(pairs.length).toBe(3)
-    // Their depths differ.
-    for (const i of [0, 2, 4]) expect(Math.abs(a.items[i].z - a.items[i + 1].z)).toBeGreaterThan(0.2)
-    // Words sit on different sides of the glass.
+    const col = (x: number) => (x < 390 * 0.34 ? 'L' : x > 390 * 0.66 ? 'R' : 'C')
+    const cols = a.items.map((p) => col(p.x))
+    expect(new Set(cols).size).toBe(3)
+    // Never two in a row on the same side.
+    for (let i = 1; i < 7; i++) expect(cols[i]).not.toBe(cols[i - 1])
+    // Some days share a band of the screen, at different depths.
+    const shared = [0, 1, 2, 3, 4, 5].filter((i) => Math.abs(a.items[i + 1].y - a.items[i].y) < 612 * 0.12)
+    expect(shared.length).toBeGreaterThanOrEqual(2)
+    for (const i of shared) expect(Math.abs(a.items[i].z - a.items[i + 1].z)).toBeGreaterThan(0.2)
     expect(new Set(a.items.map((p) => p.label)).size).toBeGreaterThan(1)
   })
 
-  it('the network: open orbits through the shared field, a few relations — one splits, one never arrives', () => {
-    const a = archipelago(1440, 900)
-    const { fibers, sparks } = network(a, a.items.map(() => ({ rx: 80, ry: 30 })), 1232, 656)
-    const orbits = fibers.filter((f) => f.kind === 'orbit')
-    const relations = fibers.filter((f) => f.kind === 'relation')
-    expect(orbits.length).toBeGreaterThanOrEqual(2)
-    expect(orbits.every((f) => f.drawn < 1)).toBe(true) // never closed
-    expect(relations.length).toBeGreaterThanOrEqual(2)
-    expect(relations.length).toBeLessThan((7 * 6) / 2) // never all-to-all
-    expect(fibers.some((f) => f.kind === 'branch')).toBe(true)
-    expect(relations.some((f) => f.drawn < 0.7)).toBe(true)
-    expect(fibers.some((f) => f.layer === 'mid')).toBe(true) // one crosses between far and near
-    expect(sparks.length).toBeGreaterThan(3)
-    for (const f of fibers) {
-      expect(f.breathe).toBeGreaterThanOrEqual(20)
-      expect(f.breathe).toBeLessThanOrEqual(60)
+  it('the network: open fibers, never orbits — they split, get lost, join regions without touching a piece', () => {
+    for (const [w, h] of [
+      [1232, 658],
+      [366, 612],
+    ]) {
+      const a = archipelago(w, h)
+      const { fibers, sparks } = network(a, w, h)
+      const main = fibers.filter((f) => f.kind === 'fiber')
+      expect(main.length).toBeGreaterThanOrEqual(4)
+      expect(main.length).toBeLessThanOrEqual(6)
+      expect(fibers.every((f) => f.drawn < 1)).toBe(true) // incomplete
+      expect(fibers.some((f) => f.kind === 'branch')).toBe(true)
+      expect(main.some((f) => f.near.length === 0)).toBe(true) // joins regions only
+      expect(fibers.some((f) => f.layer === 'mid')).toBe(true)
+      // Never closed: start and end are far apart.
+      for (const f of main) {
+        const n = f.d.match(/-?\d+(\.\d+)?/g)!.map(Number)
+        expect(Math.hypot(n[0] - n[n.length - 2], n[1] - n[n.length - 1])).toBeGreaterThan(Math.min(w, h) * 0.12)
+      }
+      expect(sparks.length).toBeGreaterThanOrEqual(4)
+      expect(sparks.length).toBeLessThanOrEqual(8)
+      for (const f of fibers) {
+        expect(f.breathe).toBeGreaterThanOrEqual(20)
+        expect(f.breathe).toBeLessThanOrEqual(60)
+      }
     }
-    expect(new Set(fibers.map((f) => f.breathe.toFixed(1))).size).toBe(fibers.length)
   })
 })
 

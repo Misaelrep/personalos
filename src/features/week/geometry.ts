@@ -1,19 +1,20 @@
 import type { DayPart, WeekDay, WeekTense } from '../../domain/week'
 
 /**
- * SEMANA — a small abstract galaxy of seven glass objects. Pure: it only turns
- * the week into forms, places and a light network; the components draw them.
+ * SEMANA — seven sculptural pieces of optical glass suspended in one field.
+ * Pure: it only turns the week into forms, places and a light network; the
+ * components draw them.
  *
- * Each day is an irregular sculptural lens: one family, seven individuals.
- * Its outline lives in its own plane (a tenser far edge, a fuller near edge,
- * one end a little wider, a slight twist) and is seen in perspective, so the
- * same object can turn toward us without ever becoming a circle.
+ * Each day is a hand-molded glass pebble: seven real outlines of one family
+ * (never an ellipse deformed by a formula), seen in perspective. Its top face
+ * is inset from its edge — thin at the top, thick at the bottom — so the
+ * glass shows its depth only at certain edges, as molded glass does.
  *
  * A day's load is read in the glass, never in a number:
- *   thickness   how deep the dome is (the glass seen under its face)
- *   frost       how clear or clouded the glass is
+ *   thickness   how deep the piece is (the edge band under its face)
+ *   frost       how milky the glass is
  *   fog         the matter suspended inside (deep work)
- *   ring        the optical ring of an almost empty lens (Thursday: space)
+ *   ring        the inner contour of an almost empty piece (Thursday: a membrane)
  *   depth       one continuous, deeper interior (Sunday: a long period)
  */
 
@@ -37,6 +38,61 @@ export function seeded(seed: number) {
   }
 }
 
+/**
+ * Seven pebbles, Monday → Sunday: one family, seven individuals. Each is set
+ * by hand — its proportion, which end is fuller, how tense its top, how heavy
+ * its lower curve, how far its axis leans, a slight irregularity — and becomes
+ * its own control outline (never one ellipse deformed by a formula for all).
+ */
+interface Pebble {
+  /** Depth / width in its own plane. */
+  aspect: number
+  /** One end fuller: − the left, + the right. */
+  egg: number
+  /** Tension of the far edge (flatter top). */
+  top: number
+  /** Weight of the near edge (fuller lower curve). */
+  bottom: number
+  /** The axis leans a little. */
+  lean: number
+  /** A slight, hand-made irregularity. */
+  bumps: [number, number]
+}
+
+const PEBBLES: Pebble[] = [
+  // Lunes: compact, fuller on the left.
+  { aspect: 0.74, egg: -0.13, top: 0.02, bottom: 0.05, lean: 0.03, bumps: [0.018, 1.1] },
+  // Martes: flatter, a little inclined.
+  { aspect: 0.64, egg: 0.13, top: 0.05, bottom: 0.02, lean: -0.07, bumps: [0.014, 2.3] },
+  // Miércoles: more open at its right end.
+  { aspect: 0.7, egg: 0.13, top: 0.03, bottom: 0.04, lean: 0.02, bumps: [0.016, 0.4] },
+  // Jueves: long and fine, a membrane; rounder on the left.
+  { aspect: 0.72, egg: -0.06, top: 0.02, bottom: 0.02, lean: 0, bumps: [0.012, 3.1] },
+  // Viernes: compact, slightly twisted.
+  { aspect: 0.74, egg: 0.15, top: 0.03, bottom: 0.03, lean: 0.07, bumps: [0.02, 1.7] },
+  // Sábado: fuller and deeper, a heavier lower curve, its right end narrower.
+  { aspect: 0.8, egg: -0.11, top: 0.03, bottom: 0.1, lean: -0.02, bumps: [0.016, 5.2] },
+  // Domingo: longer and deeper.
+  { aspect: 0.56, egg: 0.06, top: 0.02, bottom: 0.06, lean: 0.02, bumps: [0.014, 4.4] },
+]
+
+/** A pebble's control outline: 12 points, clockwise from the left end; negative y is the far edge. */
+function pebbleOutline(p: Pebble): Pt[] {
+  const pts: Pt[] = []
+  for (let i = 0; i < 12; i++) {
+    const t = Math.PI + (i / 12) * Math.PI * 2
+    const r = 1 + p.bumps[0] * Math.sin(3 * t + p.bumps[1]) + p.bumps[0] * 0.6 * Math.sin(5 * t + p.bumps[1] * 2)
+    const x = 0.5 * Math.cos(t) * r
+    let y = (p.aspect / 2) * Math.sin(t) * r
+    y *= 1 + p.egg * (x / 0.5)
+    y *= y < 0 ? 1 - p.top : 1 + p.bottom
+    pts.push([x, y + p.lean * x])
+  }
+  return pts
+}
+
+export const OUTLINES: Pt[][] = PEBBLES.map(pebbleOutline)
+
 export interface FogLayer {
   part: DayPart
   /** 0–1: how much matter the part holds. */
@@ -44,44 +100,47 @@ export interface FogLayer {
   density: number
 }
 
+export type LightKind = 'streak' | 'patch' | 'spark' | 'faint'
+
 export interface LensForm {
   seed: number
+  /** Which of the seven outlines. */
+  shape: number
   /** Width relative to the family's common width. */
   widthK: number
-  /** Depth / width of the outline in its own plane. */
-  aspect: number
-  /** Tension of the far and near edges (superellipse exponents: 2 an ellipse, higher tenser). */
-  nFar: number
-  nNear: number
-  /** One end a little wider (−: left, +: right). */
-  wide: number
-  /** Slight torsion of the outline. */
-  twist: number
-  /** Orientation in its own plane (rad): each lens is seen from its own angle. */
+  /** Orientation in its own plane (rad): each piece is seen from its own angle. */
   rot: number
-  /** Irregularity of the edge. */
-  asym: number
   /** How much of its face we see at rest (sine of the view elevation). */
   view: number
   /** Inclination on screen (deg). */
   tilt: number
-  /** Thickness of the dome, fraction of the width. */
+  /** Thickness of the piece, fraction of the width. */
   thickness: number
-  /** Opacity of the glass body. */
+  /** Milkiness of the glass. */
   frost: number
   /** Interior fog, 0–1. */
   fog: number
-  /** Optical ring, 0–1. */
+  /** Inner contour of an almost empty piece, 0–1. */
   ring: number
   /** Continuous deep interior (Sunday), 0–1. */
   depth: number
   /** Normalized load, 0–1. */
   load: number
-  /** Where the reflections fall: never twice the same. */
-  light: { at: number; span: number; second: number; band: number }
+  /** How the light falls on it: never twice the same. */
+  light: { kind: LightKind; at: number; span: number; band: number }
   layers: FogLayer[]
   tense: WeekTense
 }
+
+const LIGHTS: LensForm['light'][] = [
+  { kind: 'patch', at: 0.3, span: 0.24, band: 0.3 },
+  { kind: 'spark', at: 0.78, span: 0.14, band: 0.26 },
+  { kind: 'streak', at: 0.62, span: 0.3, band: 0.34 },
+  { kind: 'faint', at: 0.5, span: 0.36, band: 0.24 },
+  { kind: 'streak', at: 0.36, span: 0.22, band: 0.3 },
+  { kind: 'streak', at: 0.7, span: 0.34, band: 0.28 },
+  { kind: 'patch', at: 0.24, span: 0.3, band: 0.32 },
+]
 
 /** Load → glass. Eased so the heavy days separate from the ordinary ones without growing. */
 export function lensForm(day: WeekDay, index: number): LensForm {
@@ -93,76 +152,80 @@ export function lensForm(day: WeekDay, index: number): LensForm {
   const empty = day.minutes.deep === 0
   return {
     seed: 11 + index * 7,
-    widthK: long ? 1.18 : empty ? 1.06 : 0.95 + rand() * 0.08,
-    aspect: long ? 0.62 : empty ? 0.8 : 0.76 + rand() * 0.1,
-    nFar: 2.08 + rand() * 0.3,
-    nNear: empty ? 2.05 : 1.9 + rand() * 0.2,
-    wide: (rand() - 0.5) * 0.26,
-    twist: (rand() - 0.5) * 0.18,
-    rot: (rand() - 0.5) * 0.34,
-    asym: 0.014 + rand() * 0.02,
-    view: empty ? 0.4 : 0.44 + rand() * 0.06,
-    tilt: (rand() - 0.5) * 9,
-    thickness: empty ? 0.014 : 0.05 + shaped * 0.17 + (long ? 0.02 : 0),
-    frost: empty ? 0.02 : 0.06 + shaped * 0.32,
+    shape: index % OUTLINES.length,
+    widthK: long ? 1.08 : empty ? 1.04 : 0.96 + rand() * 0.05,
+    rot: (rand() - 0.5) * 0.22,
+    view: empty ? 0.38 : 0.5 + rand() * 0.06,
+    tilt: (rand() - 0.5) * 7,
+    thickness: empty ? 0.02 : 0.1 + shaped * 0.13 + (long ? 0.03 : 0),
+    frost: empty ? 0.02 : 0.08 + shaped * 0.3,
     fog: empty ? 0.06 : 0.16 + deep * 0.84,
-    ring: empty ? 0.9 : 0.3 - shaped * 0.15,
+    ring: empty ? 0.9 : 0.4,
     depth: long ? 0.85 : 0,
     load,
-    light: { at: 0.52 + rand() * 0.3, span: 0.16 + rand() * 0.14, second: rand(), band: 0.2 + rand() * 0.2 },
+    light: LIGHTS[index % LIGHTS.length],
     layers: day.layers.map((l) => ({ part: l.part, matter: clamp01(l.matter), density: clamp01(l.density) })),
     tense: day.tense,
   }
 }
 
 /* ------------------------------------------------------------------------ */
-/* The lens: its outline in its own plane, and how it is seen                 */
+/* The piece: its outline in its own plane, and how it is seen                */
 /* ------------------------------------------------------------------------ */
 
-/** Outline in the lens's own plane, width 1 (× widthK): a tenser far edge, a fuller near edge. */
-export function planeOutline(f: LensForm, points = 84): Pt[] {
-  const rand = seeded(f.seed)
-  const p1 = rand() * Math.PI * 2
-  const p2 = rand() * Math.PI * 2
-  const p3 = rand() * Math.PI * 2
-  const a = f.widthK / 2
-  const b = (f.widthK * f.aspect) / 2
-  const cr = Math.cos(f.rot)
-  const sr = Math.sin(f.rot)
+/** Closed Catmull-Rom through control points, sampled. */
+function closedSpline(ctrl: Pt[], per: number): Pt[] {
+  const n = ctrl.length
   const out: Pt[] = []
-  for (let i = 0; i < points; i++) {
-    const t = (i / points) * Math.PI * 2
-    const c = Math.cos(t)
-    const s = Math.sin(t)
-    const n = s < 0 ? f.nFar : f.nNear
-    const r = 1 + f.asym * Math.sin(2 * t + p1) + f.asym * 0.7 * Math.sin(3 * t + p2) + f.asym * 0.4 * Math.sin(5 * t + p3)
-    let x = a * Math.sign(c) * Math.abs(c) ** (2 / n) * r
-    let y = b * Math.sign(s) * Math.abs(s) ** (2 / n) * r
-    y *= 1 + f.wide * (x / a)
-    x += f.twist * y
-    out.push([x * cr - y * sr, x * sr + y * cr])
+  for (let i = 0; i < n; i++) {
+    const p0 = ctrl[(i - 1 + n) % n]
+    const p1 = ctrl[i]
+    const p2 = ctrl[(i + 1) % n]
+    const p3 = ctrl[(i + 2) % n]
+    for (let k = 0; k < per; k++) {
+      const t = k / per
+      const t2 = t * t
+      const t3 = t2 * t
+      out.push([
+        0.5 * (2 * p1[0] + (-p0[0] + p2[0]) * t + (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2 + (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3),
+        0.5 * (2 * p1[1] + (-p0[1] + p2[1]) * t + (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2 + (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3),
+      ])
+    }
   }
   return out
 }
 
+/** The piece's outline in its own plane, width ≈ widthK, from its own control points. */
+export function planeOutline(f: LensForm): Pt[] {
+  const cr = Math.cos(f.rot)
+  const sr = Math.sin(f.rot)
+  return closedSpline(OUTLINES[f.shape], 9).map(([x, y]) => {
+    const px = x * f.widthK
+    const py = y * f.widthK
+    return [px * cr - py * sr, px * sr + py * cr]
+  })
+}
+
 export interface LensView {
-  /** The whole glass as seen (the dome's underside included). */
+  /** The whole piece as seen (its lower curve carried down by the thickness). */
   silhouette: Pt[]
-  /** The top surface: far edge + near edge. */
+  /** The top face's contour: inset from the edge, thin above, thick below. */
   face: Pt[]
   /** Far edge, left → right. */
   far: Pt[]
-  /** Near edge of the face, left → right. */
+  /** Near edge before the thickness, left → right. */
   near: Pt[]
-  /** Near edge carried down by the thickness: the glass's lower edge, left → right. */
+  /** The piece's lower edge, left → right. */
   under: Pt[]
   bounds: { left: number; right: number; top: number; faceBottom: number; bottom: number }
 }
 
 /**
- * The lens of width `W` px seen at `view` (sine of the elevation: 0 edge-on,
- * 1 facing us). The far edge bounds it above; below, its thickness shows under
- * the near edge — deepest at the middle, vanishing at both ends, like a dome.
+ * The piece of width `W` px seen at `view` (sine of the elevation: 0 edge-on,
+ * 1 facing us). The far edge bounds it above; below, its thickness fills the
+ * lower curve — deepest in the middle, vanishing at both ends. The face is the
+ * outline pulled toward a point high inside the piece, so the edge band is
+ * thin above and thick below.
  */
 export function viewLens(plane: Pt[], W: number, view: number, thickness: number): LensView {
   const pts: Pt[] = plane.map(([x, y]) => [x * W, y * W * view])
@@ -189,18 +252,29 @@ export function viewLens(plane: Pt[], W: number, view: number, thickness: number
   const right = pts[iR][0]
   const mid = (left + right) / 2
   const half = (right - left) / 2 || 1
-  const drop = thickness * W * Math.sqrt(Math.max(0, 1 - view * view))
-  const under: Pt[] = near.map(([x, y]) => [x, y + drop * Math.sqrt(Math.max(0, 1 - ((x - mid) / half) ** 2))])
-  const face = [...far, ...near.slice().reverse()]
-  const silhouette = [...far, ...under.slice().reverse()]
+  const side = Math.sqrt(Math.max(0, 1 - view * view))
+  const drop = thickness * W * side
+  // Blunt at both ends: a pebble keeps its thickness almost to its tips, never an almond.
+  const profile = (x: number) => Math.max(0, 1 - ((x - mid) / half) ** 2) ** 0.3
+  // A pebble, not a bowl: its dome rises above the rim as its lower curve falls below it.
+  const dome: Pt[] = far.map(([x, y]) => [x, y - drop * 0.42 * profile(x)])
+  const under: Pt[] = near.map(([x, y]) => [x, y + drop * 0.58 * profile(x)])
+  const silhouette = [...dome, ...under.slice().reverse()]
   const ys = (c: Pt[]) => c.map((p) => p[1])
+  const top = Math.min(...ys(dome))
+  const bottom = Math.max(...ys(under))
+  // The face: the outline pulled toward a point high inside; the band shows the glass's depth.
+  const band = Math.min(0.24, 0.035 + thickness * 0.9 * (0.4 + side))
+  const cx = mid + half * 0.06
+  const cy = top + (bottom - top) * 0.3
+  const face: Pt[] = silhouette.map(([x, y]) => [cx + (x - cx) * (1 - band * 0.7), cy + (y - cy) * (1 - band)])
   return {
     silhouette,
     face,
-    far,
+    far: dome,
     near,
     under,
-    bounds: { left, right, top: Math.min(...ys(far)), faceBottom: Math.max(...ys(near)), bottom: Math.max(...ys(under)) },
+    bounds: { left, right, top, faceBottom: Math.max(...ys(face)), bottom },
   }
 }
 
@@ -256,39 +330,40 @@ export interface Placement {
 }
 
 export interface Archipelago {
-  /** Common lens width (px) at depth 0. */
+  /** Common piece width (px) at depth 0. */
   base: number
   items: Placement[]
   mobile: boolean
 }
 
 /**
- * Desktop: a small galaxy, not a row or a ring. The week drifts left → right
- * with an eddy (Thursday falls back into open air, low on the left); the near,
- * denser cluster sits right (Saturday, Sunday); Tuesday floats far and small.
+ * Desktop, after the approved reference: no center, no ring. Tuesday and
+ * Wednesday far and small; Monday, Thursday and Friday in the middle ground
+ * (Thursday low, in open air); Saturday and Sunday near, together on the right.
+ * Large voids, a near pair, isolated pieces.
  */
 const WIDE: Omit<Placement, 'label'>[] = [
-  { x: 0.105, y: 0.44, z: 0.55 },
-  { x: 0.31, y: 0.2, z: 0.78 },
-  { x: 0.425, y: 0.5, z: 0.6 },
-  { x: 0.235, y: 0.76, z: 0.22 },
-  { x: 0.545, y: 0.82, z: 0.42 },
-  { x: 0.715, y: 0.56, z: 0.04 },
-  { x: 0.845, y: 0.22, z: 0.1 },
+  { x: 0.085, y: 0.42, z: 0.6 },
+  { x: 0.325, y: 0.16, z: 0.86 },
+  { x: 0.455, y: 0.46, z: 0.8 },
+  { x: 0.235, y: 0.71, z: 0.42 },
+  { x: 0.58, y: 0.77, z: 0.54 },
+  { x: 0.775, y: 0.52, z: 0.14 },
+  { x: 0.905, y: 0.17, z: 0.05 },
 ]
 
 /**
- * Mobile: its own field, read in loose pairs at different depths — never one
- * day per line. Offsets are wide, near days larger, far days smaller and softer.
+ * Mobile: a vertical field, not a list — the eye goes left, right, center,
+ * left, right, center, right; deep, middle and near pieces alternate.
  */
 const NARROW: Placement[] = [
-  { x: 0.22, y: 0.06, z: 0.62, label: 'right' },
-  { x: 0.7, y: 0.17, z: 0.3, label: 'below' },
-  { x: 0.3, y: 0.37, z: 0.3, label: 'below' },
-  { x: 0.8, y: 0.41, z: 0.8, label: 'below' },
-  { x: 0.2, y: 0.58, z: 0.55, label: 'below' },
-  { x: 0.68, y: 0.645, z: 0.02, label: 'below' },
-  { x: 0.33, y: 0.9, z: 0.14, label: 'right' },
+  { x: 0.21, y: 0.07, z: 0.78, label: 'right' },
+  { x: 0.76, y: 0.17, z: 0.45, label: 'below' },
+  { x: 0.47, y: 0.35, z: 0.14, label: 'below' },
+  { x: 0.18, y: 0.53, z: 0.48, label: 'below' },
+  { x: 0.8, y: 0.53, z: 0.84, label: 'below' },
+  { x: 0.38, y: 0.66, z: 0.04, label: 'below' },
+  { x: 0.75, y: 0.9, z: 0.3, label: 'left' },
 ]
 
 export const MOBILE_MAX = 720
@@ -296,19 +371,19 @@ export const MOBILE_MAX = 720
 export function archipelago(width: number, height: number): Archipelago {
   const mobile = width < MOBILE_MAX
   if (mobile) {
-    const base = Math.max(84, Math.min(112, width * 0.28, height * 0.17))
+    const base = Math.max(92, Math.min(124, width * 0.31, height * 0.19))
     return { base, mobile, items: NARROW.map((p) => ({ ...p, x: p.x * width, y: p.y * height })) }
   }
-  const base = Math.max(130, Math.min(250, width * 0.168, height * 0.36))
+  const base = Math.max(140, Math.min(280, width * 0.212, height * 0.42))
   return { base, mobile, items: WIDE.map((p) => ({ ...p, x: p.x * width, y: p.y * height, label: 'below' })) }
 }
 
-/** Near days a little larger, far days smaller: depth, never a ranking of load. */
-export const depthScale = (z: number) => 1.08 - z * 0.52
-/** Far days soften and lose a little color and contrast. */
-export const depthBlur = (z: number) => Math.max(0, z - 0.5) * 2.2
-export const depthSaturation = (z: number) => 1 - z * 0.3
-export const depthOpacity = (z: number) => 1 - z * 0.28
+/** Near pieces larger, far ones smaller: depth, never a ranking of load. */
+export const depthScale = (z: number) => 1.06 - z * 0.46
+/** Far pieces soften and lose a little color, contrast and refraction. */
+export const depthBlur = (z: number) => Math.max(0, z - 0.6) * 1.3
+export const depthSaturation = (z: number) => 1 - z * 0.24
+export const depthOpacity = (z: number) => 1 - z * 0.12
 
 /* ------------------------------------------------------------------------ */
 /* The light network                                                          */
@@ -317,11 +392,11 @@ export const depthOpacity = (z: number) => 1 - z * 0.28
 export interface Fiber {
   /** Smooth path, px in the field. Also the path the glint travels. */
   d: string
-  kind: 'orbit' | 'relation' | 'branch'
-  /** 'back' passes behind every day; 'mid' crosses between far and near days. */
+  kind: 'fiber' | 'branch'
+  /** 'back' passes behind every piece; 'mid' crosses between far and near pieces. */
   layer: 'back' | 'mid'
-  /** Days it relates (none for the orbits). */
-  touches: number[]
+  /** Days it passes near (none for the fibers that only join regions). */
+  near: number[]
   /** Share of the curve that exists, and where it starts (incomplete trajectories). */
   drawn: number
   offset: number
@@ -343,129 +418,87 @@ export interface Spark {
   delay: number
 }
 
-/** An open orbit: part of a tilted ellipse (normalized to the field). */
-interface Orbit {
-  cx: number
-  cy: number
-  rx: number
-  ry: number
-  rot: number
-  from: number
-  to: number
+/** An open fiber: a free curve through the field (normalized), never an orbit. */
+interface Course {
+  pts: Pt[]
   layer: 'back' | 'mid'
+  near: number[]
   drawn: number
+  offset: number
+  base: number
   sparks: number[]
+  /** A part of its light leaves at this point and fades on its own. */
+  branch?: { at: number; pts: Pt[] }
 }
 
-const ORBITS_WIDE: Orbit[] = [
-  { cx: 0.48, cy: 0.55, rx: 0.47, ry: 0.4, rot: -5, from: 150, to: 425, layer: 'back', drawn: 0.9, sparks: [0.14, 0.43, 0.7, 0.9] },
-  { cx: 0.4, cy: 0.49, rx: 0.2, ry: 0.2, rot: 8, from: 195, to: 470, layer: 'mid', drawn: 0.84, sparks: [0.28, 0.62] },
-  { cx: 0.77, cy: 0.42, rx: 0.13, ry: 0.19, rot: 24, from: 118, to: 262, layer: 'back', drawn: 0.9, sparks: [0.5] },
+const COURSES_WIDE: Course[] = [
+  // Enters from the left edge, rises toward Tuesday and never quite reaches it.
+  { pts: [[-0.03, 0.34], [0.06, 0.25], [0.17, 0.19], [0.27, 0.16]], layer: 'back', near: [0, 1], drawn: 0.9, offset: 0.04, base: 0.7, sparks: [0.62] },
+  // Low and long: under Thursday and Friday, then turns up toward Saturday and fades.
+  { pts: [[0.02, 0.56], [0.1, 0.75], [0.26, 0.87], [0.44, 0.9], [0.6, 0.88], [0.7, 0.8], [0.73, 0.69]], layer: 'back', near: [3, 4, 5], drawn: 0.86, offset: 0.05, base: 0.68, sparks: [0.36, 0.82] },
+  // From Wednesday's air, up and over, bending toward Sunday: crosses between far and near.
+  { pts: [[0.5, 0.36], [0.58, 0.26], [0.68, 0.2], [0.78, 0.2], [0.84, 0.16]], layer: 'mid', near: [2, 6], drawn: 0.84, offset: 0.08, base: 0.66, sparks: [0.46] },
+  // Monday toward Wednesday; halfway, part of the light turns down toward Friday's region.
+  {
+    pts: [[0.14, 0.48], [0.22, 0.55], [0.32, 0.56], [0.4, 0.5]],
+    layer: 'back',
+    near: [0, 2],
+    drawn: 0.92,
+    offset: 0.02,
+    base: 0.5,
+    sparks: [0.88],
+    branch: { at: 0.55, pts: [[0.3, 0.565], [0.37, 0.62], [0.45, 0.65], [0.51, 0.66]] },
+  },
+  // Joins two regions without touching a piece: down the right side, past Saturday.
+  { pts: [[0.99, 0.3], [0.97, 0.48], [0.92, 0.66], [0.84, 0.8], [0.74, 0.9]], layer: 'back', near: [], drawn: 0.8, offset: 0.1, base: 0.58, sparks: [0.3] },
+  // Friday → Saturday, short, never arrives.
+  { pts: [[0.64, 0.72], [0.68, 0.65], [0.71, 0.6]], layer: 'back', near: [4, 5], drawn: 0.7, offset: 0, base: 0.5, sparks: [0.2] },
 ]
 
-const ORBITS_NARROW: Orbit[] = [
-  { cx: 0.5, cy: 0.5, rx: 0.62, ry: 0.36, rot: 62, from: 160, to: 450, layer: 'back', drawn: 0.9, sparks: [0.2, 0.52, 0.83] },
-  { cx: 0.46, cy: 0.62, rx: 0.4, ry: 0.13, rot: -14, from: 180, to: 420, layer: 'mid', drawn: 0.82, sparks: [0.35, 0.74] },
+const COURSES_NARROW: Course[] = [
+  // Across the top, between Monday and Tuesday, bending toward the near Wednesday.
+  { pts: [[-0.04, 0.2], [0.14, 0.24], [0.34, 0.24], [0.5, 0.2], [0.62, 0.14]], layer: 'back', near: [0, 1], drawn: 0.86, offset: 0.06, base: 0.52, sparks: [0.4] },
+  // From the right edge down across the middle toward Thursday; splits toward Saturday.
+  {
+    pts: [[1.03, 0.3], [0.9, 0.38], [0.7, 0.43], [0.46, 0.47], [0.28, 0.5]],
+    layer: 'mid',
+    near: [2, 3],
+    drawn: 0.88,
+    offset: 0.04,
+    base: 0.5,
+    sparks: [0.3],
+    branch: { at: 0.6, pts: [[0.62, 0.445], [0.58, 0.5], [0.55, 0.55], [0.53, 0.58]] },
+  },
+  // Low sweep under Saturday toward Sunday.
+  { pts: [[0.02, 0.64], [0.12, 0.78], [0.3, 0.86], [0.5, 0.88], [0.6, 0.86]], layer: 'back', near: [3, 5, 6], drawn: 0.84, offset: 0.06, base: 0.5, sparks: [0.2, 0.62] },
+  // Down the right side: joins Friday's region to Sunday's without touching either.
+  { pts: [[0.98, 0.6], [0.95, 0.7], [0.9, 0.78]], layer: 'back', near: [], drawn: 0.8, offset: 0.1, base: 0.42, sparks: [0.6] },
 ]
 
-/** Relations between days: a few, curved; one splits, one never quite arrives. */
-interface Relation {
-  from: number
-  to: number
-  bow: number
-  drawn: number
-  split?: boolean
-}
-
-const RELATIONS_WIDE: Relation[] = [
-  { from: 2, to: 3, bow: -0.28, drawn: 0.92, split: true },
-  { from: 4, to: 5, bow: 0.26, drawn: 0.9 },
-  { from: 5, to: 6, bow: -0.32, drawn: 0.64 },
-]
-
-const RELATIONS_NARROW: Relation[] = [
-  { from: 0, to: 1, bow: 0.3, drawn: 0.72 },
-  { from: 2, to: 3, bow: -0.3, drawn: 0.9, split: true },
-  { from: 4, to: 5, bow: 0.26, drawn: 0.88 },
-]
-
-function orbitPoints(o: Orbit, W: number, H: number, samples = 48): Pt[] {
-  const r = (o.rot * Math.PI) / 180
-  const pts: Pt[] = []
-  for (let i = 0; i <= samples; i++) {
-    const t = ((o.from + ((o.to - o.from) * i) / samples) * Math.PI) / 180
-    const x = o.rx * W * Math.cos(t)
-    const y = o.ry * H * Math.sin(t)
-    pts.push([o.cx * W + x * Math.cos(r) - y * Math.sin(r), o.cy * H + x * Math.sin(r) + y * Math.cos(r)])
-  }
-  return pts
-}
-
-/** Point on a glass's outline toward `(tx, ty)`, a little outside it. */
-function rimPoint(p: { x: number; y: number }, rx: number, ry: number, tx: number, ty: number, gap: number): Pt {
-  const a = Math.atan2(ty - p.y, tx - p.x)
-  return [p.x + Math.cos(a) * (rx + gap), p.y + Math.sin(a) * (ry + gap)]
-}
-
-const cubicAt = (p: Pt[], t: number): Pt => {
-  const u = 1 - t
-  return [
-    u ** 3 * p[0][0] + 3 * u * u * t * p[1][0] + 3 * u * t * t * p[2][0] + t ** 3 * p[3][0],
-    u ** 3 * p[0][1] + 3 * u * u * t * p[1][1] + 3 * u * t * t * p[2][1] + t ** 3 * p[3][1],
-  ]
-}
-
-const cubicPath = (p: Pt[]) => `M${f2(p[0][0])},${f2(p[0][1])} C${f2(p[1][0])},${f2(p[1][1])} ${f2(p[2][0])},${f2(p[2][1])} ${f2(p[3][0])},${f2(p[3][1])}`
+const toField = (pts: Pt[], W: number, H: number): Pt[] => pts.map(([x, y]) => [x * W, y * H])
 
 /**
- * The network of a composition: open orbits through the whole field (the
- * shared space), a few relations between days (one splits, one never quite
- * arrives), and small concentrations of light on the orbits.
+ * The network of a composition: open fibers that bend and change direction,
+ * pass near pieces, split, get lost, join regions; a few small concentrations
+ * of light on them. Never a closed curve, never a diagram.
  */
-export function network(arch: Archipelago, extents: { rx: number; ry: number }[], width: number, height: number): { fibers: Fiber[]; sparks: Spark[] } {
+export function network(arch: Archipelago, width: number, height: number): { fibers: Fiber[]; sparks: Spark[] } {
   const rand = seeded(arch.mobile ? 23 : 5)
   const timing = () => ({ breathe: 20 + rand() * 40, glint: 24 + rand() * 34, sway: 30 + rand() * 30, delay: -rand() * 60 })
   const fibers: Fiber[] = []
   const sparks: Spark[] = []
-
-  for (const o of arch.mobile ? ORBITS_NARROW : ORBITS_WIDE) {
-    const pts = orbitPoints(o, width, height)
-    fibers.push({ d: smoothOpen(pts), kind: 'orbit', layer: o.layer, touches: [], drawn: o.drawn, offset: (1 - o.drawn) * rand(), width: 0.85, base: 0.55, ...timing() })
-    for (const at of o.sparks) {
-      const [x, y] = pts[Math.round(at * (pts.length - 1))]
-      sparks.push({ x, y, size: 3 + rand() * 3, dur: 7 + rand() * 9, delay: -rand() * 16 })
+  for (const c of arch.mobile ? COURSES_NARROW : COURSES_WIDE) {
+    const pts = toField(c.pts, width, height)
+    fibers.push({ d: smoothOpen(pts), kind: 'fiber', layer: c.layer, near: c.near, drawn: c.drawn, offset: c.offset, width: 0.95, base: Math.min(1, c.base + 0.12), ...timing() })
+    for (const at of c.sparks) {
+      const i = at * (pts.length - 1)
+      const a = pts[Math.floor(i)]
+      const b = pts[Math.min(pts.length - 1, Math.floor(i) + 1)]
+      const t = i - Math.floor(i)
+      sparks.push({ x: a[0] + (b[0] - a[0]) * t, y: a[1] + (b[1] - a[1]) * t, size: 4 + rand() * 3.5, dur: 10 + rand() * 12, delay: -rand() * 22 })
     }
-  }
-
-  for (const r of arch.mobile ? RELATIONS_NARROW : RELATIONS_WIDE) {
-    const A = arch.items[r.from]
-    const B = arch.items[r.to]
-    const gap = arch.mobile ? 8 : 12
-    const s = rimPoint(A, extents[r.from].rx, extents[r.from].ry, B.x, B.y, gap)
-    const e = rimPoint(B, extents[r.to].rx, extents[r.to].ry, A.x, A.y, gap)
-    const dx = e[0] - s[0]
-    const dy = e[1] - s[1]
-    const len = Math.hypot(dx, dy) || 1
-    const nx = -dy / len
-    const ny = dx / len
-    const bow = len * r.bow
-    const cubic: Pt[] = [s, [s[0] + dx * 0.3 + nx * bow, s[1] + dy * 0.3 + ny * bow], [s[0] + dx * 0.72 + nx * bow * 0.8, s[1] + dy * 0.72 + ny * bow * 0.8], e]
-    fibers.push({ d: cubicPath(cubic), kind: 'relation', layer: 'back', touches: [r.from, r.to], drawn: r.drawn, offset: 0, width: 0.8, base: 0.6, ...timing() })
-    if (r.split) {
-      // Part of the light leaves the fiber and fades on its own.
-      const t0 = 0.46
-      const p = cubicAt(cubic, t0)
-      const q = cubicAt(cubic, t0 + 0.05)
-      const tx = q[0] - p[0]
-      const ty = q[1] - p[1]
-      const tl = Math.hypot(tx, ty) || 1
-      const ang = (r.bow > 0 ? -1 : 1) * 0.5
-      const ux = (tx / tl) * Math.cos(ang) - (ty / tl) * Math.sin(ang)
-      const uy = (tx / tl) * Math.sin(ang) + (ty / tl) * Math.cos(ang)
-      const L = len * 0.42
-      const branch: Pt[] = [p, [p[0] + ux * L * 0.35, p[1] + uy * L * 0.35], [p[0] + ux * L * 0.7 + nx * L * 0.1, p[1] + uy * L * 0.7 + ny * L * 0.1], [p[0] + ux * L, p[1] + uy * L]]
-      fibers.push({ d: cubicPath(branch), kind: 'branch', layer: 'back', touches: [r.from], drawn: 0.9, offset: 0, width: 0.55, base: 0.34, ...timing() })
-    }
+    if (c.branch)
+      fibers.push({ d: smoothOpen(toField(c.branch.pts, width, height)), kind: 'branch', layer: c.layer, near: [], drawn: 0.9, offset: 0, width: 0.6, base: c.base * 0.7, ...timing() })
   }
   return { fibers, sparks }
 }

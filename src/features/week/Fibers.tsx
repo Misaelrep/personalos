@@ -2,11 +2,11 @@ import { memo, useId, type CSSProperties } from 'react'
 import type { Fiber, Spark } from './geometry'
 
 /**
- * The light network: open orbits through the shared field, a few curved
- * relations between days (one splits, one never quite arrives) and small
- * concentrations of light. Fibers breathe, bend a little and now and then
- * carry a glint, each on its own long cycle (20–60 s). It connects; it never
- * organizes.
+ * The light network: open fibers that bend and change direction through the
+ * shared field — they pass near pieces, split, get lost, join regions — and a
+ * few small concentrations of light. Fibers breathe, bend a little and now and
+ * then carry a glint, each on its own long cycle (20–60 s). A field, never a
+ * diagram; it connects, it never organizes.
  *
  * Each fiber is its own small layer and everything that moves is opacity or
  * transform (the glint travels on `offset-path`), so the network costs the
@@ -43,7 +43,7 @@ export const Fibers = memo(function Fibers({ fibers, sparks = [], layer, today, 
         const b = f.offset + f.drawn
         const dash = `${f.drawn.toFixed(3)} 2`
         const dashOffset = (-f.offset).toFixed(3)
-        const alive = f.touches.includes(today)
+        const alive = f.near.includes(today)
         const style = {
           left: x0,
           top: y0,
@@ -70,9 +70,9 @@ export const Fibers = memo(function Fibers({ fibers, sparks = [], layer, today, 
                 </linearGradient>
               </defs>
               {/* A soft halo of light and a hairline core: a fiber, not a line. */}
-              <path d={local} pathLength={1} fill="none" stroke={`url(#${uid}-${k})`} strokeWidth={f.width * 3.6} strokeDasharray={dash} strokeDashoffset={dashOffset} strokeLinecap="round" opacity={0.7} />
+              <path d={local} pathLength={1} fill="none" stroke={`url(#${uid}-${k})`} strokeWidth={f.width * 4.2} strokeDasharray={dash} strokeDashoffset={dashOffset} strokeLinecap="round" opacity={0.75} />
               <path d={local} pathLength={1} fill="none" stroke={`url(#${uid}-${k})`} strokeWidth={f.width * 1.2} strokeDasharray={dash} strokeDashoffset={dashOffset} strokeLinecap="round" />
-              <path d={local} pathLength={1} fill="none" stroke="#9488B0" strokeWidth={f.width * 0.6} strokeDasharray={dash} strokeDashoffset={dashOffset} strokeLinecap="round" opacity={0.42} />
+              <path d={local} pathLength={1} fill="none" stroke="#9488B0" strokeWidth={f.width * 0.55} strokeDasharray={dash} strokeDashoffset={dashOffset} strokeLinecap="round" opacity={0.3} />
             </svg>
             {!still && <i className="sm-glint" style={{ offsetPath: `path('${local}')` }} />}
           </div>

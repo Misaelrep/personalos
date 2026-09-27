@@ -1255,7 +1255,7 @@
   inset: 0;
   /* Pearl Ivory warmed by the light it holds. */
   background:
-    radial-gradient(120% 95% at 55% 42%, #fbf8f5 0%, #f8f2ee 48%, #f2e9e5 100%),
+    radial-gradient(120% 95% at 55% 42%, #f8f3ef 0%, #f4ece7 48%, #eee3de 100%),
     #fbfaf8;
 }
 
@@ -1284,11 +1284,11 @@
 }
 
 .sm-veil-silk {
-  /* Light through glass: a long soft beam, rising to the right. Soft on every side, no mask. */
-  inset: 38% -12% auto !important;
-  height: 12%;
+  /* Light through glass: a long silky beam across the field, rising to the right. Soft on every side, no mask. */
+  inset: 40% -45% auto !important;
+  height: 7%;
   border-radius: 0 !important;
-  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.16) 55%, rgba(255, 255, 255, 0) 100%);
+  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.26) 45%, rgba(255, 255, 255, 0) 100%);
   animation: sm-veil-silk var(--veil-silk) ease-in-out var(--veil-delay) infinite alternate;
 }
 
@@ -1382,9 +1382,44 @@
 }
 
 @keyframes sm-veil-silk {
-  0% { transform: translate3d(-14%, 30%, 0) rotate(-34deg); opacity: 0.25; }
-  50% { opacity: 0.9; }
-  100% { transform: translate3d(12%, -26%, 0) rotate(-28deg); opacity: 0.4; }
+  0% { transform: translate3d(-10%, 26%, 0) rotate(-24deg); opacity: 0.35; }
+  50% { opacity: 1; }
+  100% { transform: translate3d(8%, -22%, 0) rotate(-19deg); opacity: 0.5; }
+}
+
+/* The third plane of the atmosphere: a very faint haze in front of everything. */
+.sm-front {
+  position: absolute;
+  left: 30%;
+  top: -10%;
+  width: 90%;
+  height: 50%;
+  z-index: 40;
+  pointer-events: none;
+  background: radial-gradient(closest-side, rgba(255, 252, 250, 0.3), rgba(255, 250, 246, 0.1) 55%, rgba(255, 250, 246, 0) 100%);
+  will-change: transform;
+  animation: sm-front 88s ease-in-out -30s infinite alternate;
+}
+
+@keyframes sm-front {
+  0% { transform: translate3d(0, 0, 0) rotate(-22deg) scale(1, 0.8); opacity: 0.6; }
+  100% { transform: translate3d(-12%, 10%, 0) rotate(-16deg) scale(1.1, 1); opacity: 1; }
+}
+
+/* A piece's reflections breathe on their own layer, never in step. */
+.sm-light {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.sm-light[data-breathe] {
+  animation: sm-light var(--breathe) ease-in-out infinite alternate;
+}
+
+@keyframes sm-light {
+  0% { opacity: 0.7; }
+  100% { opacity: 1; }
 }
 
 .sm-grain {
@@ -1458,14 +1493,14 @@
 .sm-spark {
   position: absolute;
   border-radius: 50%;
-  background: radial-gradient(closest-side, #ffffff, rgba(255, 255, 255, 0.55) 30%, rgba(255, 246, 240, 0) 100%);
+  background: radial-gradient(closest-side, #ffffff, #ffffff 10%, rgba(255, 255, 255, 0.6) 24%, rgba(255, 242, 236, 0.18) 58%, rgba(255, 246, 240, 0) 100%);
   opacity: 0.5;
   animation: sm-twinkle var(--dur) ease-in-out var(--delay) infinite;
 }
 
 @keyframes sm-twinkle {
-  0%, 100% { opacity: 0.25; transform: scale(0.7); }
-  50% { opacity: 0.95; transform: scale(1); }
+  0%, 100% { opacity: 0.1; transform: scale(0.6); }
+  50% { opacity: 1; transform: scale(1); }
 }
 
 @keyframes sm-glint {
@@ -1510,10 +1545,14 @@
   position: absolute;
   left: 50%;
   pointer-events: none;
-  /* Depth: far days a little softer, paler, fainter. */
-  filter: blur(var(--blur, 0px)) saturate(var(--sat, 1));
   opacity: var(--fade, 1);
-  transition: filter 0.6s var(--ease-astral), opacity 0.6s var(--ease-astral);
+  transition: opacity 0.6s var(--ease-astral);
+}
+
+/* Depth: far pieces a little softer and paler. Only on the static glass, so its breathing reflections never re-filter it. */
+.sm-lens-glass .sm-glass > svg {
+  filter: blur(var(--blur, 0px)) saturate(var(--sat, 1));
+  transition: filter 0.6s var(--ease-astral);
 }
 
 .sm-hoy {
@@ -1542,7 +1581,6 @@
 }
 
 .sm-spec {
-  opacity: 0.62;
   transition: opacity 0.6s var(--ease-astral);
 }
 
@@ -1562,8 +1600,10 @@
     transform: translateY(-2px);
   }
   .sm-lens:hover .sm-lens-glass {
-    filter: blur(0px) saturate(1.05);
     opacity: 1;
+  }
+  .sm-lens:hover .sm-lens-glass .sm-glass > svg {
+    filter: blur(0px) saturate(1.05);
   }
   .sm-lens:hover .sm-band {
     stroke-opacity: 0.45;
@@ -1745,6 +1785,8 @@
 .semana[data-motion='reducido'] .sm-veil,
 .semana[data-motion='reducido'] .sm-veil > i,
 .semana[data-motion='reducido'] .sm-mist-band,
+.semana[data-motion='reducido'] .sm-front,
+.semana[data-motion='reducido'] .sm-light[data-breathe],
 .semana[data-motion='reducido'] .sm-fiber,
 .semana[data-motion='reducido'] .sm-fiber-line,
 .semana[data-motion='reducido'] .sm-spark,

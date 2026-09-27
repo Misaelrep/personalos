@@ -1,16 +1,31 @@
-import { AnimatePresence, m } from 'framer-motion'
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type CSSProperties } from 'react'
+import { AnimatePresence, animate, m, useMotionValue, useSpring, useTransform, type MotionValue } from 'framer-motion'
+import { useCallback, useEffect, useId, useMemo, useReducer, useRef, type CSSProperties, type PointerEvent } from 'react'
 import { routineForDate } from '../../data/routine'
 import { RoutineMissingError } from '../../domain/routine'
-import { dateKey, minutesOfDay } from '../../domain/time'
+import { dateKey, formatClock, minutesOfDay } from '../../domain/time'
 import { DAY_PARTS, buildWeek, shortDateLabel, weekRangeLabel, type DayPart, type Week, type WeekDay } from '../../domain/week'
 import { useViewport } from '../../hooks/useViewport'
 import { useMotion } from '../../motion/MotionLevel'
 import { EASE } from '../../motion/tokens'
 import { useDay } from '../../state/DayProvider'
 import { Fibers } from './Fibers'
-import { MOBILE_MAX, archipelago, depthScale, fibers, lensForm, type LensForm } from './geometry'
-import { Lens, PART_Y, SELECTED_ASPECT, type LensMode } from './Lens'
+import {
+  MOBILE_MAX,
+  archipelago,
+  depthBlur,
+  depthOpacity,
+  depthSaturation,
+  depthScale,
+  lensForm,
+  network,
+  planeOutline,
+  smoothOpen,
+  smoothPath,
+  viewLens,
+  type LabelSide,
+  type LensForm,
+} from './geometry'
+import { Lens, PART_AT, selectedView, type LensMode } from './Lens'
 import { Modular } from './Modular'
 import { Veils } from './Veils'
 import { WeekDayscape } from './WeekDayscape'
@@ -19,12 +34,14 @@ import { WEEK_FLOW_START, weekFlow } from './weekFlow'
 /**
  * SEMANA — ¿cómo está diseñada mi semana?
  *
- * SIETE OBJETOS + UNA RED DE LUZ + UNA ATMÓSFERA COMPARTIDA. The network
- * connects but does not organize; the information lives in the objects.
+ * SIETE OBJETOS + UNA RED DE LUZ + UNA ATMÓSFERA COMPARTIDA: a small abstract
+ * galaxy of glass. The network connects but does not organize; the
+ * information lives in the objects.
  *
- *   1 general    the seven days, their names and what each is for
- *   2 selected   one day comes forward, faces us and organizes its matter
- *   3 opening    the glass loses cohesion; the matter stays, cools, separates
+ *   1 general    the seven days in one spatial field, near and far
+ *   2 selected   the same object comes forward and turns a little toward us;
+ *                its matter settles into mañana · tarde · noche
+ *   3 opening    the surface loses its limit; the matter stays, cools, separates
  *   4 day        the real DAYSCAPE of that date
  */
 
@@ -40,6 +57,10 @@ interface SemanaProps {
 /** Milliseconds from VER DÍA: the day's DAYSCAPE mounts, then the week gives way. */
 const OPEN = { dayscape: 950, gone: 2200 }
 const OPEN_REDUCED = { dayscape: 350, gone: 1400 }
+
+/** Stacking inside the field: far days, a veil of mist, fibers crossing, near days. */
+const Z = { backFibers: 2, mist: 14, midFibers: 15, chosen: 30, words: 32, matter: 35 }
+const zOf = (z: number) => (z >= 0.5 ? 10 + Math.round((1 - z) * 6) : 16 + Math.round((0.5 - z) * 10))
 
 export function Semana(props: SemanaProps) {
   const { now } = useDay()
@@ -75,7 +96,6 @@ function WeekField({ week, onImmersive, onTodayHandoff, onTodayDone }: SemanaPro
   const [flow, dispatch] = useReducer(weekFlow, WEEK_FLOW_START)
   const { phase, selected, dayOpen } = flow
   const opened = flow.opened === null ? null : week.days[flow.opened]
-  const [hovered, setHovered] = useState<number | null>(null)
   const timers = useRef<number[]>([])
   const later = useCallback((ms: number, fn: () => void) => void timers.current.push(window.setTimeout(fn, ms)), [])
   useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), [])
@@ -87,30 +107,48 @@ function WeekField({ week, onImmersive, onTodayHandoff, onTodayDone }: SemanaPro
   const wide = width >= 1024
   const mobile = width < MOBILE_MAX
   const inset = {
-    left: wide ? 104 + 44 : mobile ? 14 : 44,
-    right: mobile ? 14 : 64,
-    top: mobile ? 132 : 176,
-    bottom: mobile ? 100 : 96,
+    left: wide ? 104 + 44 : mobile ? 12 : 44,
+    right: mobile ? 12 : 56,
+    top: mobile ? Math.min(128, Math.round(height * 0.17)) : 168,
+    bottom: mobile ? (height < 720 ? 92 : 104) : 74,
   }
   const fieldW = Math.max(240, width - inset.left - inset.right)
   const fieldH = Math.max(320, height - inset.top - inset.bottom)
   const forms = useMemo(() => week.days.map((d, i) => lensForm(d, i)), [week])
-  const { arch, sizes, extents, network } = useMemo(() => {
+  const { arch, sizes, extents, net } = useMemo(() => {
     const arch = archipelago(fieldW, fieldH)
     const sizes = arch.items.map((p) => arch.base * depthScale(p.z))
-    // What each glass occupies at rest, seen at three quarters.
+    // What each glass occupies at rest, as seen.
     const extents = forms.map((f, i) => {
-      const W = sizes[i] * f.widthK
-      const cos = Math.cos((f.lean * Math.PI) / 180)
-      return { rx: W / 2, ry: (W * f.aspect * cos) / 2, below: (W * f.aspect * cos) / 2 + W * f.thickness * cos }
+      const b = viewLens(planeOutline(f), sizes[i], f.view, f.thickness).bounds
+      return { rx: (b.right - b.left) / 2, ry: (b.bottom - b.top) / 2, top: b.top, bottom: b.bottom }
     })
-    return { arch, sizes, extents, network: fibers(arch, extents) }
+    return { arch, sizes, extents, net: network(arch, extents, fieldW, fieldH) }
   }, [fieldW, fieldH, forms])
 
-  // The chosen day comes to the middle of the field, facing us.
-  const target = { x: fieldW / 2, y: mobile ? fieldH * 0.46 : fieldH * 0.5 + 6 }
-  const selW = mobile ? Math.min(fieldW - 10, 340, (height - 230) / SELECTED_ASPECT) : Math.min(430, (fieldH * 0.98) / SELECTED_ASPECT, fieldW * 0.38)
-  const selH = selW * SELECTED_ASPECT
+  // The chosen day comes to the middle of the field, nearer, turned a little toward us.
+  const target = { x: fieldW * (mobile ? 0.5 : 0.53), y: fieldH * (mobile ? 0.52 : 0.54) }
+  const selWidth = mobile ? Math.min(fieldW - 30, 330) : Math.min(470, fieldW * 0.37)
+
+  /* ---------------------------------------------------------------------- */
+  /* A little parallax (desktop): near days move more than far ones          */
+  /* ---------------------------------------------------------------------- */
+
+  const px = useMotionValue(0)
+  const py = useMotionValue(0)
+  const sx = useSpring(px, { stiffness: 30, damping: 16, mass: 1.2 })
+  const sy = useSpring(py, { stiffness: 30, damping: 16, mass: 1.2 })
+  const parallax = !mobile && !reduced
+  const onPointerMove = (e: PointerEvent) => {
+    if (!parallax || e.pointerType !== 'mouse') return
+    px.set((e.clientX / width - 0.5) * 2)
+    py.set((e.clientY / height - 0.5) * 2)
+  }
+  const backX = useTransform(sx, (v) => v * 3)
+  const backY = useTransform(sy, (v) => v * 2)
+  const midX = useTransform(sx, (v) => v * 7)
+  const midY = useTransform(sy, (v) => v * 4)
+  const mistX = useTransform(sx, (v) => v * 10)
 
   /* ---------------------------------------------------------------------- */
   /* States                                                                 */
@@ -168,17 +206,31 @@ function WeekField({ week, onImmersive, onTodayHandoff, onTodayDone }: SemanaPro
 
   const chosen = selected === null ? null : week.days[selected]
   const presentPart = partAt(minutesOfDay(now))
-  const showField = !inDay
   const opening = phase === 'opening'
+  // The chosen glass as it will stand, in field px.
+  const stage = useMemo(() => {
+    if (selected === null) return null
+    const f = forms[selected]
+    const zoom = selWidth / (sizes[selected] * f.widthK)
+    const b = selectedView(f, sizes[selected]).bounds
+    // The glass's own origin, so that what we see is centered on the target.
+    const ox = target.x - ((b.left + b.right) / 2) * zoom
+    const oy = target.y - ((b.top + b.bottom) / 2) * zoom
+    return { zoom, ox, oy, left: ox + b.left * zoom, right: ox + b.right * zoom, top: oy + b.top * zoom, faceBottom: oy + b.faceBottom * zoom, bottom: oy + b.bottom * zoom }
+  }, [selected, forms, sizes, selWidth, target.x, target.y])
+
+  const weekday = now.toLocaleDateString('es', { weekday: 'long' })
+  const time = formatClock(minutesOfDay(now))
 
   return (
     <>
-      {showField && (
+      {!inDay && (
         <m.main
           className="semana"
           data-ambient={ambient ? 'on' : 'off'}
           data-motion={level}
           aria-label={`Semana · ${range}`}
+          onPointerMove={onPointerMove}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0, transition: { duration: 0.35, ease: EASE } }}
@@ -195,17 +247,22 @@ function WeekField({ week, onImmersive, onTodayHandoff, onTodayDone }: SemanaPro
           />
 
           <m.header
-            className="absolute"
-            style={{ left: mobile ? 22 : inset.left, top: mobile ? 'max(env(safe-area-inset-top), 30px)' : 58 }}
+            className="sm-head"
+            style={{ left: mobile ? 22 : inset.left, right: mobile ? 22 : inset.right, top: mobile ? 'max(env(safe-area-inset-top), 28px)' : 56 }}
             initial={false}
             animate={{ opacity: opening ? 0 : 1 }}
             transition={{ duration: 0.5, ease: EASE }}
           >
-            <p className="label-spaced" style={{ fontSize: 10.5, color: 'var(--sm-ink-3)' }}>
-              Semana
-            </p>
-            <p className="mt-3 font-display text-[27px] leading-none font-light tracking-[-0.025em] sm:text-[32px]" style={{ color: 'var(--sm-ink)' }}>
-              {range}
+            <div>
+              <p className="label-spaced" style={{ fontSize: 10, color: 'var(--sm-ink-3)' }}>
+                Semana
+              </p>
+              <p className="mt-3 font-display text-[26px] leading-none font-light tracking-[-0.025em] sm:text-[31px]" style={{ color: 'var(--sm-ink)' }}>
+                {range}
+              </p>
+            </div>
+            <p className="sm-now label-spaced tabular">
+              {weekday} <span style={{ color: 'var(--sm-ink-4)' }}>·</span> {time}
             </p>
           </m.header>
 
@@ -213,13 +270,31 @@ function WeekField({ week, onImmersive, onTodayHandoff, onTodayDone }: SemanaPro
             {/* A quiet way back from a chosen day: tap the space around it. */}
             {phase === 'selected' && <button type="button" aria-label="Volver a la semana" className="sm-backdrop" onClick={release} />}
 
+            {/* The shared space: orbits and relations behind every day… */}
             <m.div
-              className="absolute inset-0"
+              className="pointer-events-none absolute inset-0"
+              style={{ x: backX, y: backY, zIndex: Z.backFibers }}
               initial={false}
-              animate={{ opacity: phase === 'general' || phase === 'returning' ? 1 : phase === 'selected' ? 0.16 : 0 }}
-              transition={{ duration: 0.6, ease: EASE }}
+              animate={{ opacity: phase === 'general' || phase === 'returning' ? 1 : phase === 'selected' ? 0.18 : 0 }}
+              transition={{ duration: opening ? 0.35 : 0.6, ease: EASE }}
             >
-              <Fibers fibers={network} still={reduced} />
+              <Fibers fibers={net.fibers} sparks={net.sparks} layer="back" today={week.todayIndex} still={reduced} />
+            </m.div>
+
+            {/* …a veil of mist that passes in front of the far days… */}
+            <m.div aria-hidden className="sm-mist" style={{ left: -inset.left, top: -inset.top, width, height, x: mistX, zIndex: Z.mist }}>
+              <div className="sm-mist-band" />
+            </m.div>
+
+            {/* …and one orbit crossing between far and near. */}
+            <m.div
+              className="pointer-events-none absolute inset-0"
+              style={{ x: midX, y: midY, zIndex: Z.midFibers }}
+              initial={false}
+              animate={{ opacity: phase === 'general' || phase === 'returning' ? 1 : phase === 'selected' ? 0.12 : 0 }}
+              transition={{ duration: opening ? 0.35 : 0.6, ease: EASE }}
+            >
+              <Fibers fibers={net.fibers} layer="mid" today={week.todayIndex} still={reduced} />
             </m.div>
 
             {week.days.map((day, i) => {
@@ -227,20 +302,14 @@ function WeekField({ week, onImmersive, onTodayHandoff, onTodayDone }: SemanaPro
               const f = forms[i]
               const mode: LensMode =
                 selected === null || phase === 'returning' ? 'rest' : selected === i ? (opening ? 'opening' : 'selected') : 'receded'
-              const W = sizes[i] * f.widthK
-              const zoom = mode === 'selected' ? selW / W : mode === 'opening' ? (selW / W) * 1.24 : mode === 'receded' ? 0.84 : 1
+              const facing = mode === 'selected' || mode === 'opening'
+              const zoom = facing && stage ? stage.zoom * (mode === 'opening' ? 1.22 : 1) : mode === 'receded' ? 0.86 : 1
               const pose =
-                mode === 'selected' || mode === 'opening'
-                  ? { x: target.x - p.x, y: target.y - p.y, scale: zoom, opacity: 1, filter: 'blur(0px)' }
+                facing && stage
+                  ? { x: stage.ox - p.x, y: stage.oy - p.y, scale: zoom, opacity: 1 }
                   : mode === 'receded'
-                    ? {
-                        x: (p.x - target.x) * 0.12,
-                        y: (p.y - target.y) * 0.12,
-                        scale: 0.84,
-                        opacity: opening ? 0 : 0.3,
-                        filter: 'blur(1.4px)',
-                      }
-                    : { x: 0, y: 0, scale: 1, opacity: hovered === i ? 1 : 1 - p.z * 0.16, filter: 'blur(0px)' }
+                    ? { x: (p.x - target.x) * 0.1, y: (p.y - target.y) * 0.1, scale: 0.86, opacity: opening ? 0 : 0.34 }
+                    : { x: 0, y: 0, scale: 1, opacity: 1 }
               return (
                 <DayObject
                   key={day.date}
@@ -249,30 +318,29 @@ function WeekField({ week, onImmersive, onTodayHandoff, onTodayDone }: SemanaPro
                   size={sizes[i]}
                   extent={extents[i]}
                   place={p}
-                  label={arch.mobile ? p.label : 'below'}
+                  label={p.label}
+                  mobile={mobile}
                   mode={mode}
                   zoom={zoom}
                   pose={pose}
                   reduced={reduced}
-                  wordsShown={mode === 'rest' ? 1 : mode === 'receded' && !opening ? 0.22 : 0}
+                  sx={sx}
+                  sy={sy}
                   onSelect={() => (selected === i && phase === 'selected' ? open() : select(i))}
-                  onHover={(on) => setHovered(on ? i : (h) => (h === i ? null : h))}
                   index={i}
                 />
               )
             })}
 
-            {/* The chosen day, in words, inside its glass. */}
+            {/* The chosen day, in words, suspended in and around its glass. */}
             <AnimatePresence>
-              {chosen && phase === 'selected' && (
-                <SelectedDay key={chosen.date} day={chosen} x={target.x} y={target.y} w={selW} h={selH} reduced={reduced} onOpen={open} />
-              )}
+              {chosen && stage && phase === 'selected' && <SelectedDay key={chosen.date} day={chosen} stage={stage} mobile={mobile} reduced={reduced} onOpen={open} />}
             </AnimatePresence>
 
             {/* OBJETO → MATERIA → ESPACIO: the matter stays, cools and separates in depth. */}
             <AnimatePresence>
-              {chosen && opening && (
-                <SuspendedMatter key="matter" form={forms[selected!]} x={target.x} y={target.y} w={selW} h={selH} present={presentPart} reduced={reduced} />
+              {chosen && stage && opening && (
+                <SuspendedMatter key="matter" form={forms[selected!]} x={target.x} y={target.y} w={selWidth} present={presentPart} reduced={reduced} />
               )}
             </AnimatePresence>
           </div>
@@ -281,14 +349,7 @@ function WeekField({ week, onImmersive, onTodayHandoff, onTodayDone }: SemanaPro
 
       <AnimatePresence>
         {dayOpen && opened && (
-          <WeekDayscape
-            key="day"
-            date={opened.date}
-            dayName={opened.dayName}
-            onBack={back}
-            onHandoff={onTodayHandoff}
-            onDone={onTodayDone}
-          />
+          <WeekDayscape key="day" date={opened.date} dayName={opened.dayName} onBack={back} onHandoff={onTodayHandoff} onDone={onTodayDone} />
         )}
       </AnimatePresence>
     </>
@@ -308,72 +369,85 @@ interface DayObjectProps {
   day: WeekDay
   form: LensForm
   size: number
-  extent: { rx: number; ry: number; below: number }
+  extent: { rx: number; ry: number; top: number; bottom: number }
   place: { x: number; y: number; z: number }
-  label: 'below' | 'left' | 'right'
+  label: LabelSide
+  mobile: boolean
   mode: LensMode
   zoom: number
-  pose: { x: number; y: number; scale: number; opacity: number; filter: string }
+  pose: { x: number; y: number; scale: number; opacity: number }
   reduced: boolean
-  /** Opacity of the day's name and function. */
-  wordsShown: number
+  sx: MotionValue<number>
+  sy: MotionValue<number>
   onSelect: () => void
-  onHover: (on: boolean) => void
   index: number
 }
 
-function DayObject({ day, form, size, extent, place, label, mode, zoom, pose, reduced, wordsShown, onSelect, onHover, index }: DayObjectProps) {
+function DayObject({ day, form, size, extent, place, label, mobile, mode, zoom, pose, reduced, sx, sy, onSelect, index }: DayObjectProps) {
   const today = day.tense === 'today'
   const facing = mode === 'selected' || mode === 'opening'
+  // Parallax by depth; a chosen day is still.
+  const k = useMotionValue(1)
+  useEffect(() => {
+    const c = animate(k, facing ? 0 : 1, { duration: 0.6, ease: EASE })
+    return () => c.stop()
+  }, [facing, k])
+  const px = useTransform(() => sx.get() * (1 - place.z) * 13 * k.get())
+  const py = useTransform(() => sy.get() * (1 - place.z) * 7 * k.get())
   const drift = { '--drift': `${31 + ((index * 7) % 5) * 4}s`, '--drift-delay': `${-index * 5.3}s` } as CSSProperties
+  const depth = facing ? { '--blur': '0px', '--sat': 1, '--fade': 1 } : { '--blur': `${depthBlur(place.z).toFixed(2)}px`, '--sat': depthSaturation(place.z).toFixed(2), '--fade': depthOpacity(place.z).toFixed(2) }
   const words: CSSProperties =
     label === 'below'
-      ? { left: 0, top: extent.below + 18, transform: 'translateX(-50%)', textAlign: 'center', width: 190 }
+      ? { left: 0, top: extent.bottom + (mobile ? 12 : 16), transform: 'translateX(-50%)', textAlign: 'center', width: mobile ? 124 : 176 }
       : label === 'right'
-        ? { left: extent.rx + 14, top: 0, transform: 'translateY(-50%)', textAlign: 'left', width: 158 }
-        : { right: extent.rx + 14, top: 0, transform: 'translateY(-50%)', textAlign: 'right', width: 158 }
+        ? { left: extent.rx + 12, top: 0, transform: 'translateY(-50%)', textAlign: 'left', width: 124 }
+        : { right: extent.rx + 12, top: 0, transform: 'translateY(-50%)', textAlign: 'right', width: 124 }
+  const wordsShown = mode === 'rest' ? 1 : mode === 'receded' && pose.opacity > 0 ? 0.3 : 0
   return (
     <m.div
       // Reduced motion: no travel — the day fades out of one place and into the other.
       key={reduced ? mode : 'glass'}
       className="absolute"
-      style={{ left: place.x, top: place.y, zIndex: facing ? 30 : Math.round(20 - place.z * 10) }}
+      style={{ left: place.x, top: place.y, zIndex: facing ? 30 : zOf(place.z) }}
       initial={reduced ? { ...pose, opacity: 0 } : false}
       animate={pose}
       transition={{ duration: reduced ? 0.45 : 0.7, ease: EASE }}
     >
-      <div className="sm-drift" style={drift} data-still={mode === 'receded' || undefined}>
-        <button
-          type="button"
-          className="sm-lens"
-          style={{ width: extent.rx * 2, height: Math.max(extent.ry * 2 + 10, 44), marginLeft: -extent.rx, marginTop: -extent.ry - 5 }}
-          aria-label={`${day.dayName} ${shortDateLabel(day.date)}${today ? ', hoy' : ''}: ${day.theme}`}
-          aria-pressed={facing}
-          onClick={(e) => {
-            e.stopPropagation()
-            onSelect()
-          }}
-          onPointerEnter={(e) => e.pointerType === 'mouse' && onHover(true)}
-          onPointerLeave={() => onHover(false)}
-        >
-          <span className="sm-lens-glass" style={{ top: extent.ry + 5 }}>
-            <Lens form={form} width={size} mode={mode} zoom={zoom} today={today} reduced={reduced} />
-          </span>
-        </button>
-      </div>
+      <m.div style={{ x: px, y: py }}>
+        <div className="sm-drift" style={drift} data-still={mode !== 'rest' || undefined}>
+          <button
+            type="button"
+            className="sm-lens"
+            style={{ width: extent.rx * 2, height: Math.max(extent.bottom - extent.top, 44), marginLeft: -extent.rx, marginTop: extent.top }}
+            aria-label={`${day.dayName} ${shortDateLabel(day.date)}${today ? ', hoy' : ''}: ${day.theme}`}
+            aria-pressed={facing}
+            onClick={(e) => {
+              e.stopPropagation()
+              onSelect()
+            }}
+          >
+            <span className="sm-lens-glass" style={{ ...depth, top: -extent.top } as CSSProperties}>
+              <Lens form={form} width={size} mode={mode} zoom={zoom} today={today} reduced={reduced} />
+            </span>
+          </button>
+          {/* HOY: the modular point, resting on its glass. */}
+          {today && (
+            <m.span className="sm-hoy" style={{ top: extent.top - 15 }} initial={false} animate={{ opacity: mode === 'rest' ? 1 : 0 }}>
+              <Modular />
+            </m.span>
+          )}
+        </div>
 
-      <m.div
-        className="pointer-events-none absolute"
-        style={words}
-        initial={false}
-        animate={{ opacity: wordsShown, filter: wordsShown < 1 ? 'blur(1.5px)' : 'blur(0px)' }}
-        transition={{ duration: 0.5, ease: EASE }}
-      >
-        <span className={`sm-day-name ${label === 'left' ? 'justify-end' : label === 'right' ? 'justify-start' : 'justify-center'}`}>
-          {today && <Modular />}
-          {day.dayName}
-        </span>
-        <span className="sm-day-theme">{day.theme}</span>
+        <m.div
+          className="pointer-events-none absolute"
+          style={{ ...words, opacity: facing ? 0 : undefined }}
+          initial={false}
+          animate={{ opacity: wordsShown * (mode === 'rest' ? 0.72 + 0.28 * (1 - place.z) : 1), filter: wordsShown < 1 ? 'blur(1.5px)' : 'blur(0px)' }}
+          transition={{ duration: 0.5, ease: EASE }}
+        >
+          <span className="sm-day-name">{day.dayName}</span>
+          <span className="sm-day-theme">{day.theme}</span>
+        </m.div>
       </m.div>
     </m.div>
   )
@@ -383,38 +457,48 @@ function DayObject({ day, form, size, extent, place, label, mode, zoom, pose, re
 /* State 2: the day, organized                                               */
 /* ------------------------------------------------------------------------ */
 
-function SelectedDay({ day, x, y, w, h, reduced, onOpen }: { day: WeekDay; x: number; y: number; w: number; h: number; reduced: boolean; onOpen: () => void }) {
-  const at = (f: number): CSSProperties => ({ position: 'absolute', left: 0, right: 0, top: `calc(50% + ${(f * h).toFixed(1)}px)`, transform: 'translateY(-50%)' })
+interface Stage {
+  zoom: number
+  left: number
+  right: number
+  top: number
+  faceBottom: number
+  bottom: number
+}
+
+function SelectedDay({ day, stage, mobile, reduced, onOpen }: { day: WeekDay; stage: Stage; mobile: boolean; reduced: boolean; onOpen: () => void }) {
+  const w = stage.right - stage.left
+  const h = stage.faceBottom - stage.top
   const show = (delay: number) => ({
     initial: { opacity: 0, y: 4 },
     animate: { opacity: 1, y: 0 },
     exit: { opacity: 0, transition: { duration: 0.25, ease: EASE } },
-    transition: { duration: 0.5, ease: EASE, delay: reduced ? 0.2 : delay },
+    transition: { duration: 0.55, ease: EASE, delay: reduced ? 0.2 : delay },
   })
+  const inside = stage.left + w * (mobile ? 0.19 : 0.2)
   return (
-    <div className="sm-selected" style={{ left: x - w / 2, top: y - h / 2, width: w, height: h }} aria-live="polite">
-      <m.div style={at(-0.37)} {...show(0.5)}>
-        <p className="label-spaced text-center" style={{ fontSize: 10.5, letterSpacing: '0.34em', color: 'var(--sm-ink)' }}>
-          {day.tense === 'today' && <Modular />} {day.dayName}
+    <div className="sm-selected" aria-live="polite">
+      {/* Its name and what it is for float just above the glass, not inside a medallion. */}
+      <m.div className="absolute" style={{ left: stage.left + w * 0.06, bottom: `calc(100% - ${(stage.top - (mobile ? 16 : 22)).toFixed(1)}px)`, width: w * 0.94 }} {...show(0.45)}>
+        <p className="label-spaced" style={{ fontSize: 10, letterSpacing: '0.34em', color: 'var(--sm-ink)' }}>
+          {day.dayName}
           <span style={{ color: 'var(--sm-ink-4)' }}> · {shortDateLabel(day.date)}</span>
         </p>
-      </m.div>
-      <m.div style={at(-0.265)} {...show(0.58)}>
         <p className="sm-selected-theme">{day.theme}</p>
       </m.div>
       {day.layers.map((l, i) => (
-        <m.div key={l.part} style={at(PART_Y[l.part])} {...show(0.66 + i * 0.07)}>
-          <p className="text-center">
+        <m.div key={l.part} className="absolute" style={{ left: inside, top: stage.top + h * PART_AT[l.part], width: w * 0.66 }} {...show(0.62 + i * 0.08)}>
+          <div style={{ transform: 'translateY(-50%)' }}>
             <span className="label-spaced block" style={{ fontSize: 9, letterSpacing: '0.34em', color: 'var(--sm-ink-3)' }}>
               {l.label}
             </span>
-            <span className="mt-[7px] block px-6 text-[13.5px] leading-snug tracking-[-0.005em]" style={{ color: 'var(--sm-ink)' }}>
+            <span className="mt-[8px] block text-[14px] leading-snug tracking-[-0.005em]" style={{ color: 'var(--sm-ink)' }}>
               {l.names.join(' · ')}
             </span>
-          </p>
+          </div>
         </m.div>
       ))}
-      <m.div style={{ ...at(0.39), display: 'flex', justifyContent: 'center' }} {...show(0.9)}>
+      <m.div className="absolute" style={{ right: `calc(100% - ${(stage.right - w * 0.04).toFixed(1)}px)`, top: stage.bottom + (mobile ? 8 : 12) }} {...show(0.9)}>
         <button type="button" className="sm-open ds-continue label-spaced" onClick={onOpen}>
           Ver día <span aria-hidden className="ds-continue-arrow">→</span>
         </button>
@@ -424,43 +508,71 @@ function SelectedDay({ day, x, y, w, h, reduced, onOpen }: { day: WeekDay; x: nu
 }
 
 /* ------------------------------------------------------------------------ */
-/* State 3: the shell is gone, the matter stays                              */
+/* State 3: the surface is gone, the matter stays                            */
 /* ------------------------------------------------------------------------ */
 
-const DEPTH_OF: Record<DayPart, { y: number; scale: number; opacity: number }> = {
-  manana: { y: -0.27, scale: 0.8, opacity: 0.7 },
-  tarde: { y: 0.0, scale: 1, opacity: 0.95 },
-  noche: { y: 0.27, scale: 1.16, opacity: 1 },
+/** Three plates of matter drift apart in depth: morning further, night nearer. */
+const PLATES: Record<DayPart, { y: number; scale: number; opacity: number }> = {
+  manana: { y: -0.3, scale: 0.84, opacity: 0.78 },
+  tarde: { y: 0, scale: 1, opacity: 0.95 },
+  noche: { y: 0.3, scale: 1.12, opacity: 1 },
 }
 
-function SuspendedMatter({ form, x, y, w, h, present, reduced }: { form: LensForm; x: number; y: number; w: number; h: number; present: DayPart; reduced: boolean }) {
+/** Warm matter, and the cool light it turns into. */
+const PLATE_TINT: Record<DayPart, [string, string]> = {
+  manana: ['rgba(234, 196, 176, 0.75)', 'rgba(247, 232, 222, 0.35)'],
+  tarde: ['rgba(190, 172, 208, 0.75)', 'rgba(232, 224, 240, 0.35)'],
+  noche: ['rgba(172, 168, 212, 0.78)', 'rgba(226, 224, 242, 0.35)'],
+}
+
+function SuspendedMatter({ form, x, y, w, present, reduced }: { form: LensForm; x: number; y: number; w: number; present: DayPart; reduced: boolean }) {
+  const uid = useId().replace(/[:«»]/g, '')
+  // Each plate keeps the lens's own outline, seen almost edge-on.
+  const plate = useMemo(() => viewLens(planeOutline(form), w / form.widthK, 0.3, 0.02), [form, w])
+  const b = plate.bounds
+  const pw = b.right - b.left + 40
+  const ph = b.bottom - b.top + 40
+  const outline = smoothPath(plate.silhouette)
+  const far = smoothOpen(plate.far)
+  const near = smoothOpen(plate.near)
+  const face = useMemo(() => selectedView(form, w / form.widthK).bounds, [form, w])
+  const spread = (face.faceBottom - face.top) * 1.75
   return (
-    <m.div
-      aria-hidden
-      className="pointer-events-none absolute"
-      style={{ left: x, top: y, width: 0, height: 0, zIndex: 35 }}
-      initial={{ opacity: 1 }}
-      exit={{ opacity: 0, transition: { duration: 0.6 } }}
-    >
+    <m.div aria-hidden className="pointer-events-none absolute" style={{ left: x, top: y, width: 0, height: 0, zIndex: Z.matter }} initial={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.6 } }}>
       {form.layers.map((l) => {
-        const from = PART_Y[l.part] * h * 1.24
-        const to = DEPTH_OF[l.part]
-        const lw = w * 0.96
-        const lh = h * 0.2
-        const amount = 0.25 + 0.75 * l.matter
+        const to = PLATES[l.part]
+        const from = (PART_AT[l.part] - 0.55) * (face.faceBottom - face.top)
+        const amount = 0.3 + 0.7 * l.matter
         return (
           <m.div
             key={l.part}
-            className="sm-stratum"
+            className="sm-plate"
             data-part={l.part}
-            style={{ width: lw, height: lh, marginLeft: -lw / 2, marginTop: -lh / 2 }}
-            initial={{ y: from, scale: 1, opacity: 0 }}
-            animate={{ y: to.y * h * 1.3, scale: to.scale * 1.12, opacity: to.opacity * amount }}
-            transition={{ duration: reduced ? 0.4 : 1.15, ease: EASE, delay: reduced ? 0 : 0.2, opacity: { duration: 0.5, delay: 0.1 } }}
+            style={{ width: pw, height: ph, marginLeft: -pw / 2, marginTop: -ph / 2 }}
+            initial={{ y: from, scale: 1.1, opacity: 0 }}
+            animate={{ y: to.y * spread, scale: to.scale * 1.12, opacity: to.opacity * amount }}
+            transition={{ duration: reduced ? 0.4 : 1.15, ease: EASE, delay: reduced ? 0 : 0.18, opacity: { duration: 0.5, delay: 0.1 } }}
           >
-            <m.i className="sm-stratum-cool" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 1.1, ease: EASE, delay: 0.45 }} />
+            <svg width={pw} height={ph} viewBox={`${b.left - 20} ${b.top - 20} ${pw} ${ph}`} className="overflow-visible">
+              <defs>
+                <radialGradient id={`${uid}-${l.part}-w`} cx="50%" cy="55%" r="55%">
+                  <stop offset="0" stopColor={PLATE_TINT[l.part][0]} />
+                  <stop offset="0.7" stopColor={PLATE_TINT[l.part][1]} />
+                  <stop offset="1" stopColor="#FFFFFF" stopOpacity={0.55} />
+                </radialGradient>
+                <radialGradient id={`${uid}-${l.part}-c`} cx="50%" cy="55%" r="55%">
+                  <stop offset="0" stopColor="rgba(160, 180, 214, 0.8)" />
+                  <stop offset="0.7" stopColor="rgba(214, 224, 240, 0.4)" />
+                  <stop offset="1" stopColor="#FFFFFF" stopOpacity={0.6} />
+                </radialGradient>
+              </defs>
+              <path d={outline} fill={`url(#${uid}-${l.part}-w)`} />
+              <m.path d={outline} fill={`url(#${uid}-${l.part}-c)`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 1.1, ease: EASE, delay: 0.45 }} />
+              <path d={far} fill="none" stroke="#FFFFFF" strokeOpacity={0.9} strokeWidth={1.3} strokeLinecap="round" />
+              <path d={near} fill="none" stroke="#FFFFFF" strokeOpacity={0.55} strokeWidth={1} strokeLinecap="round" />
+            </svg>
             {l.part === present && (
-              <m.b className="sm-stratum-now" initial={{ opacity: 0, scale: 0.4 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.7, ease: EASE, delay: 0.75 }} />
+              <m.b className="sm-plate-now" initial={{ opacity: 0, scale: 0.4 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.7, ease: EASE, delay: 0.75 }} />
             )}
           </m.div>
         )

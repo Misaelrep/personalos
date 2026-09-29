@@ -6,7 +6,8 @@ Aplicación web de rutina semanal. Contiene la entrada diaria (DAYSCAPE), la pan
 npm install
 npm run dev        # http://localhost:5173
 npm test           # motor de horario (vitest)
-npm run build      # typecheck + build de producción
+npm run build      # typecheck + build de producción (+ manifest, service worker, iconos)
+npm run preview    # http://localhost:4173 — el build de producción, con service worker (ver MOBILE / PWA)
 ```
 
 ## Revisar cualquier momento del día
@@ -111,6 +112,72 @@ Todo el día a la vez, alrededor del presente (arquitectura D aprobada: radial a
 - **Cualquier día**: el revelado y CONTINUAR se ajustan al número real de actividades (≈ 11 s y 14 s para un día completo, antes para uno ligero, algo más para uno muy lleno); en días muy llenos las formas secundarias son algo más pequeñas y los nombres nunca salen de la pantalla. El tiempo restante de AHORA sigue el reloj mientras DAYSCAPE está abierto. Un día sin rutina (o sin bloques) no usa otro día: la app muestra un error de rutina explícito.
 - Código: `src/features/dayscape/` — `model.ts` (modelo y oleadas), `choreography.ts` (tiempos), `layout.ts` (composición D, nombres, inspección, dianas), `forms.ts` (las cinco formas), `morph.ts`, `matter.ts` (fragmentos → partículas → convergencia), `atmosphere.ts` (vidas de las masas de luz), `Aperture.tsx`, `MassField.tsx`, `MatterCanvas.tsx`, `DayscapeAtmosphere.tsx`, `Dayscape.tsx`.
 
+## MOBILE / PWA
+
+PERSONAL OS se instala en la pantalla de inicio del iPhone (y en Android / escritorio) como una app **standalone**: sin barras del navegador, con su icono y su nombre, y funciona sin conexión después de la primera carga. Es una PWA: sin App Store, sin envoltorio nativo, sin backend.
+
+### Instalar en el iPhone (Safari)
+
+1. Abre en **Safari** la URL de PERSONAL OS (la de producción; o la Preview de Vercel para probar una rama). Tiene que ser Safari: desde otra app o navegador la opción puede no aparecer.
+2. Toca el botón **Compartir** (el cuadrado con la flecha hacia arriba). Según la versión de iOS y el diseño de Safari está en la barra inferior o superior; si no lo ves, toca primero **···** en la barra de Safari y después **Compartir**.
+3. Desliza la hoja hacia arriba y toca **Añadir a pantalla de inicio**. (Si no aparece: **Editar acciones…** al final de la hoja y actívala.)
+4. El nombre propuesto es **PERSONAL OS**: déjalo así (o corrígelo) y toca **Añadir**. Si iOS muestra el interruptor **Abrir como app web**, déjalo activado.
+5. Sal de Safari y abre **PERSONAL OS** desde su icono (matriz 3 × 3 sobre Deep Ink). Es standalone si no hay barra de direcciones ni botones de Safari, arriba solo aparece la barra de estado del iPhone (hora, batería) y en el selector de apps aparece como *PERSONAL OS*, no como Safari.
+
+La app instalada tiene **su propio almacenamiento**, separado de Safari (así funciona iOS): lo que hayas marcado en Safari no aparece en la app instalada y viceversa. Úsala siempre desde el icono. Si la Preview de Vercel está protegida con login de Vercel, la app instalada lo pedirá otra vez la primera vez (no comparte cookies con Safari).
+
+### Configuración
+
+- **`vite-plugin-pwa` 1.3** (`vite.config.ts`, modo `generateSW`, `registerType: 'prompt'`): genera `manifest.webmanifest`, `sw.js` (Workbox) y lo inyecta en el build. En `npm run dev` no hay service worker; se prueba con `npm run build && npm run preview`.
+- **Manifest** (`src/pwa/config.ts`, compartido con los tests): `name` y `short_name` *PERSONAL OS*, `display: standalone`, `start_url: /`, `scope: /`, `id: /`, `orientation: portrait-primary` (iOS decide igualmente si gira), `background_color: #F7F9FC` (Pearl: lo que la app pinta antes de su atmósfera), `theme_color: #081A32` (Deep Ink), `lang: es`. El `<link rel="manifest">` lleva `crossorigin="use-credentials"` para que funcione en Previews protegidas de Vercel.
+- **`index.html`**: `viewport-fit=cover`, `apple-mobile-web-app-capable`, `mobile-web-app-capable`, `apple-mobile-web-app-status-bar-style: default`, `apple-mobile-web-app-title: PERSONAL OS`, `apple-touch-icon`, `theme-color` y una imagen de lanzamiento por iPhone.
+
+### Iconos y lanzamiento
+
+- Sin logotipo nuevo: el motivo 3 × 3 de `public/mark.svg` (puntos astral, centro aurora, sobre Deep Ink), con más aire para la pantalla de inicio. Fuentes: `src/pwa/icon.svg` (esquinas redondeadas) e `icon-maskable.svg` (a sangre).
+- `public/`: `pwa-192x192.png`, `pwa-512x512.png` (any), `maskable-512x512.png` (Android: la matriz queda dentro de la zona segura), `apple-touch-icon.png` (180 × 180, a sangre, sin transparencia: iOS aplica su propia máscara). Para regenerarlos, rasteriza las fuentes SVG a esos tamaños (los tests comprueban nombres y píxeles).
+- `public/splash/launch-*.png`: 13 imágenes de lanzamiento (iPhone SE → 17 Pro Max / Air, vertical), color Pearl liso: al tocar el icono no hay destello negro ni blanco duro, y la app entra sobre el mismo fondo. No hay splash artificial: dura lo que tarda en cargar.
+
+### Barra de estado
+
+`default` + `theme-color` dinámico. La app ya fija `theme-color` con el fondo de cada momento (atmósfera de HOY, Pearl Ivory en SEMANA, Deep Ink en FOCUS y en la atmósfera profunda de la noche); en standalone iOS pinta la barra de estado con ese color y elige iconos oscuros o claros según el contraste. Por eso no se usa `black-translucent`: dejaría los iconos siempre blancos, ilegibles sobre HOY y SEMANA claros. Limitación: el contenido empieza bajo la barra de estado (no por detrás), y si alguna versión de iOS no aplicara el cambio de color en vivo, la barra quedaría con el color de la pantalla de arranque. Verificar en el dispositivo (checklist).
+
+### Safe areas, altura y toque
+
+- Contextuales, sin padding global: HOY `padding-top: inset + 28px` y `padding-bottom: 4rem + inset` (su final nunca queda bajo la navegación); cabecera de SEMANA `inset + 28px`; cabecera del día abierto `inset + 22px`; navegación inferior, CONTINUAR, *Volver a la semana* y FOCUS con `max(inset inferior, …)`. En Safari (insets 0) todo queda exactamente como antes (verificado píxel a píxel contra `49387ac`).
+- No hay `100vh`: `body` usa `100dvh` y las capas a pantalla completa son `fixed inset-0`; los `vh` restantes son solo decorativos (velos, halos) y el tamaño del círculo de FOCUS, estables en standalone.
+- Toque ≥ 44 px sin cambiar el aspecto: clase `.hit` (Button y botones sueltos) y `.sm-open::before` amplían el área táctil con un pseudo-elemento; CONTINUAR, *← Semana* y los campos de texto ganan altura sin mover su texto. Excepción asumida: con un día seleccionado en SEMANA, los días que retroceden miden ~38 px de alto (su escala es parte del renderer congelado); en reposo todos superan 44 px.
+- Teclado: el objetivo usa texto de 18 px (iOS no hace zoom), la tecla de retorno es **OK / Done** (`enterkeyhint`) y lo guarda y cierra el teclado; mientras se escribe en un móvil, la navegación inferior y el aviso de versión se apartan. Nada depende de hover (en SEMANA el hover solo existe con `(hover: hover)`).
+
+### Service worker, caché y offline
+
+- **Precache** de todo el build (~870 KB, 20 archivos): HTML, JS, CSS, las fuentes (todas las subsets), iconos y manifest. Las imágenes de lanzamiento no (solo las lee iOS al instalar). `cleanupOutdatedCaches` borra las versiones anteriores.
+- **Una sola app, cualquier URL:** toda navegación recibe el mismo `index.html` del precache y se ignoran todos los parámetros (`?date=`, `?t=`, `?entry=`, `?section=`): una URL simulada nunca es otra versión ni otra entrada de caché. La separación simulación / real sigue siendo la del almacenamiento (`personal-os:sim:*`).
+- **Offline:** la rutina vive en el bundle y la app no hace peticiones de red. Tras una primera carga con conexión funcionan sin red HOY, SEMANA, DAYSCAPE (de cualquier fecha), FOCUS, la entrada diaria y los estados locales (probado: recarga offline, URL nunca visitada offline, FOCUS y registro de resultado offline). Sin conexión solo no se buscan versiones nuevas.
+
+### Actualizaciones
+
+1. Cada deploy genera un `sw.js` nuevo. La app lo busca al abrirse, cada vez que vuelve al primer plano y cada hora si sigue abierta.
+2. La versión nueva se descarga en segundo plano y **espera**: nunca recarga sola.
+3. Solo en reposo (HOY o SEMANA; nunca durante FOCUS, su cierre y resultado, la entrada diaria o un día abierto) aparece sobre la navegación, discreto: **Nueva versión disponible · Actualizar**. Si llega durante FOCUS, aparece al volver a HOY.
+4. **Actualizar** activa la nueva versión y recarga en HOY. Si no se toca, la nueva versión se usa sola la próxima vez que la app se abra desde cero (iOS la cierra tras un tiempo en segundo plano, o al cerrarla desde el selector de apps). Si otra ventana la activa, esta no recarga hasta estar en reposo.
+5. Los estados guardados (localStorage) no se tocan al actualizar. No hace falta reinstalar.
+
+Código: `src/pwa/updates.ts` (registro + comprobaciones), `src/pwa/moment.ts` (cuándo se puede ofrecer), `src/pwa/UpdateNotice.tsx`.
+
+### Almacenamiento, privacidad y límites
+
+- **Estado local, por dispositivo:** `personal-os:day:<fecha local>` (registros, completados, omitidos, parciales, objetivos, Focus abierto) y `personal-os:entry` (entrada vista, mensaje del día, última actividad); las simulaciones usan `personal-os:sim:*`. Sigue en localStorage. Instalada, la app pide almacenamiento persistente (`navigator.storage.persist()`) para que el sistema no lo desaloje.
+- **Sin cuenta, sin sincronización:** el iPhone tiene su estado y el escritorio el suyo; Safari y la app instalada también son distintos. Borrar la app de la pantalla de inicio borra su estado. Si no se usa durante semanas, iOS podría limpiar sus datos.
+- **La rutina viaja en el frontend:** quien tenga la URL puede ver la rutina (está en el JavaScript). No hay login ni contraseña: no se añade un acceso falso solo de frontend. Autenticación y backend son otra fase.
+- **Hora local:** instalada se comporta igual que Safari: fecha, hora y día de la semana del dispositivo, nunca UTC.
+- **Iconos:** iOS guarda el icono al instalar; si el icono cambia en el futuro, hay que quitar y volver a añadir la app para verlo.
+
+### Probar y desplegar
+
+- Local: `npm run build && npm run preview` → http://localhost:4173 (DevTools → Application: Manifest, Service workers, Cache storage; *Offline* para probar sin red). Tests: `src/pwa/pwa.test.ts` (manifest, iconos, metadatos iOS, imágenes de lanzamiento, URLs simuladas, cuándo se ofrece una versión, standalone).
+- Deploy: cada rama genera su Preview en el mismo proyecto de Vercel; `main` es producción. Tras el merge, el iPhone recibe la versión nueva al abrir o volver a la app (aviso → Actualizar) sin reinstalar. No cambies `id`, `start_url` ni `scope` del manifest: el sistema lo trataría como otra app.
+
 ## Arquitectura
 
 ```
@@ -136,6 +203,7 @@ src/
     dayscape/      DAYSCAPE: el día entero alrededor del presente, su atmósfera y su materia
     week/          SEMANA: lentes, red de luz, velos, selección, apertura al DAYSCAPE de una fecha
   layout/          navegación lateral (desktop), navegación inferior (móvil) y secciones
+  pwa/             app instalable: manifest (config.ts), actualizaciones (updates.ts), aviso, standalone
 ```
 
 La UI no contiene datos de rutina: ni horas, ni títulos, ni objetivos. Todo sale de `src/data/routine/` (ver abajo).

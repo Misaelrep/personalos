@@ -305,7 +305,7 @@ export function DailyEntry({ message, onStage, onHandoff, onDone }: DailyEntryPr
           >
             <button
               type="button"
-              className="ds-action ds-continue label-spaced pointer-events-auto px-5 pt-3 pb-4 text-ink-2 hover:text-ink"
+              className="ds-action ds-continue label-spaced pointer-events-auto px-5 pt-[18px] pb-4 text-ink-2 hover:text-ink"
               style={{ fontSize: 10.5 }}
               onClick={(e) => {
                 e.stopPropagation()

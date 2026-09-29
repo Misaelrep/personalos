@@ -1836,3 +1836,68 @@
 :root[data-section='semana'] .bottom-nav::before {
   background: linear-gradient(180deg, rgba(251, 250, 248, 0), rgba(251, 250, 248, 0.6) 50%, rgba(251, 250, 248, 0.85));
 }
+
+/* A new version, offered in one quiet line above the navigation — never during Focus. */
+.update-notice {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(max(env(safe-area-inset-bottom), 10px) + 62px);
+  z-index: 25;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+@media (min-width: 1024px) {
+  .update-notice {
+    bottom: 28px;
+  }
+}
+
+.update-notice button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6em;
+  height: 30px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid var(--surface-border);
+  background: color-mix(in srgb, var(--atmo-base) 70%, transparent);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  pointer-events: auto;
+}
+
+/* 44 px to the touch, 30 px to the eye. */
+.update-notice button::before {
+  content: '';
+  position: absolute;
+  inset: -7px 0;
+}
+
+@layer components {
+  /* Touch: at least 44 px to the finger, whatever the control looks like to the eye. */
+  .hit {
+    position: relative;
+  }
+
+  .hit::before,
+  .sm-open::before {
+    content: '';
+    position: absolute;
+    inset: min(0px, calc(50% - 22px));
+  }
+}
+
+/* Typing on a phone: the keyboard owns the bottom of the screen — nothing fixed floats over the field. */
+@media (pointer: coarse) {
+  :root:has(input:focus, textarea:focus) .bottom-nav,
+  :root:has(input:focus, textarea:focus) .update-notice {
+    visibility: hidden;
+  }
+}

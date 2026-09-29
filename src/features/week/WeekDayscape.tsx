@@ -143,7 +143,7 @@ export function WeekDayscape({ date, dayName, onBack, onHandoff, onDone }: WeekD
           <m.div
             key="head"
             className="pointer-events-none absolute inset-x-0 top-0 z-[80] flex items-center justify-between px-5 sm:px-10"
-            style={{ paddingTop: 'max(env(safe-area-inset-top), 22px)' }}
+            style={{ paddingTop: 'calc(env(safe-area-inset-top) + 22px)' }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -151,7 +151,7 @@ export function WeekDayscape({ date, dayName, onBack, onHandoff, onDone }: WeekD
           >
             <button
               type="button"
-              className="ds-action label-spaced pointer-events-auto -ml-2 px-2 py-3 text-ink-2 hover:text-ink"
+              className="ds-action label-spaced pointer-events-auto -my-[3px] -ml-2 px-2 py-[15px] text-ink-2 hover:text-ink"
               style={{ fontSize: 10.5 }}
               onClick={() => leave('week')}
             >
@@ -177,7 +177,7 @@ export function WeekDayscape({ date, dayName, onBack, onHandoff, onDone }: WeekD
           >
             <button
               type="button"
-              className="ds-action ds-continue label-spaced pointer-events-auto px-5 pt-3 pb-4 text-ink-2 hover:text-ink"
+              className="ds-action ds-continue label-spaced pointer-events-auto px-5 pt-[18px] pb-4 text-ink-2 hover:text-ink"
               style={{ fontSize: 10.5 }}
               onClick={() => leave(today ? 'today' : 'week')}
             >

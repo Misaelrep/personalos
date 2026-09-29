@@ -13,6 +13,9 @@ import { Semana } from './features/week/Semana'
 import { BottomNav, NavRail } from './layout/NavRail'
 import type { SectionId } from './layout/sections'
 import { useMotion } from './motion/MotionLevel'
+import { isUpdateMoment } from './pwa/moment'
+import { UpdateNotice } from './pwa/UpdateNotice'
+import { useUpdates } from './pwa/updates'
 import { useDay } from './state/DayProvider'
 
 export function App() {
@@ -56,6 +59,8 @@ export function App() {
     : flow.atmosphere.particles
   const showFocus = focusBlock && ((phase === 'entering' && step >= 5) || phase === 'focus' || phase === 'exiting')
   const showClosing = focusBlock && (phase === 'result' || phase === 'next')
+  // A new version waits until the app is at rest: never during Focus, the entry or an open day.
+  const update = useUpdates(isUpdateMoment({ phase, focusOpen: Boolean(state.focus), entryActive: entry.active, immersive }))
 
   return (
     <>
@@ -129,6 +134,8 @@ export function App() {
           />
         )}
       </AnimatePresence>
+
+      <UpdateNotice visible={update.offer} onApply={update.apply} />
     </>
   )
 }

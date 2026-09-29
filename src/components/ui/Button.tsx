@@ -7,7 +7,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const base =
-  'inline-flex items-center justify-center gap-3 select-none whitespace-nowrap ' +
+  'hit inline-flex items-center justify-center gap-3 select-none whitespace-nowrap ' +
   'transition-[background-color,color,box-shadow,transform,opacity,border-color] duration-200 ease-astral ' +
   'disabled:opacity-40 disabled:pointer-events-none active:scale-[0.985]'
 

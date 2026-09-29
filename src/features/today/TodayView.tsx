@@ -45,7 +45,7 @@ export function TodayView({ onStartFocus, step, appear = 'fade' }: TodayViewProp
 
   return (
     <m.main
-      className="tone-ink relative z-10 mx-auto w-full max-w-[1180px] px-5 pt-[max(env(safe-area-inset-top),28px)] pb-16 sm:px-10 sm:pt-12 lg:pr-14 lg:pl-[140px] lg:pt-16"
+      className="tone-ink relative z-10 mx-auto w-full max-w-[1180px] px-5 pt-[calc(env(safe-area-inset-top)+28px)] pb-[calc(4rem+env(safe-area-inset-bottom))] sm:px-10 sm:pt-12 lg:pr-14 lg:pl-[140px] lg:pt-16"
       variants={appearing === 'field' ? fadeGroup(0, 0) : appearing === 'materialize' ? fadeGroup(0.13, 0.05) : fadeGroup(0.09, 0.05)}
       initial="hidden"
       animate="visible"

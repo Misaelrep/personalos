@@ -250,7 +250,7 @@ function WeekField({ week, onImmersive, onTodayHandoff, onTodayDone }: SemanaPro
 
           <m.header
             className="sm-head"
-            style={{ left: mobile ? 22 : inset.left, right: mobile ? 22 : inset.right, top: mobile ? 'max(env(safe-area-inset-top), 28px)' : 56 }}
+            style={{ left: mobile ? 22 : inset.left, right: mobile ? 22 : inset.right, top: mobile ? 'calc(env(safe-area-inset-top) + 28px)' : 56 }}
             initial={false}
             animate={{ opacity: opening ? 0 : 1 }}
             transition={{ duration: 0.5, ease: EASE }}

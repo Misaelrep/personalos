@@ -71,7 +71,7 @@ export function ResultPrompt({ onAnswer, onCancel, align = 'start' }: ResultProm
               autoComplete="off"
               placeholder="Una frase breve"
               onChange={(e) => setNote(e.target.value)}
-              className={`mt-3 w-full border-b border-line bg-transparent pb-2.5 text-[18px] text-ink placeholder:text-ink-4 focus:border-accent focus:outline-none ${center ? 'text-center' : ''}`}
+              className={`mt-1.5 w-full border-b border-line bg-transparent pt-1.5 pb-2.5 text-[18px] text-ink placeholder:text-ink-4 focus:border-accent focus:outline-none ${center ? 'text-center' : ''}`}
             />
             <div className={`mt-6 flex gap-2 ${center ? 'justify-center' : ''}`}>
               <Button type="submit" variant="primary" className="h-12 px-7">

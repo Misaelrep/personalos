@@ -59,6 +59,7 @@ export function ObjectiveField({ objective, onSave }: ObjectiveFieldProps) {
         placeholder="Un resultado concreto"
         onChange={(e) => setDraft(e.target.value)}
         onBlur={commit}
+        enterKeyHint="done"
         onKeyDown={(e) => {
           if (e.key === 'Enter') e.currentTarget.blur()
           if (e.key === 'Escape') {
@@ -67,7 +68,7 @@ export function ObjectiveField({ objective, onSave }: ObjectiveFieldProps) {
             e.currentTarget.blur()
           }
         }}
-        className="mt-3 w-full border-b border-line bg-transparent pb-2.5 text-[18px] tracking-[-0.012em] text-ink transition-[border-color] duration-200 placeholder:text-ink-4 focus:border-accent focus:outline-none sm:text-[20px]"
+        className="mt-1.5 w-full border-b border-line bg-transparent pt-1.5 pb-2.5 text-[18px] tracking-[-0.012em] text-ink transition-[border-color] duration-200 placeholder:text-ink-4 focus:border-accent focus:outline-none sm:text-[20px]"
       />
     </div>
   )

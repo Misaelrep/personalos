@@ -43,7 +43,7 @@ export function DayPath({ defaultOpen }: { defaultOpen: boolean }) {
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-controls={listId}
-        className="group flex w-full items-center justify-between gap-4 rounded-2xl py-2 text-left"
+        className="hit group flex w-full items-center justify-between gap-4 rounded-2xl py-2 text-left"
       >
         <Label>Camino del día</Label>
         <span className="flex items-center gap-3 text-[13px] text-ink-3">

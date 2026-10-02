@@ -1,13 +1,13 @@
 import { forwardRef, type ButtonHTMLAttributes } from 'react'
 
-type Variant = 'primary' | 'choice' | 'quiet'
+type Variant = 'primary' | 'choice' | 'quiet' | 'secondary'
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant
 }
 
 const base =
-  'inline-flex items-center justify-center gap-3 select-none whitespace-nowrap ' +
+  'hit inline-flex items-center justify-center gap-3 select-none whitespace-nowrap ' +
   'transition-[background-color,color,box-shadow,transform,opacity,border-color] duration-200 ease-astral ' +
   'disabled:opacity-40 disabled:pointer-events-none active:scale-[0.985]'
 
@@ -21,6 +21,9 @@ const variants: Record<Variant, string> = {
     'text-[13px] font-medium tracking-[0.18em] uppercase hover:border-[color-mix(in_srgb,var(--accent)_45%,transparent)]',
   quiet:
     'h-10 rounded-full px-4 text-ink-3 text-[13px] font-medium tracking-[0.06em] hover:text-ink hover:bg-[var(--line)]',
+  /** Beside a primary action: visible, clearly subordinate. */
+  secondary:
+    'h-10 rounded-full px-3.5 text-ink-3 text-[12.5px] font-normal tracking-[0.04em] hover:text-ink-2 hover:bg-[var(--line)]',
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(

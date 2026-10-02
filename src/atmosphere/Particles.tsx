@@ -5,11 +5,12 @@ import { useMotion } from '../motion/MotionLevel'
 import { EASE } from '../motion/tokens'
 
 /**
- * DISPERSIÓN → CONCENTRACIÓN → LIBERACIÓN.
+ * DISPERSIÓN → AGRUPACIÓN → CONCENTRACIÓN → LIBERACIÓN.
  * A handful of slow points: peripheral in HOY, drawn toward the center in
- * Focus, released outward when Focus ends.
+ * Focus, released outward when Focus ends. `handed-off` rests them while
+ * DAYSCAPE shows the day in its own atmosphere.
  */
-export type ParticleMode = 'dispersed' | 'converged' | 'released'
+export type ParticleMode = 'dispersed' | 'gathering' | 'converged' | 'released' | 'handed-off'
 
 interface Particle {
   /** Peripheral resting place (vw / vh). */
@@ -71,14 +72,31 @@ export function Particles({ mode }: { mode: ParticleMode }) {
   return (
     <div className="particles">
       {list.map((p, i) => {
-        const [x, y] = mode === 'converged' ? p.focus : mode === 'released' ? p.out : p.home
-        const duration = mode === 'converged' ? 2.4 + (i % 5) * 0.25 : mode === 'released' ? 2.2 : 6
+        const [x, y] =
+          mode === 'converged'
+            ? p.focus
+            : mode === 'released'
+              ? p.out
+              : mode === 'gathering'
+                ? [(p.home[0] + p.focus[0]) / 2, (p.home[1] + p.focus[1]) / 2]
+                : p.home
+        const duration =
+          mode === 'converged'
+            ? 2.4 + (i % 5) * 0.25
+            : mode === 'released'
+              ? 2.2
+              : mode === 'gathering'
+                ? 1.2
+                : mode === 'handed-off'
+                  ? 0.45
+                  : 6
+        const opacity = mode === 'handed-off' ? 0 : mode === 'converged' ? Math.min(1, p.opacity + 0.3) : p.opacity
         return (
           <m.span
             key={i}
             className="particle"
             initial={false}
-            animate={{ x: `${x}vw`, y: `${y}vh`, opacity: mode === 'converged' ? Math.min(1, p.opacity + 0.3) : p.opacity }}
+            animate={{ x: `${x}vw`, y: `${y}vh`, opacity }}
             transition={{ duration, ease: EASE, delay: mode === 'converged' ? (i % 7) * 0.06 : 0 }}
           >
             <span

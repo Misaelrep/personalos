@@ -25,18 +25,26 @@ export interface DayView {
   next?: ScheduledBlock
   /** True when `next` belongs to tomorrow (after the day's last block). */
   nextIsTomorrow: boolean
-  /** First meaningful (non-transition) block after `next`. */
+  /** The block right after `next` (DESPUÉS). */
   after?: ScheduledBlock
   energy: EnergyState
   progress: { done: number; total: number }
   meditationPrompt?: MeditationPrompt
 }
 
+/** Neighbouring days, so the night never breaks at midnight. */
+export interface DayContext {
+  /** Yesterday's routine: before today's first block, its sleep is still the present. */
+  yesterday?: DayRoutine
+  /** Tomorrow's routine: after today's last block, its first block comes next. */
+  tomorrow?: DayRoutine
+}
+
 const EMPTY_RECORD = {}
 
-/** Blocks that never appear in the day path. */
+/** Deliberately registered blocks, plus the day's sleep as its end point. */
 function isInPath(block: RoutineBlock): boolean {
-  return block.kind !== 'transition'
+  return block.countsForProgress || block.category === 'sleep'
 }
 
 function sortByStart<T extends { startMin: number }>(blocks: T[]): T[] {
@@ -59,14 +67,14 @@ function withTimes(routine: DayRoutine) {
  * Build the day as HOY sees it at `now` (minutes from local midnight).
  * Pure: same routine + state + time always produce the same view.
  */
-export function buildDayView(routine: DayRoutine, state: DayState, now: number): DayView {
+export function buildDayView(routine: DayRoutine, state: DayState, now: number, context: DayContext = {}): DayView {
   const rule = routine.meditation
-  const moved = rule && state.meditationMoved
+  const moved = rule?.rescueBlockId && state.meditationMoved
 
   let timed = withTimes(routine)
 
   // Meditation exception: it takes over the rescue slot; the replaced activity
-  // is not rescheduled anywhere else.
+  // is not rescheduled anywhere else, and nothing else moves.
   let replacedTitle: string | undefined
   if (moved && rule) {
     const rescue = timed.find((b) => b.id === rule.rescueBlockId)
@@ -94,7 +102,9 @@ export function buildDayView(routine: DayRoutine, state: DayState, now: number):
         start: '',
         title: 'Transición',
         descriptor: `Prepárate para ${following.shortTitle ?? following.title}`,
-        kind: 'transition',
+        category: 'transition',
+        focusEligible: false,
+        countsForProgress: false,
         energy: following.energy,
         startMin: b.endMin,
         endMin: following.startMin,
@@ -102,7 +112,7 @@ export function buildDayView(routine: DayRoutine, state: DayState, now: number):
     }
   })
 
-  const rescueSlot = rule ? withTimes(routine).find((b) => b.id === rule.rescueBlockId) : undefined
+  const rescueSlot = rule?.rescueBlockId ? withTimes(routine).find((b) => b.id === rule.rescueBlockId) : undefined
 
   const timeline: ScheduledBlock[] = filled.map((b) => {
     const record = state.records[b.id] ?? EMPTY_RECORD
@@ -117,26 +127,24 @@ export function buildDayView(routine: DayRoutine, state: DayState, now: number):
     } else if (now >= b.startMin && now < b.endMin) {
       status = 'activo'
     } else if (now >= b.endMin) {
+      // Passed time is never assumed completed: without a record it is just past.
       implicit = true
       const isOriginalMeditation = rule && b.id === rule.blockId && !moved
-      if (isOriginalMeditation) {
-        // Priority meditation is never assumed done. It stays pending while it
-        // can still be rescued, and counts as skipped once that window closes.
-        status = rescueSlot && now < rescueSlot.endMin ? 'proximo' : 'omitido'
+      if (isOriginalMeditation && rescueSlot) {
+        // Priority meditation: pending while it can still be rescued, skipped once that window closes.
+        status = now < rescueSlot.endMin ? 'proximo' : 'omitido'
       } else {
-        // The routine is assumed followed unless the user says otherwise.
-        status = 'completado'
+        status = 'sin-registrar'
       }
     } else {
       status = 'proximo'
     }
 
-    const objective =
-      b.kind === 'deep'
-        ? record.objective !== undefined
-          ? record.objective.trim() || undefined
-          : b.defaultObjective
-        : undefined
+    const objective = b.focusEligible
+      ? record.objective !== undefined
+        ? record.objective.trim() || undefined
+        : b.defaultObjective
+      : undefined
 
     return {
       ...b,
@@ -154,17 +162,9 @@ export function buildDayView(routine: DayRoutine, state: DayState, now: number):
   const currentIndex = timeline.findIndex((b) => now >= b.startMin && now < b.endMin)
   let current: ScheduledBlock
   if (currentIndex === -1) {
-    const sleep = timeline[timeline.length - 1]
-    current = {
-      ...sleep,
-      id: `${sleep.id}-overnight`,
-      startMin: sleep.startMin - MINUTES_PER_DAY,
-      endMin: timeline[0].startMin,
-      status: 'activo',
-      implicit: false,
-      inPath: false,
-      record: EMPTY_RECORD,
-    }
+    const lastNight = overnightSleep(context.yesterday, routine, timeline[0].startMin)
+    const record = state.records[lastNight.id] ?? EMPTY_RECORD
+    current = { ...lastNight, status: record.status ?? 'activo', implicit: false, inPath: false, record }
   } else {
     current = timeline[currentIndex]
   }
@@ -175,19 +175,19 @@ export function buildDayView(routine: DayRoutine, state: DayState, now: number):
     next = timeline[0]
   } else if (currentIndex < timeline.length - 1) {
     next = timeline[currentIndex + 1]
-  } else {
-    next = timeline[0]
+  } else if (context.tomorrow) {
+    next = firstOf(context.tomorrow, state)
     nextIsTomorrow = true
   }
 
   let after: ScheduledBlock | undefined
   if (next && !nextIsTomorrow) {
     const from = timeline.indexOf(next)
-    after = timeline.slice(from + 1).find((b) => b.kind !== 'transition' && !b.synthetic)
+    after = timeline.slice(from + 1).find((b) => !b.synthetic)
   }
 
   const path = timeline.filter((b) => b.inPath)
-  const counted = path.filter((b) => b.kind !== 'sleep')
+  const counted = path.filter((b) => b.countsForProgress)
   const progress = {
     done: counted.filter((b) => b.status === 'completado' || b.status === 'parcial').length,
     total: counted.length,
@@ -219,6 +219,37 @@ export function buildDayView(routine: DayRoutine, state: DayState, now: number):
     energy: current.energy,
     progress,
     meditationPrompt,
+  }
+}
+
+/**
+ * Last night's sleep, from the routine it belongs to (yesterday), running until
+ * today's first block. Without yesterday at hand, today's own sleep stands in
+ * under a distinct id, so it is never confused with tonight's.
+ */
+function overnightSleep(yesterday: DayRoutine | undefined, today: DayRoutine, todayStart: number) {
+  const source = withTimes(yesterday ?? today)
+  const sleep = source.find((b) => b.category === 'sleep') ?? source[source.length - 1]
+  return {
+    ...sleep,
+    id: yesterday ? sleep.id : `${sleep.id}-overnight`,
+    startMin: sleep.startMin - MINUTES_PER_DAY,
+    endMin: todayStart,
+  }
+}
+
+/** Tomorrow's first block, on today's clock (+24 h). */
+function firstOf(tomorrow: DayRoutine, state: DayState): ScheduledBlock {
+  const first = withTimes(tomorrow)[0]
+  return {
+    ...first,
+    startMin: first.startMin + MINUTES_PER_DAY,
+    endMin: first.endMin + MINUTES_PER_DAY,
+    status: 'proximo',
+    implicit: false,
+    inPath: false,
+    objective: undefined,
+    record: state.records[first.id] ?? EMPTY_RECORD,
   }
 }
 

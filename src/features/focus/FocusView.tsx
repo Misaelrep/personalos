@@ -79,7 +79,7 @@ export function FocusView({ block, closing, onFinish, onLeave }: FocusViewProps)
           type="button"
           onClick={onLeave}
           disabled={closing}
-          className="h-10 rounded-full px-4 text-[12px] tracking-[0.06em] text-ink-3 transition-colors duration-200 hover:text-ink"
+          className="hit h-10 rounded-full px-4 text-[12px] tracking-[0.06em] text-ink-3 transition-colors duration-200 hover:text-ink"
         >
           Salir sin cerrar
         </button>

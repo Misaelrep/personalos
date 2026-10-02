@@ -36,6 +36,40 @@ export const fade: Variants = {
   exit: { opacity: 0, y: -4, transition: transition.micro },
 }
 
+/**
+ * MATERIALIZE — HOY appearing after the entry ritual: surfaces come into focus.
+ * The filter is cleared at the end so glass surfaces keep sampling the light behind them.
+ */
+export const materialize: Variants = {
+  hidden: { opacity: 0, y: 6, scale: 0.985, filter: 'blur(12px)' },
+  visible: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    filter: 'blur(0px)',
+    transition: { duration: 1, ease: EASE },
+    transitionEnd: { filter: 'none' },
+  },
+  exit: { opacity: 0, transition: transition.micro },
+}
+
+/**
+ * HOY after the DAY FIELD: surfaces come into focus in order of importance
+ * (`custom` = rank: AHORA 0, context 1, SIGUIENTE 2, path 3), right after the
+ * AHORA module has landed. Opacity, blur and a trace of scale; no slides.
+ */
+export const fieldReveal: Variants = {
+  hidden: { opacity: 0, scale: 0.994, filter: 'blur(10px)' },
+  visible: (rank: number = 0) => ({
+    opacity: 1,
+    scale: 1,
+    filter: 'blur(0px)',
+    transition: { duration: 0.55, ease: EASE, delay: 0.3 + rank * 0.1 },
+    transitionEnd: { filter: 'none' },
+  }),
+  exit: { opacity: 0, transition: transition.micro },
+}
+
 /** Staggered FADE for a group of surfaces. */
 export const fadeGroup = (stagger = 0.08, delay = 0): Variants => ({
   hidden: {},

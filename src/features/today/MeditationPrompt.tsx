@@ -28,7 +28,7 @@ export function MeditationPrompt() {
           </p>
         </div>
       </div>
-      <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+      <div className="flex flex-wrap items-center gap-2 sm:ml-auto sm:flex-nowrap">
         <Button variant="choice" className="h-11 min-w-20" onClick={() => dispatch({ type: 'moveMeditation' })}>
           Sí
         </Button>

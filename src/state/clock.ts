@@ -1,20 +1,44 @@
 import { useEffect, useState } from 'react'
 
 /**
- * App clock. `?t=HH:MM` starts the clock at that time of day (it keeps
- * ticking from there), which makes every moment of the routine reviewable.
+ * App clock: the browser's LOCAL date and time (its own time zone, never UTC).
+ * For review only, two optional URL params move it:
+ *   `?t=HH:MM`           that time of day, today;
+ *   `?date=YYYY-MM-DD`   that date, at the current time of day;
+ *   both together        that exact moment (e.g. `?date=2026-09-28&t=10:30`).
+ * The clock keeps ticking from there. Without them it is the real clock.
  */
-function readOffset(): number {
-  if (typeof window === 'undefined') return 0
-  const t = new URLSearchParams(window.location.search).get('t')
-  const match = t?.match(/^(\d{1,2}):(\d{2})$/)
-  if (!match) return 0
-  const target = new Date()
-  target.setHours(Number(match[1]), Number(match[2]), 0, 0)
-  return target.getTime() - Date.now()
+function readParams(search: string) {
+  const params = new URLSearchParams(search)
+  return {
+    t: params.get('t')?.match(/^(\d{1,2}):(\d{2})$/),
+    date: params.get('date')?.match(/^(\d{4})-(\d{2})-(\d{2})$/),
+  }
 }
 
-const OFFSET = readOffset()
+/** A review session: the clock is simulated and persistence is kept apart (see storage). */
+export function isSimulation(search: string): boolean {
+  const { t, date } = readParams(search)
+  return Boolean(t || date)
+}
+
+export function readOffset(search: string, realNow: number): number {
+  const { t, date } = readParams(search)
+  if (!t && !date) return 0
+  const target = new Date(realNow)
+  if (date) {
+    const [y, m, d] = [Number(date[1]), Number(date[2]) - 1, Number(date[3])]
+    const probe = new Date(y, m, d)
+    // Reject impossible dates (2026-02-31) instead of silently rolling them over.
+    if (probe.getFullYear() !== y || probe.getMonth() !== m || probe.getDate() !== d) return 0
+    target.setFullYear(y, m, d)
+  }
+  if (t) target.setHours(Number(t[1]), Number(t[2]), 0, 0)
+  return target.getTime() - realNow
+}
+
+const OFFSET = typeof window === 'undefined' ? 0 : readOffset(window.location.search, Date.now())
+export const SIMULATED = typeof window !== 'undefined' && isSimulation(window.location.search)
 
 export function nowMs(): number {
   return Date.now() + OFFSET

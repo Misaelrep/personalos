@@ -9,3 +9,4 @@ export const ENERGY_LABEL: Record<EnergyState, string> = {
   'segundo-pico': 'Segundo pico',
   cierre: 'Cierre',
 }
+

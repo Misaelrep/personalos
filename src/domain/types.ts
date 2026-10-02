@@ -16,22 +16,59 @@ export type EnergyState =
   | 'cierre'
 
 /**
- * What kind of time a block represents. Drives which actions HOY offers
- * and whether the block appears in the "Camino del día".
+ * What a block is. The category drives behavior, never decoration: which
+ * actions HOY offers, how DAYSCAPE draws it and what it defaults to for Focus
+ * and progress (each block states `focusEligible` / `countsForProgress`
+ * explicitly anyway).
  */
-export type BlockKind =
-  | 'deep' // trabajo profundo — admite Focus y objetivo
-  | 'practice' // prácticas diarias (escritura, inglés, lectura…)
-  | 'ritual' // meditación, breathwork
-  | 'recovery' // descanso cognitivo
-  | 'body' // gimnasio
-  | 'transition' // logística / comida / pausas — no aparece en el camino
+export type BlockCategory =
+  | 'deep_work' // producción profunda — objetivo y Focus
+  | 'learning' // inglés, lectura, PROTEGE, Derecho, formación…
+  | 'ritual' // meditación, Merkaba, breathwork, cierre digital
+  | 'creative_practice' // escritura, TouchDesigner…
+  | 'body' // gimnasio, caminata
+  | 'recovery' // comida, descanso, pausa
+  | 'transition' // traslados, preparación, cambios de actividad
+  | 'admin' // Substack (publicación), Jets, finanzas, correo
+  | 'reflection' // introspección semanal
   | 'sleep'
+  | 'free' // espacio abierto intencional (jueves)
+
+/** Projects a block belongs to (a block may belong to none). */
+export type ProjectId =
+  | 'web'
+  | 'wellness'
+  | 'newsletter'
+  | 'substack'
+  | 'touchdesigner'
+  | 'biotron'
+  | 'polaris'
+  | 'jets'
+  | 'finances'
 
 /** "HH:MM", 24h. */
 export type ClockTime = string
 
+/** How DAYSCAPE draws a block. Normally derived from its category (see features/dayscape/model.ts). */
+export type DayscapeRole = 'micro' | 'medium' | 'major' | 'space'
+
+/** A lesser alternative inside the same block: never a second obligation, never split time. */
+export interface SecondaryOption {
+  title: string
+  description?: string
+  project?: ProjectId
+}
+
+/** Something that happens inside a block without breaking it (e.g. ~1 h of AI Polaris within Wellness). */
+export interface IncludedActivity {
+  title: string
+  /** Approximate minutes within the block, when known. */
+  minutes?: number
+  project?: ProjectId
+}
+
 export interface RoutineBlock {
+  /** Stable, readable identity: `<day>-<slug>-<HHMM>`, e.g. `tue-web-1000`. Never an index. */
   id: string
   start: ClockTime
   /** Omit for point-in-time entries: the block then lasts until the next one starts. */
@@ -39,31 +76,42 @@ export interface RoutineBlock {
   title: string
   /** Secondary line, e.g. "MVP / Testeo". */
   subtitle?: string
-  /** Nature of the block, e.g. "Trabajo profundo", "Recuperación cognitiva". */
+  /** Nature of the block, e.g. "Trabajo profundo", "Recuperación cognitiva". Defaults to the category's name. */
   descriptor?: string
-  /** Short name used in the day path, e.g. "Merkaba". Defaults to title. */
+  /** Short name for the day path and DAYSCAPE, e.g. "Merkaba". Defaults to title. */
   shortTitle?: string
-  kind: BlockKind
+  category: BlockCategory
+  project?: ProjectId
   energy: EnergyState
-  /** Default "¿Qué tiene que existir al terminar este bloque?" answer. Editable in HOY. */
+  /** HOY offers INICIAR FOCUS (and an objective) only on these. */
+  focusEligible: boolean
+  /** Deliberately registered: appears in the day path and counts in progress. */
+  countsForProgress: boolean
+  /** Optional override of how DAYSCAPE draws it. */
+  dayscapeRole?: DayscapeRole
+  /** Default "¿Qué tiene que existir al terminar este bloque?". Normally unset: objectives are per date. */
   defaultObjective?: string
+  secondaryOption?: SecondaryOption
+  includes?: IncludedActivity[]
+  metadata?: Record<string, unknown>
 }
 
 /**
  * La meditación es prioritaria a su hora. Si no se realizó, HOY puede
- * proponer moverla a una franja de rescate, sustituyendo lo que hubiera allí.
+ * proponer moverla a una franja de rescate (09:30), sustituyendo lo que hubiera
+ * allí — solo los días en que esa franja existe.
  */
 export interface MeditationRule {
   blockId: string
-  /** Block whose slot the meditation takes if moved. */
-  rescueBlockId: string
+  /** Block whose slot the meditation takes if moved. Unset: this day has no rescue slot. */
+  rescueBlockId?: string
 }
 
 export interface DayRoutine {
   weekday: Weekday
   /** Display name, e.g. "Martes". */
   dayName: string
-  /** Day theme, e.g. "Páginas Web + Wellness". */
+  /** Day direction, e.g. "Páginas Web + Wellness". */
   theme: string
   blocks: RoutineBlock[]
   meditation?: MeditationRule
@@ -106,7 +154,7 @@ export interface DayState {
 /* Derived schedule                                                          */
 /* ------------------------------------------------------------------------ */
 
-/** The only states a block can show. */
+/** The only states a block can show. A block whose time has passed is never assumed completed. */
 export type BlockStatus =
   | 'proximo'
   | 'activo'
@@ -114,6 +162,8 @@ export type BlockStatus =
   | 'completado'
   | 'parcial'
   | 'omitido'
+  /** Its time has passed and nothing was recorded. */
+  | 'sin-registrar'
 
 export interface ScheduledBlock extends RoutineBlock {
   /** Minutes from local midnight. `endMin` may exceed 1440 for overnight blocks. */

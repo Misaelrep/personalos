@@ -7,9 +7,10 @@ export const STATUS_LABEL: Record<BlockStatus, string> = {
   completado: 'Completado',
   parcial: 'Parcial',
   omitido: 'Omitido',
+  'sin-registrar': 'Sin registrar',
 }
 
-/** ✓ completado · ◐ parcial · – omitido · ● activo · ○ próximo */
+/** ✓ completado · ◐ parcial · – omitido · ● activo · ○ próximo · ◌ sin registrar */
 export function StatusGlyph({ status, className = '' }: { status: BlockStatus; className?: string }) {
   if (status === 'activo' || status === 'en-focus') {
     return (
@@ -39,6 +40,9 @@ export function StatusGlyph({ status, className = '' }: { status: BlockStatus; c
         </>
       )}
       {status === 'proximo' && <circle cx="8" cy="8" r="5.3" fill="none" stroke="currentColor" strokeWidth="1.2" />}
+      {status === 'sin-registrar' && (
+        <circle cx="8" cy="8" r="5.3" fill="none" stroke="currentColor" strokeWidth="1.2" strokeDasharray="1.4 2.4" strokeLinecap="round" />
+      )}
     </svg>
   )
 }

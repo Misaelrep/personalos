@@ -3,7 +3,7 @@ import { useId, useState } from 'react'
 import { Button } from '../../components/ui/Button'
 import { Label } from '../../components/ui/Label'
 import { STATUS_LABEL, StatusGlyph } from '../../components/ui/StatusGlyph'
-import { blockDescription, blockName, resolutionLine } from '../../domain/labels'
+import { alternativeLine, blockDescription, blockName, resolutionLine } from '../../domain/labels'
 import { formatClock, formatRange, minutesOfDay } from '../../domain/time'
 import type { BlockStatus, ScheduledBlock } from '../../domain/types'
 import { expand } from '../../motion/tokens'
@@ -16,6 +16,7 @@ const TEXT: Record<BlockStatus, string> = {
   completado: 'text-ink-3',
   parcial: 'text-ink-3',
   omitido: 'text-ink-4 line-through decoration-[var(--line)]',
+  'sin-registrar': 'text-ink-3',
 }
 
 const GLYPH: Record<BlockStatus, string> = {
@@ -25,6 +26,7 @@ const GLYPH: Record<BlockStatus, string> = {
   completado: 'text-ink-3',
   parcial: 'text-ink-3',
   omitido: 'text-ink-4',
+  'sin-registrar': 'text-ink-4',
 }
 
 /** D + E · Camino del día with minimal progress. Subordinate to AHORA. */
@@ -41,7 +43,7 @@ export function DayPath({ defaultOpen }: { defaultOpen: boolean }) {
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-controls={listId}
-        className="group flex w-full items-center justify-between gap-4 rounded-2xl py-2 text-left"
+        className="hit group flex w-full items-center justify-between gap-4 rounded-2xl py-2 text-left"
       >
         <Label>Camino del día</Label>
         <span className="flex items-center gap-3 text-[13px] text-ink-3">
@@ -84,25 +86,42 @@ export function DayPath({ defaultOpen }: { defaultOpen: boolean }) {
   )
 }
 
+/**
+ * Progress in the dot system's own terms: done points are lit, pending points
+ * are the matrix's faint "off" dots, the active one glows.
+ */
 function ProgressDots({ blocks }: { blocks: ScheduledBlock[] }) {
-  const counted = blocks.filter((b) => b.kind !== 'sleep')
+  const counted = blocks.filter((b) => b.countsForProgress)
+  const pitch = 12
   return (
-    <div className="mt-3 flex items-center gap-[7px]" aria-hidden>
-      {counted.map((b) => {
+    <svg
+      aria-hidden
+      className="mt-3 h-3 overflow-visible"
+      width={counted.length * pitch}
+      viewBox={`0 0 ${counted.length * pitch} 12`}
+    >
+      {counted.map((b, i) => {
+        const cx = i * pitch + pitch / 2
         const s = b.status
-        const cls =
+        if (s === 'activo' || s === 'en-focus') {
+          return (
+            <g key={b.id}>
+              <circle cx={cx} cy={6} r={5.2} fill="var(--accent)" opacity={0.14} />
+              <circle cx={cx} cy={6} r={2.7} fill="var(--accent)" />
+            </g>
+          )
+        }
+        const [r, fill, opacity] =
           s === 'completado'
-            ? 'bg-ink-3'
+            ? [2.3, 'var(--ink-3)', 0.9]
             : s === 'parcial'
-              ? 'bg-[linear-gradient(90deg,var(--ink-3)_50%,transparent_50%)] ring-1 ring-inset ring-[var(--ink-3)]'
-              : s === 'activo' || s === 'en-focus'
-                ? 'bg-accent shadow-[0_0_0_3px_color-mix(in_srgb,var(--accent)_18%,transparent)]'
-                : s === 'omitido'
-                  ? 'ring-1 ring-inset ring-[var(--ink-4)] opacity-60'
-                  : 'ring-1 ring-inset ring-[var(--ink-4)]'
-        return <span key={b.id} className={`size-[6px] rounded-full ${cls}`} />
+              ? [2.3, 'var(--ink-3)', 0.45]
+              : s === 'omitido'
+                ? [1.1, 'var(--ink-4)', 0.6]
+                : [1.5, 'var(--ink-4)', 0.75]
+        return <circle key={b.id} cx={cx} cy={6} r={r} fill={fill} opacity={opacity} />
       })}
-    </div>
+    </svg>
   )
 }
 
@@ -122,7 +141,9 @@ function PathItem({ block }: { block: ScheduledBlock }) {
         aria-controls={detailId}
         aria-current={current ? 'step' : undefined}
         className={`grid w-full grid-cols-[16px_46px_1fr] items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors duration-200 hover:bg-[var(--line)] ${
-          current ? 'bg-[color-mix(in_srgb,var(--accent)_8%,transparent)]' : ''
+          current
+            ? 'bg-[var(--glass-quiet)] shadow-[var(--glass-shadow-quiet)] hover:bg-[var(--glass-quiet)]'
+            : ''
         }`}
       >
         <StatusGlyph status={block.status} className={GLYPH[block.status]} />
@@ -152,9 +173,9 @@ function PathItem({ block }: { block: ScheduledBlock }) {
               <p>
                 <span className="tabular">{formatRange(block.startMin, block.endMin)}</span> · {blockDescription(block)}
               </p>
+              {block.secondaryOption && <p>{alternativeLine(block)}</p>}
               <p>
                 {block.record.status ? resolutionLine(block) : STATUS_LABEL[block.status]}
-                {block.implicit && block.status === 'completado' && <span className="text-ink-4"> · según la rutina</span>}
               </p>
               {block.objective && <p>Objetivo: {block.objective}</p>}
               {block.record.pendingNote && <p className="text-ink-2">Pendiente: {block.record.pendingNote}</p>}
@@ -182,11 +203,17 @@ function Correction({
       </Button>
     )
   }
-  if (block.status === 'completado') {
+  // Passed without a record: nothing is assumed, either answer can be given.
+  if (block.status === 'sin-registrar') {
     return (
-      <Button variant="quiet" className="-ml-4 h-8" onClick={() => onAction({ type: 'skip', blockId: block.id })}>
-        Marcar omitido
-      </Button>
+      <div className="-ml-4 flex gap-1">
+        <Button variant="quiet" className="h-8" onClick={() => onAction({ type: 'complete', blockId: block.id })}>
+          Marcar completado
+        </Button>
+        <Button variant="quiet" className="h-8" onClick={() => onAction({ type: 'skip', blockId: block.id })}>
+          Marcar omitido
+        </Button>
+      </div>
     )
   }
   return (

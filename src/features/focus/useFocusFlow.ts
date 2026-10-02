@@ -49,6 +49,8 @@ export function useFocusFlow(): FocusFlow {
 
   const start = useCallback(
     (blockId: string) => {
+      // Focus is only for deep production (focusEligible in the routine).
+      if (!view.timeline.find((b) => b.id === blockId)?.focusEligible) return
       clearTimers()
       dispatch({ type: 'startFocus', blockId, at: nowMs() })
       if (!cinematic) {
@@ -66,7 +68,7 @@ export function useFocusFlow(): FocusFlow {
         setStep(0)
       })
     },
-    [cinematic, dispatch],
+    [cinematic, dispatch, view.timeline],
   )
 
   const finish = useCallback(() => {
@@ -118,7 +120,13 @@ export function useFocusFlow(): FocusFlow {
   const atmosphere: FocusFlow['atmosphere'] = {
     preset: deep ? 'focus-session' : phase === 'today' || phase === 'entering' ? view.energy : 'exhale',
     expanded: (phase === 'entering' && step >= 2) || phase === 'focus',
-    particles: deep ? 'converged' : phase === 'exiting' || phase === 'result' ? 'released' : 'dispersed',
+    particles: deep
+      ? 'converged'
+      : phase === 'entering'
+        ? 'gathering'
+        : phase === 'exiting' || phase === 'result'
+          ? 'released'
+          : 'dispersed',
     // Without the cinematic sequence, content appears at once: let the light settle quickly.
     duration: !cinematic ? 0.6 : phase === 'entering' ? 1.1 : phase === 'exiting' ? 1.6 : 1.8,
     wave,

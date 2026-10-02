@@ -14,58 +14,70 @@ export interface AtmospherePreset {
   /** Halo colors: [main light source, counter light, low accent, crossing beam]. */
   halos: [string, string, string, string]
   particle: string
+  /** Glow around each particle. Defaults to the particle color. */
+  glow?: string
   accent: string
 }
 
 export type AtmosphereKey = EnergyState | 'focus-session' | 'exhale'
 
 export const PRESETS: Record<AtmosphereKey, AtmospherePreset> = {
+  // HOY (light states) share a pearl ground: white light, silver reflections,
+  // ice blue. Each state keeps its own hue in the counter light (halo 2).
+  // Particles become small glints: a white core with a cool halo.
+
   // blanco + azul frío
   activacion: {
     tone: 'light',
-    base: '#F7F9FC',
-    halos: ['rgba(105,165,255,0.34)', 'rgba(186,214,255,0.40)', 'rgba(255,216,183,0.20)', 'rgba(234,242,255,0.85)'],
-    particle: 'rgba(58,130,246,0.55)',
+    base: '#EFF3F9',
+    halos: ['rgba(255,255,255,0.95)', 'rgba(190,214,248,0.62)', 'rgba(216,231,250,0.55)', 'rgba(255,255,255,0.9)'],
+    particle: 'rgba(255,255,255,0.95)',
+    glow: 'rgba(150,185,235,0.75)',
     accent: '#3A82F6',
   },
   // azul profundo + azul eléctrico (en HOY se mantiene claro, con luz más intensa)
   focus: {
     tone: 'light',
-    base: '#F4F7FC',
-    halos: ['rgba(58,130,246,0.30)', 'rgba(16,39,70,0.10)', 'rgba(105,165,255,0.30)', 'rgba(210,228,255,0.80)'],
-    particle: 'rgba(58,130,246,0.6)',
+    base: '#EEF2F9',
+    halos: ['rgba(255,255,255,0.92)', 'rgba(150,188,248,0.55)', 'rgba(216,231,250,0.6)', 'rgba(255,255,255,0.88)'],
+    particle: 'rgba(255,255,255,0.95)',
+    glow: 'rgba(120,165,235,0.75)',
     accent: '#3A82F6',
   },
   // blanco + lavanda
   recuperacion: {
     tone: 'light',
-    base: '#F9F8FD',
-    halos: ['rgba(167,139,250,0.24)', 'rgba(220,210,255,0.45)', 'rgba(105,165,255,0.14)', 'rgba(244,240,255,0.9)'],
-    particle: 'rgba(167,139,250,0.6)',
+    base: '#F2F2F9',
+    halos: ['rgba(255,255,255,0.95)', 'rgba(208,198,250,0.55)', 'rgba(216,231,250,0.45)', 'rgba(255,255,255,0.9)'],
+    particle: 'rgba(255,255,255,0.95)',
+    glow: 'rgba(170,150,240,0.7)',
     accent: '#8B6CF0',
   },
   // blanco + azul limpio
   produccion: {
     tone: 'light',
-    base: '#F7F9FC',
-    halos: ['rgba(58,130,246,0.22)', 'rgba(105,165,255,0.26)', 'rgba(255,216,183,0.14)', 'rgba(234,242,255,0.9)'],
-    particle: 'rgba(58,130,246,0.5)',
+    base: '#EFF3F9',
+    halos: ['rgba(255,255,255,0.95)', 'rgba(176,206,250,0.58)', 'rgba(220,227,234,0.5)', 'rgba(255,255,255,0.9)'],
+    particle: 'rgba(255,255,255,0.95)',
+    glow: 'rgba(140,180,235,0.75)',
     accent: '#3A82F6',
   },
   // muy neutro / limpio
   cuerpo: {
     tone: 'light',
-    base: '#F7F8FA',
-    halos: ['rgba(112,128,154,0.14)', 'rgba(220,228,240,0.55)', 'rgba(105,165,255,0.10)', 'rgba(255,255,255,0.9)'],
-    particle: 'rgba(112,128,154,0.5)',
+    base: '#F0F3F7',
+    halos: ['rgba(255,255,255,0.95)', 'rgba(220,227,234,0.6)', 'rgba(216,231,250,0.35)', 'rgba(255,255,255,0.9)'],
+    particle: 'rgba(255,255,255,0.95)',
+    glow: 'rgba(150,165,190,0.7)',
     accent: '#5B6F8F',
   },
   // azul + violeta
   'segundo-pico': {
     tone: 'light',
-    base: '#F6F7FD',
-    halos: ['rgba(58,130,246,0.26)', 'rgba(167,139,250,0.30)', 'rgba(105,165,255,0.18)', 'rgba(236,232,255,0.85)'],
-    particle: 'rgba(124,108,246,0.6)',
+    base: '#F0F1F9',
+    halos: ['rgba(255,255,255,0.92)', 'rgba(172,190,250,0.55)', 'rgba(204,190,250,0.5)', 'rgba(255,255,255,0.88)'],
+    particle: 'rgba(255,255,255,0.95)',
+    glow: 'rgba(150,140,240,0.72)',
     accent: '#5B6CF0',
   },
   // azul profundo + naranja cálido extremadamente tenue

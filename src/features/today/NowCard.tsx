@@ -1,9 +1,10 @@
 import { AnimatePresence, m } from 'framer-motion'
 import { useState } from 'react'
+import { ActiveMatrix } from '../../components/dot/ActiveMatrix'
 import { Button } from '../../components/ui/Button'
 import { Label } from '../../components/ui/Label'
 import { StatusGlyph } from '../../components/ui/StatusGlyph'
-import { blockDescription, isPassive, resolutionLine } from '../../domain/labels'
+import { alternativeLine, blockDescription, isPassive, resolutionLine } from '../../domain/labels'
 import { formatClock, formatDuration, formatRange, minutesOfDay } from '../../domain/time'
 import type { ScheduledBlock } from '../../domain/types'
 import { fade, fadeGroup, morph, transition } from '../../motion/tokens'
@@ -30,11 +31,19 @@ export function NowCard({ onStartFocus, focusing = false }: NowCardProps) {
       <div className="now-glow" aria-hidden />
       <div className="relative flex items-center justify-between gap-4">
         <div className="flex items-center gap-3 text-ink-3">
-          <StatusGlyph status={block.status} />
-          <Label className="text-ink-2">Ahora</Label>
+          <span data-now-matrix className="flex shrink-0">
+            {block.status === 'activo' || block.status === 'en-focus' ? (
+              <ActiveMatrix gathering={focusing} />
+            ) : (
+              <StatusGlyph status={block.status} />
+            )}
+          </span>
+          <span data-now-label className="flex">
+            <Label className="text-ink-2">Ahora</Label>
+          </span>
         </div>
         <span className="tabular text-[14px] text-ink-2 sm:text-[15px]">
-          {block.kind === 'sleep' ? `hasta ${formatClock(block.endMin)}` : formatRange(block.startMin, block.endMin)}
+          {block.category === 'sleep' ? `hasta ${formatClock(block.endMin)}` : formatRange(block.startMin, block.endMin)}
         </span>
       </div>
 
@@ -50,13 +59,14 @@ export function NowCard({ onStartFocus, focusing = false }: NowCardProps) {
           <h2
             id="now-title"
             aria-live="polite"
-            className={`mt-8 text-[clamp(38px,6.2vw,68px)] leading-[0.98] font-[450] tracking-[-0.038em] text-ink transition-opacity duration-500 sm:mt-10 ${
+            className={`mt-8 font-display text-[clamp(40px,5.6vw,64px)] leading-[1] font-[460] tracking-[-0.045em] text-ink transition-opacity duration-500 sm:mt-10 ${
               block.record.status ? 'opacity-55' : ''
             }`}
           >
             {block.title}
           </h2>
           <p className="mt-3.5 text-[16px] text-ink-2 sm:text-[18px]">{blockDescription(block)}</p>
+          {block.secondaryOption && <p className="mt-2 text-[13px] text-ink-3">{alternativeLine(block)}</p>}
 
           <m.div
             animate={{ opacity: focusing ? 0 : 1 }}
@@ -85,7 +95,13 @@ function TimeLine({ block, now }: { block: ScheduledBlock; now: number }) {
         />
       </div>
       <span className="tabular shrink-0 text-[13px] text-ink-3">
-        {left < 1 ? 'terminando' : `${formatDuration(left)} restantes`}
+        {left < 1 ? (
+          'terminando'
+        ) : (
+          <>
+            <span className="text-ink-2">{formatDuration(left)}</span> restantes
+          </>
+        )}
       </span>
     </div>
   )
@@ -121,7 +137,8 @@ function Body({ block, onStartFocus }: { block: ScheduledBlock; onStartFocus: (i
 
   if (isPassive(block)) return null
 
-  const deep = block.kind === 'deep'
+  // Only deep production opens Focus; everything else is simply completed or skipped.
+  const deep = block.focusEligible
 
   return (
     <m.div variants={fadeGroup(0.06)} initial="hidden" animate="visible">
@@ -149,7 +166,7 @@ function Body({ block, onStartFocus }: { block: ScheduledBlock; onStartFocus: (i
             initial="hidden"
             animate="visible"
             exit="exit"
-            className="mt-10 flex flex-col gap-2 sm:mt-12 sm:flex-row sm:items-center"
+            className="mt-10 flex flex-col gap-3 sm:mt-12 sm:flex-row sm:items-center sm:gap-2"
           >
             {deep ? (
               <Button className="w-full sm:w-auto" onClick={() => onStartFocus(block.id)}>
@@ -164,11 +181,11 @@ function Body({ block, onStartFocus }: { block: ScheduledBlock; onStartFocus: (i
             )}
             <div className="flex justify-center gap-1 sm:ml-auto">
               {deep && (
-                <Button variant="quiet" onClick={() => setClosing(true)}>
+                <Button variant="secondary" onClick={() => setClosing(true)}>
                   Cerrar bloque
                 </Button>
               )}
-              <Button variant="quiet" onClick={() => dispatch({ type: 'skip', blockId: block.id })}>
+              <Button variant="secondary" onClick={() => dispatch({ type: 'skip', blockId: block.id })}>
                 Omitir
               </Button>
             </div>

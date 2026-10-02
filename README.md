@@ -1,4 +1,4 @@
-# PERSONAL OS — HOY + FOCUS + DAYSCAPE + SEMANA · Rutina maestra V3
+# ELYUM — HOY + FOCUS + DAYSCAPE + SEMANA · Rutina maestra V3
 
 Aplicación web de rutina semanal. Contiene la entrada diaria (DAYSCAPE), la pantalla HOY, el modo FOCUS y SEMANA, alimentados por **una sola fuente de verdad**: la RUTINA MAESTRA V3, de lunes a domingo (`src/data/routine/`).
 
@@ -114,23 +114,23 @@ Todo el día a la vez, alrededor del presente (arquitectura D aprobada: radial a
 
 ## MOBILE / PWA
 
-PERSONAL OS se instala en la pantalla de inicio del iPhone (y en Android / escritorio) como una app **standalone**: sin barras del navegador, con su icono y su nombre, y funciona sin conexión después de la primera carga. Es una PWA: sin App Store, sin envoltorio nativo, sin backend.
+ELYUM se instala en la pantalla de inicio del iPhone (y en Android / escritorio) como una app **standalone**: sin barras del navegador, con su icono y su nombre, y funciona sin conexión después de la primera carga. Es una PWA: sin App Store, sin envoltorio nativo, sin backend.
 
 ### Instalar en el iPhone (Safari)
 
-1. Abre en **Safari** la URL de PERSONAL OS (la de producción; o la Preview de Vercel para probar una rama). Tiene que ser Safari: desde otra app o navegador la opción puede no aparecer.
+1. Abre en **Safari** la URL de ELYUM (la de producción; o la Preview de Vercel para probar una rama). Tiene que ser Safari: desde otra app o navegador la opción puede no aparecer.
 2. Toca el botón **Compartir** (el cuadrado con la flecha hacia arriba). Según la versión de iOS y el diseño de Safari está en la barra inferior o superior; si no lo ves, toca primero **···** en la barra de Safari y después **Compartir**.
 3. Desliza la hoja hacia arriba y toca **Añadir a pantalla de inicio**. (Si no aparece: **Editar acciones…** al final de la hoja y actívala.)
-4. El nombre propuesto es **PERSONAL OS**: déjalo así (o corrígelo) y toca **Añadir**. Si iOS muestra el interruptor **Abrir como app web**, déjalo activado.
-5. Sal de Safari y abre **PERSONAL OS** desde su icono (matriz 3 × 3 sobre Deep Ink). Es standalone si no hay barra de direcciones ni botones de Safari, arriba solo aparece la barra de estado del iPhone (hora, batería) y en el selector de apps aparece como *PERSONAL OS*, no como Safari.
+4. El nombre propuesto es **ELYUM**: déjalo así (o corrígelo) y toca **Añadir**. Si iOS muestra el interruptor **Abrir como app web**, déjalo activado.
+5. Sal de Safari y abre **ELYUM** desde su icono (matriz 3 × 3 sobre Deep Ink). Es standalone si no hay barra de direcciones ni botones de Safari, arriba solo aparece la barra de estado del iPhone (hora, batería) y en el selector de apps aparece como *ELYUM*, no como Safari.
 
 La app instalada tiene **su propio almacenamiento**, separado de Safari (así funciona iOS): lo que hayas marcado en Safari no aparece en la app instalada y viceversa. Úsala siempre desde el icono. Si la Preview de Vercel está protegida con login de Vercel, la app instalada lo pedirá otra vez la primera vez (no comparte cookies con Safari).
 
 ### Configuración
 
 - **`vite-plugin-pwa` 1.3** (`vite.config.ts`, modo `generateSW`, `registerType: 'prompt'`): genera `manifest.webmanifest`, `sw.js` (Workbox) y lo inyecta en el build. En `npm run dev` no hay service worker; se prueba con `npm run build && npm run preview`.
-- **Manifest** (`src/pwa/config.ts`, compartido con los tests): `name` y `short_name` *PERSONAL OS*, `display: standalone`, `start_url: /`, `scope: /`, `id: /`, `orientation: portrait-primary` (iOS decide igualmente si gira), `background_color: #F7F9FC` (Pearl: lo que la app pinta antes de su atmósfera), `theme_color: #081A32` (Deep Ink), `lang: es`. El `<link rel="manifest">` lleva `crossorigin="use-credentials"` para que funcione en Previews protegidas de Vercel.
-- **`index.html`**: `viewport-fit=cover`, `apple-mobile-web-app-capable`, `mobile-web-app-capable`, `apple-mobile-web-app-status-bar-style: default`, `apple-mobile-web-app-title: PERSONAL OS`, `apple-touch-icon`, `theme-color` y una imagen de lanzamiento por iPhone.
+- **Manifest** (`src/pwa/config.ts`, compartido con los tests): `name` y `short_name` *ELYUM*, `display: standalone`, `start_url: /`, `scope: /`, `id: /`, `orientation: portrait-primary` (iOS decide igualmente si gira), `background_color: #F7F9FC` (Pearl: lo que la app pinta antes de su atmósfera), `theme_color: #081A32` (Deep Ink), `lang: es`. El `<link rel="manifest">` lleva `crossorigin="use-credentials"` para que funcione en Previews protegidas de Vercel.
+- **`index.html`**: `viewport-fit=cover`, `apple-mobile-web-app-capable`, `mobile-web-app-capable`, `apple-mobile-web-app-status-bar-style: default`, `apple-mobile-web-app-title: ELYUM`, `apple-touch-icon`, `theme-color` y una imagen de lanzamiento por iPhone.
 
 ### Iconos y lanzamiento
 
@@ -170,6 +170,7 @@ Código: `src/pwa/updates.ts` (registro + comprobaciones), `src/pwa/moment.ts` (
 - **Estado local, por dispositivo:** `personal-os:day:<fecha local>` (registros, completados, omitidos, parciales, objetivos, Focus abierto) y `personal-os:entry` (entrada vista, mensaje del día, última actividad); las simulaciones usan `personal-os:sim:*`. Sigue en localStorage. Instalada, la app pide almacenamiento persistente (`navigator.storage.persist()`) para que el sistema no lo desaloje.
 - **Sin cuenta, sin sincronización:** el iPhone tiene su estado y el escritorio el suyo; Safari y la app instalada también son distintos. Borrar la app de la pantalla de inicio borra su estado. Si no se usa durante semanas, iOS podría limpiar sus datos.
 - **La rutina viaja en el frontend:** quien tenga la URL puede ver la rutina (está en el JavaScript). No hay login ni contraseña: no se añade un acceso falso solo de frontend. Autenticación y backend son otra fase.
+- **Identificadores técnicos que conservan el nombre anterior (a propósito):** las claves de `localStorage` `personal-os:day:*`, `personal-os:entry` y `personal-os:sim:*` no son nombre de producto sino la dirección donde viven los datos de cada dispositivo: renombrarlas dejaría sin estado (días, objetivos, entrada vista) a la app ya instalada. Por la misma razón no cambian `id`, `scope` y `start_url` del manifest (siguen en `/`, así el sistema reconoce la misma app), ni las URLs, ni el service worker. También conservan el nombre antiguo, sin efecto para quien usa la app: el `name` privado de `package.json` y el nombre del repositorio / proyecto de Vercel.
 - **Hora local:** instalada se comporta igual que Safari: fecha, hora y día de la semana del dispositivo, nunca UTC.
 - **Iconos:** iOS guarda el icono al instalar; si el icono cambia en el futuro, hay que quitar y volver a añadir la app para verlo.
 

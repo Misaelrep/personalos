@@ -1,7 +1,7 @@
 import type { ManifestOptions } from 'vite-plugin-pwa'
 
 /**
- * PERSONAL OS as an installable app (home screen, standalone). Shared by the
+ * ELYUM as an installable app (home screen, standalone). Shared by the
  * build (vite.config.ts) and the tests; nothing here runs in the page.
  */
 
@@ -12,8 +12,8 @@ export const DEEP_INK = '#081A32'
 
 export const MANIFEST: Partial<ManifestOptions> = {
   id: '/',
-  name: 'PERSONAL OS',
-  short_name: 'PERSONAL OS',
+  name: 'ELYUM',
+  short_name: 'ELYUM',
   description: 'Sistema operativo personal — Hoy · Semana · Focus',
   lang: 'es',
   dir: 'ltr',

@@ -42,5 +42,5 @@ export function routineForDate(date: string): ResolvedDay {
 // Development: an inconsistent routine is reported loudly, never silently patched.
 if (import.meta.env?.DEV) {
   const issues = validateWeek(WEEKLY_ROUTINE)
-  if (issues.length) console.error('[PERSONAL OS] Rutina maestra inconsistente:\n' + issues.join('\n'))
+  if (issues.length) console.error('[ELYUM] Rutina maestra inconsistente:\n' + issues.join('\n'))
 }

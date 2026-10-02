@@ -1,5 +1,5 @@
 /**
- * Top-level sections of the personal OS. HOY and SEMANA exist; the others are
+ * Top-level sections of ELYUM. HOY and SEMANA exist; the others are
  * listed so the navigation structure can be validated.
  */
 export type SectionId = 'hoy' | 'semana' | 'aprender' | 'sistema'

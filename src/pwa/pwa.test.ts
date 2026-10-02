@@ -15,11 +15,12 @@ function pngSize(path: string): [number, number] {
   return [b.readUInt32BE(16), b.readUInt32BE(20)]
 }
 
-describe('PWA: installable as PERSONAL OS', () => {
-  it('manifest: standalone PERSONAL OS from /, Pearl ground, Deep Ink theme', () => {
+describe('PWA: installable as ELYUM', () => {
+  it('manifest: standalone ELYUM from /, Pearl ground, Deep Ink theme', () => {
     expect(MANIFEST).toMatchObject({
-      name: 'PERSONAL OS',
-      short_name: 'PERSONAL OS',
+      id: '/', // the installed app's identity: renaming the product must never move it
+      name: 'ELYUM',
+      short_name: 'ELYUM',
       display: 'standalone',
       start_url: '/',
       scope: '/',
@@ -47,7 +48,7 @@ describe('PWA: installable as PERSONAL OS', () => {
     expect(html).toMatch(/name="viewport" content="[^"]*viewport-fit=cover/)
     expect(html).toContain('<meta name="apple-mobile-web-app-capable" content="yes" />')
     expect(html).toContain('<meta name="apple-mobile-web-app-status-bar-style" content="default" />')
-    expect(html).toContain('<meta name="apple-mobile-web-app-title" content="PERSONAL OS" />')
+    expect(html).toContain('<meta name="apple-mobile-web-app-title" content="ELYUM" />')
     expect(html).toContain('<link rel="apple-touch-icon" href="/apple-touch-icon.png" />')
     expect(html).toContain(`<meta name="theme-color" content="${PEARL}" />`)
     for (const [w, h, scale] of LAUNCH_SCREENS) {

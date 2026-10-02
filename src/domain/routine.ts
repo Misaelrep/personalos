@@ -53,7 +53,7 @@ export class RoutineMissingError extends Error {
   readonly weekday: Weekday
   readonly date: string
   constructor(weekday: Weekday, date: string) {
-    super(`[PERSONAL OS] No hay rutina para ${DAY_KEYS[weekday]} (${date}). Defínela en src/data/routine y regístrala en WEEKLY_ROUTINE.`)
+    super(`[ELYUM] No hay rutina para ${DAY_KEYS[weekday]} (${date}). Defínela en src/data/routine y regístrala en WEEKLY_ROUTINE.`)
     this.name = 'RoutineMissingError'
     this.weekday = weekday
     this.date = date

@@ -1,7 +1,7 @@
 import type { ClockTime, ProjectId, Weekday } from '../../domain/types'
 
 /**
- * Global rules of the week. Informative for now: PERSONAL OS does not block
+ * Global rules of the week. Informative for now: ELYUM does not block
  * anything on the device. Kept as data so SEMANA / SISTEMA can use them later.
  */
 export const ROUTINE_RULES = {

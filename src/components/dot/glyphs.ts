@@ -26,7 +26,7 @@ const RAW: Record<string, string[]> = {
 }
 
 /** Words the system is designed to spell. */
-export type DotWordName = 'FOCUS' | 'LEARN' | 'FLOW' | 'RESET' | 'DEEP'
+export type DotWordName = 'FOCUS' | 'LEARN' | 'FLOW' | 'RESET' | 'DEEP' | 'APRENDER'
 
 export interface Dot {
   col: number

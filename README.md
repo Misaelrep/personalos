@@ -20,7 +20,8 @@ npm run preview    # http://localhost:4173 — el build de producción, con serv
 | `?date=2026-09-28` | El reloj arranca en esa fecha, a la hora actual. Combinado con `?t=` fija el momento exacto: `?date=2026-09-28&t=10:30`. Fechas imposibles (`2026-02-31`) se ignoran. Sin parámetros, el reloj es el real: producción no cambia. |
 | `?motion=completo` · `sutil` · `reducido` | Fuerza un nivel de movimiento (por defecto: `reducido` si el sistema pide `prefers-reduced-motion`, si no `completo`). |
 | `?entry=full` · `micro` · `none` | Fuerza la entrada diaria completa, la micro entrada o ninguna, ignorando las reglas de sesión (no guarda nada). |
-| `?section=semana` | Abre directamente SEMANA (solo si no toca entrada: combínalo con `&entry=none`). Sin el parámetro, la app abre en HOY. |
+| `?section=semana` · `aprender` | Abre directamente SEMANA o APRENDER (solo si no toca entrada: combínalo con `&entry=none`). Sin el parámetro, la app abre en HOY. |
+| `?learn=full` · `brief` | Fuerza el ritual completo o la entrada breve de APRENDER, ignorando la regla del día. No guarda nada. |
 | `?field=collapse` · `fast` · `hold` | Revisión de DAYSCAPE: `collapse` acorta el mensaje, forma el día de golpe (sin nombres) y sale solo tras 1,2 s para revisar FORMAS → FRAGMENTOS → PARTÍCULAS → CONVERGENCIA → HOY a velocidad normal; `fast` acelera toda la entrada; `hold` impide la salida automática de `collapse`. Se pueden combinar (`fast,collapse`). Sin el parámetro, nada cambia: DAYSCAPE solo sale con CONTINUAR. |
 
 Semana de referencia: lunes `2026-09-28` · martes `2026-09-29` · miércoles `2026-09-30` · jueves `2026-10-01` · viernes `2026-10-02` · sábado `2026-10-03` · domingo `2026-10-04`.
@@ -111,6 +112,32 @@ Todo el día a la vez, alrededor del presente (arquitectura D aprobada: radial a
   - **HOY**: el tiempo restante destaca, *Cerrar bloque* y *Omitir* quedan claramente por debajo de INICIAR FOCUS, y SIGUIENTE es inequívocamente secundario (nombre más pequeño y en tinta más suave).
 - **Cualquier día**: el revelado y CONTINUAR se ajustan al número real de actividades (≈ 11 s y 14 s para un día completo, antes para uno ligero, algo más para uno muy lleno); en días muy llenos las formas secundarias son algo más pequeñas y los nombres nunca salen de la pantalla. El tiempo restante de AHORA sigue el reloj mientras DAYSCAPE está abierto. Un día sin rutina (o sin bloques) no usa otro día: la app muestra un error de rutina explícito.
 - Código: `src/features/dayscape/` — `model.ts` (modelo y oleadas), `choreography.ts` (tiempos), `layout.ts` (composición D, nombres, inspección, dianas), `forms.ts` (las cinco formas), `morph.ts`, `matter.ts` (fragmentos → partículas → convergencia), `atmosphere.ts` (vidas de las masas de luz), `Aperture.tsx`, `MassField.tsx`, `MatterCanvas.tsx`, `DayscapeAtmosphere.tsx`, `Dayscape.tsx`.
+
+## APRENDER (Fase A · esqueleto)
+
+Nueva sección de ELYUM (HOY · SEMANA · **APRENDER**) con su identidad, su navegación, su persistencia y su estructura propias. **Es solo el esqueleto**: todavía no hay IA, backend, llamadas de red, voz, grafo de conocimiento, modelos mentales funcionales, objetivos ni habilidades. Funciona sin conexión, como el resto.
+
+**Qué hay.** Una entrada con ritual, el campo *¿Qué tienes en mente?* con tres sugerencias, y tres vistas internas — **AHORA · MAPA · MODELOS** — que son una línea de palabras arriba, no la navegación (esa es la inferior / lateral). Las rutas intelectuales (orientarme, desarrollar, explorar) no son pestañas.
+
+**Identidad.** Reutiliza el lenguaje de FOCUS sin tocarlo: la tipografía de puntos (`DotWord`, matriz 5 × 7) deletrea APRENDER —se comprobó su legibilidad a 320, 375 y 390 px—, etiquetas con tracking amplio y atmósfera profunda. Sin fuentes ni assets nuevos. APRENDER **toma prestada por nombre la atmósfera `focus-session`** (`features/learn/atmosphere.ts`): es temporal; tendrá la suya y solo ese archivo cambiará.
+
+**Entrada (hora local del dispositivo, nunca UTC).**
+
+- *Primera entrada de la fecha* — ritual completo: 0,0 atmósfera · 0,2 APRENDER empieza a formarse · 2,3 la frase del día · 6,0 desfragmentación · 7,0 *¿Qué tienes en mente?* · 7,6 el campo · 8,2 las sugerencias. La navegación se aparta hasta las sugerencias.
+- *Entradas posteriores ese día* — breve (≈1 s): sin wordmark ni frase, sin esperas, la navegación siempre visible.
+- *Nunca un bloqueo*: cualquier clic, toque o tecla lleva al estado funcional en ≈0,3 s. Mientras dura el gesto que saltó, lo que aparece bajo el dedo no se puede pulsar (el toque que solo quería "seguir" no activa una sugerencia).
+- Se marca "visto" al llegar al estado funcional (por tiempo o saltando); si se cierra la app a mitad, el ritual se repite.
+- Con `prefers-reduced-motion`, la desfragmentación y la formación del wordmark son fundidos simples.
+
+**Frase del día.** Biblioteca local, una frase por fecha local y estable todo el día (`día % tamaño`; la frase registrada gana si se edita la biblioteca). `features/learn/data/phrases.ts` contiene **solo 3 frases semilla de desarrollo**, marcadas `seed` en código, sin autor y sin citas reales: la biblioteca editorial verificada la sustituirá sin tocar la selección.
+
+**AHORA** es la casa de APRENDER. Sin una capacidad activa contiene el campo; si se escribe texto libre sin tocar una sugerencia, aparece una **elección manual** de ruta marcada `TEMPORARY_ROUTING_FALLBACK` (no hay clasificador ni simulación de IA: la ruta es siempre la que la persona toca; el archivo se elimina cuando llegue la interpretación). Con una intención guardada AHORA la conserva, dice que aún no hay una capacidad activa y permite *Empezar de nuevo* (las palabras vuelven al campo). **MAPA** y **MODELOS** son solo estados vacíos.
+
+**Persistencia** (propia, versionada, sin tocar ninguna clave del core): `elyum:learn:v1:state` (intención y borrador del campo, que sobrevive a una recarga) y `elyum:learn:v1:entry` (fecha del último ritual y frase del día), con envelope `{ v: 1, data }`; una sesión simulada (`?date=` / `?t=`) usa `elyum:learn:v1:sim:*`. Otra versión de envelope se ignora sin destruirla; si el almacenamiento no está disponible, la sesión sigue en memoria.
+
+**Dominio.** `domain/types.ts` solo declara los tipos que se usarán después (LearningGoal, Skill, Evidence, LearningSession · Knowledge, KnowledgeConnection, Area, MentalModel, Source, Exploration · Context, ContextUpdate · Hypothesis, Experiment), mínimos —identidad, y `kind` en Knowledge—. `KnowledgeKind` = principle · procedure · heuristic · observation; **MentalModel es un objeto compuesto aparte, no un KnowledgeKind**.
+
+**Puntos compartidos tocados** (todos aditivos): `layout/sections.ts` (`aprender` disponible), `App.tsx` (montar la sección, igual que SEMANA) y `components/dot/glyphs.ts` (el nombre `APRENDER` en la unión de palabras de puntos). Nada de PWA, service worker ni estrategia de actualización cambia: el ritual cuenta como inmersivo, así que no se ofrece una versión nueva en mitad de él.
 
 ## MOBILE / PWA
 
@@ -204,6 +231,7 @@ src/
     dayscape/      DAYSCAPE: el día entero alrededor del presente, su atmósfera y su materia
     week/          SEMANA: lentes, red de luz, velos, selección, apertura al DAYSCAPE de una fecha
   layout/          navegación lateral (desktop), navegación inferior (móvil) y secciones
+  features/learn/  APRENDER (Fase A): domain/ data/ storage/ hooks/ components/ screens/ — ver su sección
   pwa/             app instalable: manifest (config.ts), actualizaciones (updates.ts), aviso, standalone
 ```
 

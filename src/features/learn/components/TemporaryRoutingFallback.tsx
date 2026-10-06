@@ -19,7 +19,7 @@ export function TemporaryRoutingFallback({ onChoose }: { onChoose: (route: Learn
       <ul className="mt-1 flex flex-col">
         {LEARN_ROUTES.map((route) => (
           <li key={route}>
-            <button type="button" onClick={() => onChoose(route)} className="hit label-spaced min-h-11 text-ink-2 transition-colors duration-200 hover:text-ink focus-visible:text-ink">
+            <button type="button" onClick={() => onChoose(route)} className="hit label-spaced min-h-11 text-ink-2 hover:text-ink focus-visible:text-ink">
               {LABEL[route]}
             </button>
           </li>

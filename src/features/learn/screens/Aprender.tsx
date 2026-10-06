@@ -1,7 +1,8 @@
 import { AnimatePresence, m } from 'framer-motion'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { dateKey } from '../../../domain/time'
 import { nowMs } from '../../../state/clock'
+import { LearnLight, learnScreenVars, useLearnTheme } from '../atmosphere'
 import { FragmentedText } from '../components/FragmentedText'
 import { LearnTabs, type LearnView } from '../components/LearnTabs'
 import { Reveal } from '../components/Reveal'
@@ -43,6 +44,8 @@ export function Aprender({ onImmersive }: AprenderProps) {
   const timeline = full ? FULL_TIMELINE : BRIEF_TIMELINE
   const phrase = useMemo(() => phraseForDate(today, PHRASES, entry.memory.phrase), [today, entry])
 
+  // The atmosphere follows the local hour. It changes by itself, and nothing below depends on which one it is.
+  const theme = useLearnTheme()
   const { stage, skipped, locked } = useRitual(timeline)
   const learn = useLearn()
   const [view, setView] = useState<LearnView>('ahora')
@@ -73,15 +76,18 @@ export function Aprender({ onImmersive }: AprenderProps) {
   return (
     <m.div
       data-learn=""
+      data-learn-theme={theme.id}
       data-stage={stage}
       data-entry={entry.kind}
       data-skipped={skipped || undefined}
-      className="tone-ink fixed inset-0 z-10 flex flex-col overflow-y-auto overscroll-contain px-6 pt-[calc(env(safe-area-inset-top)+28px)] pb-[calc(env(safe-area-inset-bottom)+104px)] lg:pr-14 lg:pb-16 lg:pl-[140px]"
+      className="fixed inset-0 z-10 flex flex-col overflow-y-auto overscroll-contain px-6 pt-[calc(env(safe-area-inset-top)+28px)] pb-[calc(env(safe-area-inset-bottom)+104px)] lg:pr-14 lg:pb-16 lg:pl-[140px]"
+      style={learnScreenVars(theme) as CSSProperties}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0, transition: { duration: 0.4 } }}
       transition={{ duration: 0.6 }}
     >
+      <LearnLight theme={theme} />
       <header className="mx-auto w-full max-w-[560px]">
         <Reveal shown={ready} skipped={skipped} locked={locked}>
           <LearnTabs view={view} onChange={setView} />

@@ -119,7 +119,22 @@ Nueva sección de ELYUM (HOY · SEMANA · **APRENDER**) con su identidad, su nav
 
 **Qué hay.** Una entrada con ritual, el campo *¿Qué tienes en mente?* con tres sugerencias, y tres vistas internas — **AHORA · MAPA · MODELOS** — que son una línea de palabras arriba, no la navegación (esa es la inferior / lateral). Las rutas intelectuales (orientarme, desarrollar, explorar) no son pestañas.
 
-**Identidad.** Reutiliza el lenguaje de FOCUS sin tocarlo: la tipografía de puntos (`DotWord`, matriz 5 × 7) deletrea APRENDER —se comprobó su legibilidad a 320, 375 y 390 px—, etiquetas con tracking amplio y atmósfera profunda. Sin fuentes ni assets nuevos. APRENDER **toma prestada por nombre la atmósfera `focus-session`** (`features/learn/atmosphere.ts`): es temporal; tendrá la suya y solo ese archivo cambiará.
+**Identidad.** Reutiliza el lenguaje de FOCUS sin tocarlo: la tipografía de puntos (`DotWord`, matriz 5 × 7) deletrea APRENDER —se comprobó su legibilidad a 320, 375 y 390 px—, etiquetas con tracking amplio. Sin fuentes ni assets nuevos. Su atmósfera es propia y cambia con la hora (ver *Atmósferas*).
+
+**Atmósferas (Fase A.1).** APRENDER tiene tres, automáticas según la hora local (`features/learn/atmosphere/`). Cambia solo la luz: ni el contenido ni la estructura.
+
+| Atmósfera | Hora local | Sensación |
+| --- | --- | --- |
+| `learn-day` · DÍA | 06:00 – 16:29 | La más luminosa: blanco perlado, azul muy claro, lavanda suave, toques celestes. Tinta índigo oscura. |
+| `learn-sunset` · ATARDECER | 16:30 – 19:29 | Violeta y azul lavanda, blanco tenue, un matiz rosado muy sutil. Desciende la intensidad, pero todavía no es noche. |
+| `learn-night` · NOCHE | 19:30 – 05:59 | Profunda y silenciosa. Ámbar, brasa y durazno son una luz *dentro* de la oscuridad, nunca un color plano encima. |
+
+- **Un solo lugar para el color:** `themes.ts`. Cada atmósfera es `{ atmosphere (suelo, 4 halos, partículas, acento), ink (tinta y líneas), light (orbes, bruma, borde), mark (puntos del wordmark) }`. Ningún componente ni pantalla escribe un color (un test lo vigila). Los colores son referencia reconstruida con gradientes, halos, bruma y partículas del sistema existente: no hay imágenes de fondo.
+- **Cómo se pinta:** el `<Atmosphere>` compartido recibe el preset propio de APRENDER (`preset` acepta ahora un nombre **o** un objeto) y `LearnLight` añade sus orbes y su bruma bajo el contenido; las propiedades de color están registradas (`@property`), así que interpolan solas. APRENDER ya no depende de `focus-session` ni de ningún otro preset del core.
+- **Hora:** `schedule.ts` (puro) mapea un instante a una atmósfera con la hora **local**, tomada de `nowMs()` —el mismo reloj de la app—. Para probar: `?t=11:40` (DÍA) · `?t=17:45` (ATARDECER) · `?t=22:10` (NOCHE), con `&section=aprender&entry=none`. No hay un segundo sistema de tiempo ni parámetros nuevos.
+- **Cambio en vivo:** un único temporizador apuntado al siguiente límite (06:00 / 16:30 / 19:30; no un sondeo), que además se reevalúa al volver a la app (`visibilitychange`, `pageshow`, `focus`, `online`). La atmósfera siempre se *deriva* del reloj, nunca se guarda: un temporizador tardío o perdido no puede dejarla mal. Solo cambian el color y la tinta —en 3,2 s con una curva pareja; la tinta cambia de polaridad en un paso corto cuando el fondo está a medias—: la pantalla, el campo (texto, foco y cursor), la intención, la pestaña, la navegación y el ritual ni se remontan ni se reinician. Mientras APRENDER no está abierta no corre nada.
+- **Añadir otra atmósfera:** un id en `LearnThemeId`, una entrada en `LEARN_THEMES` y, si es por hora, una fila en `SCHEDULE`. TypeScript obliga a completar el registro.
+- **EXPLORAR (decisión visual futura, no implementada):** tendrá su propia identidad verde / jade / orgánica (conexiones, crecimiento, exploración). Todavía no existe como experiencia, así que no hay código ni pantallas para ella.
 
 **Entrada (hora local del dispositivo, nunca UTC).**
 
@@ -137,7 +152,7 @@ Nueva sección de ELYUM (HOY · SEMANA · **APRENDER**) con su identidad, su nav
 
 **Dominio.** `domain/types.ts` solo declara los tipos que se usarán después (LearningGoal, Skill, Evidence, LearningSession · Knowledge, KnowledgeConnection, Area, MentalModel, Source, Exploration · Context, ContextUpdate · Hypothesis, Experiment), mínimos —identidad, y `kind` en Knowledge—. `KnowledgeKind` = principle · procedure · heuristic · observation; **MentalModel es un objeto compuesto aparte, no un KnowledgeKind**.
 
-**Puntos compartidos tocados** (todos aditivos): `layout/sections.ts` (`aprender` disponible), `App.tsx` (montar la sección, igual que SEMANA) y `components/dot/glyphs.ts` (el nombre `APRENDER` en la unión de palabras de puntos). Nada de PWA, service worker ni estrategia de actualización cambia: el ritual cuenta como inmersivo, así que no se ofrece una versión nueva en mitad de él.
+**Puntos compartidos tocados** (todos aditivos): `layout/sections.ts` (`aprender` disponible), `App.tsx` (montar la sección, igual que SEMANA, y pasarle su atmósfera), `components/dot/glyphs.ts` (el nombre `APRENDER` en la unión de palabras de puntos) y `atmosphere/Atmosphere.tsx` (la prop `preset` acepta también un preset-objeto: tres líneas, el comportamiento de quienes pasan un nombre no cambia). Nada de PWA, service worker ni estrategia de actualización cambia: el ritual cuenta como inmersivo, así que no se ofrece una versión nueva en mitad de él.
 
 ## MOBILE / PWA
 
@@ -231,7 +246,7 @@ src/
     dayscape/      DAYSCAPE: el día entero alrededor del presente, su atmósfera y su materia
     week/          SEMANA: lentes, red de luz, velos, selección, apertura al DAYSCAPE de una fecha
   layout/          navegación lateral (desktop), navegación inferior (móvil) y secciones
-  features/learn/  APRENDER (Fase A): domain/ data/ storage/ hooks/ components/ screens/ — ver su sección
+  features/learn/  APRENDER: domain/ data/ storage/ hooks/ atmosphere/ components/ screens/ — ver su sección
   pwa/             app instalable: manifest (config.ts), actualizaciones (updates.ts), aviso, standalone
 ```
 

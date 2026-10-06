@@ -55,7 +55,7 @@ export function Composer({ value, onChange, onSubmit }: ComposerProps) {
         aria-label="Continuar"
         disabled={empty}
         tabIndex={empty ? -1 : 0}
-        className={`absolute right-0 bottom-0 grid size-11 place-items-center text-ink-3 transition-[opacity,color] duration-200 hover:text-ink ${empty ? 'pointer-events-none opacity-0' : 'opacity-100'}`}
+        className={`absolute right-0 bottom-0 grid size-11 place-items-center text-ink-3 transition-opacity duration-200 hover:text-ink ${empty ? 'pointer-events-none opacity-0' : 'opacity-100'}`}
       >
         <svg aria-hidden viewBox="0 0 16 16" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
           <path d="M2.5 8h10M9 4.2 12.8 8 9 11.8" />

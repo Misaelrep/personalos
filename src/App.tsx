@@ -8,7 +8,7 @@ import { FocusClosing } from './features/focus/FocusClosing'
 import { FocusIntro } from './features/focus/FocusIntro'
 import { FocusView } from './features/focus/FocusView'
 import { useFocusFlow } from './features/focus/useFocusFlow'
-import { LEARN_ATMOSPHERE } from './features/learn/atmosphere'
+import { useLearnAtmosphere } from './features/learn/atmosphere'
 import { Aprender } from './features/learn/screens/Aprender'
 import { TodayView, type TodayAppear } from './features/today/TodayView'
 import { Semana } from './features/week/Semana'
@@ -54,6 +54,7 @@ export function App() {
   const focusBlock = view.timeline.find((b) => b.id === (state.focus?.blockId ?? flow.closedBlockId))
   const inWeek = section === 'semana' && !entry.active && phase === 'today'
   const inLearn = section === 'aprender' && !entry.active && phase === 'today'
+  const learnAtmosphere = useLearnAtmosphere(inLearn)
   const activeSection: SectionId = inWeek ? 'semana' : inLearn ? 'aprender' : 'hoy'
   const showToday = (!entry.active || handoff) && (phase === 'today' || phase === 'entering') && (!inWeek || weekHandoff) && !inLearn
   const navHidden = entry.active || immersive || !(phase === 'today' || (phase === 'entering' && step < 2))
@@ -75,7 +76,7 @@ export function App() {
         particles={particles}
         scene={phase === 'today' || (phase === 'entering' && step < 3) ? 'today' : 'flow'}
         gather={phase === 'entering' && step >= 2}
-        {...(inLearn ? LEARN_ATMOSPHERE : undefined)}
+        {...(inLearn ? learnAtmosphere : undefined)}
       />
       <NavRail hidden={navHidden} active={activeSection} onNavigate={navigate} />
       <BottomNav hidden={navHidden} active={activeSection} onNavigate={navigate} />

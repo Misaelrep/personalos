@@ -6,8 +6,8 @@ import { useMotion } from '../../../motion/MotionLevel'
 import { EASE } from '../../../motion/tokens'
 import { WORDMARK, WORDMARK_COLS, wordmarkPitch } from '../domain/wordmark'
 
-/** The dot language's own light: pale blue with a soft halo. */
-const TINT = 'text-[#B9D4FF] drop-shadow-[0_0_14px_rgba(105,165,255,0.55)]'
+/** The dots take the color and glow of the atmosphere in force (set by the screen). */
+const TINT = 'text-(--learn-mark) drop-shadow-[0_0_14px_var(--learn-mark-glow)]'
 const LETTER_GAP = 2
 
 /**

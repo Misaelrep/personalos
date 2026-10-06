@@ -1,0 +1,163 @@
+/* ---------------------------------------------------------------------- */
+/* APRENDER's atmosphere: its light and its ink                             */
+/*                                                                          */
+/* Only colors change between atmospheres. They are registered, so they     */
+/* interpolate by themselves at the speed the shared Atmosphere sets in     */
+/* --atmo-dur; the places stay.                                             */
+/* ---------------------------------------------------------------------- */
+
+@property --learn-orb-1 { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --learn-orb-2 { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --learn-orb-3 { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --learn-haze { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --learn-edge { syntax: '<color>'; inherits: true; initial-value: transparent; }
+
+@property --learn-ink { syntax: '<color>'; inherits: true; initial-value: black; }
+@property --learn-ink-2 { syntax: '<color>'; inherits: true; initial-value: black; }
+@property --learn-ink-3 { syntax: '<color>'; inherits: true; initial-value: black; }
+@property --learn-ink-4 { syntax: '<color>'; inherits: true; initial-value: black; }
+@property --learn-line { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --learn-mark { syntax: '<color>'; inherits: true; initial-value: black; }
+@property --learn-mark-glow { syntax: '<color>'; inherits: true; initial-value: transparent; }
+
+/* An hour passing in front of the person. While a live change is in progress the document
+   carries data-learn-live, and the shared Atmosphere's easing — front-loaded, right for
+   entering Focus — gives way to an even one: dusk should not arrive in the first half second. */
+:root[data-learn-live] {
+  --ease-astral: cubic-bezier(0.45, 0, 0.55, 1);
+}
+
+/* The screen's ink: the core's text tokens, answered by APRENDER's own inside it.
+   With the even easing the ground reaches the middle (the tone at which light text starts to
+   read better than dark) a little after half of --atmo-dur — earlier for the quietest ink, later
+   for the strongest, whose dark and light ends sit further apart. The ink changes there, in a
+   single step (1 ms: a zero duration would not wait for its delay): a fade would leave the text,
+   for an instant, as light as the ground behind it. Nothing inside the screen eases its own
+   color either, which would bring that middle back. */
+[data-learn] {
+  --ink: var(--learn-ink);
+  --ink-2: var(--learn-ink-2);
+  --ink-3: var(--learn-ink-3);
+  --ink-4: var(--learn-ink-4);
+  --line: var(--learn-line);
+  transition:
+    --learn-ink 0.001s linear calc(var(--atmo-dur, 1s) * 0.57),
+    --learn-ink-2 0.001s linear calc(var(--atmo-dur, 1s) * 0.54),
+    --learn-ink-3 0.001s linear calc(var(--atmo-dur, 1s) * 0.52),
+    --learn-ink-4 0.001s linear calc(var(--atmo-dur, 1s) * 0.5),
+    --learn-line 0.001s linear calc(var(--atmo-dur, 1s) * 0.54),
+    --learn-mark 0.001s linear calc(var(--atmo-dur, 1s) * 0.54),
+    --learn-mark-glow 0.001s linear calc(var(--atmo-dur, 1s) * 0.54);
+}
+
+.learn-light {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  transition:
+    --learn-orb-1 var(--atmo-dur, 1s) var(--ease-astral),
+    --learn-orb-2 var(--atmo-dur, 1s) var(--ease-astral),
+    --learn-orb-3 var(--atmo-dur, 1s) var(--ease-astral),
+    --learn-haze var(--atmo-dur, 1s) var(--ease-astral),
+    --learn-edge var(--atmo-dur, 1s) var(--ease-astral);
+}
+
+.learn-orb {
+  position: absolute;
+  border-radius: 50%;
+  will-change: transform;
+}
+
+/* Horizon: the main light, low and wide. */
+.learn-orb-1 {
+  width: 150vmax;
+  height: 64vmax;
+  left: calc(50% - 62vmax);
+  bottom: -32vmax;
+  background: radial-gradient(
+    closest-side,
+    var(--learn-orb-1),
+    color-mix(in srgb, var(--learn-orb-1) 55%, transparent) 38%,
+    color-mix(in srgb, var(--learn-orb-1) 16%, transparent) 70%,
+    transparent
+  );
+  animation: learn-drift-1 41s ease-in-out infinite alternate;
+}
+
+/* Counter light: top left. */
+.learn-orb-2 {
+  width: 92vmax;
+  height: 92vmax;
+  top: -46vmax;
+  left: -50vmax;
+  background: radial-gradient(
+    closest-side,
+    var(--learn-orb-2),
+    color-mix(in srgb, var(--learn-orb-2) 50%, transparent) 40%,
+    color-mix(in srgb, var(--learn-orb-2) 14%, transparent) 70%,
+    transparent
+  );
+  animation: learn-drift-2 47s ease-in-out infinite alternate;
+}
+
+/* Side light: leaning in from the right edge. */
+.learn-orb-3 {
+  width: 72vmax;
+  height: 92vmax;
+  top: 14vh;
+  right: -52vmax;
+  background: radial-gradient(
+    closest-side,
+    var(--learn-orb-3),
+    color-mix(in srgb, var(--learn-orb-3) 50%, transparent) 42%,
+    color-mix(in srgb, var(--learn-orb-3) 14%, transparent) 72%,
+    transparent
+  );
+  animation: learn-drift-3 35s ease-in-out infinite alternate;
+}
+
+/* Mist: a low, slow band. */
+.learn-haze {
+  position: absolute;
+  left: -20%;
+  width: 140%;
+  top: 52%;
+  height: 40%;
+  background: radial-gradient(ellipse 50% 50% at 50% 50%, var(--learn-haze), color-mix(in srgb, var(--learn-haze) 35%, transparent) 55%, transparent 100%);
+  will-change: transform;
+  animation: learn-haze-drift 58s ease-in-out infinite alternate;
+}
+
+/* Depth: the edges recede. */
+.learn-edge {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 125% 92% at 50% 42%, transparent 50%, var(--learn-edge) 100%);
+}
+
+@keyframes learn-drift-1 {
+  0% { transform: translate3d(0, 0, 0) scale(1); }
+  100% { transform: translate3d(3vmax, -1.5vmax, 0) scale(1.06); }
+}
+
+@keyframes learn-drift-2 {
+  0% { transform: translate3d(0, 0, 0) scale(1); }
+  100% { transform: translate3d(3vmax, 2.5vmax, 0) scale(1.08); }
+}
+
+@keyframes learn-drift-3 {
+  0% { transform: translate3d(0, 0, 0) scale(1.04); }
+  100% { transform: translate3d(-2.5vmax, 2vmax, 0) scale(0.95); }
+}
+
+@keyframes learn-haze-drift {
+  0% { transform: translate3d(-3%, 0, 0); }
+  100% { transform: translate3d(3%, -2%, 0); }
+}
+
+.learn-light[data-ambient='off'] .learn-orb,
+.learn-light[data-ambient='off'] .learn-haze {
+  animation: none;
+}

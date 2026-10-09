@@ -24,7 +24,7 @@ export function LearnTabs({ view, onChange }: { view: LearnView; onChange: (view
             aria-selected={current}
             id={`learn-tab-${t.id}`}
             onClick={() => onChange(t.id)}
-            className={`hit relative flex min-h-11 items-center px-4 text-[10px] font-medium tracking-[0.24em] uppercase ${current ? 'text-ink' : 'text-ink-4 hover:text-ink-2'}`}
+            className={`hit relative flex min-h-11 items-center px-4 text-[10px] font-medium tracking-[0.24em] uppercase ${current ? 'text-(--learn-tab-on)' : 'text-ink-4 hover:text-ink-2'}`}
           >
             {t.label}
             <span aria-hidden className={`absolute inset-x-4 bottom-1.5 h-px bg-current transition-opacity duration-300 ${current ? 'opacity-60' : 'opacity-0'}`} />

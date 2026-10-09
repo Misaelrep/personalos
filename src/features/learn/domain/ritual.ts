@@ -32,6 +32,13 @@ export const FULL_TIMELINE: Timeline = {
   ready: 8.7,
 }
 
+/**
+ * The first entry of the day when it begins with APARICIÓN (see ../aparicion/beats.ts).
+ * The same rhythm and the same total length: only the wordmark's dots start a little
+ * later (0.35 s), so the fragments can reach them as they take shape.
+ */
+export const APARICION_TIMELINE: Timeline = { ...FULL_TIMELINE, wordmark: 0.35 }
+
 /** Any later entry that day: no wordmark, no phrase, no immersive wait. */
 export const BRIEF_TIMELINE: Timeline = {
   atmosphere: 0,

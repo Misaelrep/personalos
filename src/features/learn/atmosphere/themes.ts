@@ -4,15 +4,20 @@ import type { LearnThemeId } from './schedule'
 /**
  * THE ATMOSPHERES OF APRENDER — the one place where its color lives.
  *
- * Each one is made of the same three things, so adding another is adding an entry:
+ * Each one is made of the same things, so adding another is adding an entry:
  *   atmosphere  the ground, four halos, particles and accent of the shared Atmosphere
  *   ink         text and rules (tokens: they replace the core's inside APRENDER only)
  *   light       APRENDER's own light, painted over the ground (see LearnLight)
  *   mark        the dots of the wordmark
+ *   ritual      how the first entry of the day begins ('classic': the wordmark; 'aparicion': see ../aparicion)
+ *   stage       only for a ritual that has a stage of its own: the ink of the words that live on it
  * Layout never depends on any of this. Which one is in force is `schedule.ts`.
  */
+export type RitualKind = 'classic' | 'aparicion'
+
 export interface LearnTheme {
   id: LearnThemeId
+  ritual: RitualKind
   atmosphere: AtmospherePreset
   ink: {
     /** Text and the main line. */
@@ -25,6 +30,10 @@ export interface LearnTheme {
     faint: string
     /** Rules and the field's underline. */
     line: string
+    /** The question that heads the field. */
+    label: string
+    /** The tab that is open. */
+    tabOn: string
   }
   light: {
     /** [horizon, counter-light, side light] — the same places in every atmosphere, so only color changes between them. */
@@ -33,8 +42,44 @@ export interface LearnTheme {
     haze: string
     /** Darkening (or cooling) toward the edges: depth. */
     edge: string
+    /** An energetic edge of light along the right side, where the glass catches it. */
+    rim: string
+    /** A pool of depth in the lower corner. */
+    depth: string
+    /** Specular streaks (white-hot) and the thin prismatic fringe beside them. */
+    spec: string
+    prism: string
   }
   mark: { color: string; glow: string }
+  /** The ink of the words on the ritual's own stage (a dark one, over this atmosphere's light ground). */
+  stage?: { strong: string; medium: string; soft: string }
+  /** The palette of the ritual's own scene (APARICIÓN): a few primitives; every gradient is mixed from them in CSS. */
+  scene?: SceneColors
+}
+
+/**
+ * Nine colors make the whole scene: the glass is built of white, ice and sky; its
+ * shadows are steel and night (blue-black); vermilion and ember are the light that
+ * crosses it (hot is its white-hot core); cyan is the prismatic fringe.
+ */
+export interface SceneColors {
+  white: string
+  ice: string
+  sky: string
+  steel: string
+  night: string
+  vermilion: string
+  ember: string
+  hot: string
+  cyan: string
+}
+
+/** Day and night have no edge light, depth pool or prismatic fringe: those layers are there, and clear. */
+const NO_RIM = {
+  rim: 'rgba(0,0,0,0)',
+  depth: 'rgba(0,0,0,0)',
+  spec: 'rgba(0,0,0,0)',
+  prism: 'rgba(0,0,0,0)',
 }
 
 /**
@@ -43,6 +88,7 @@ export interface LearnTheme {
  */
 const DAY: LearnTheme = {
   id: 'learn-day',
+  ritual: 'classic',
   atmosphere: {
     tone: 'light',
     base: '#F4F5FC',
@@ -51,36 +97,56 @@ const DAY: LearnTheme = {
     glow: 'rgba(150,164,240,0.5)',
     accent: '#5B6CF0',
   },
-  ink: { strong: '#0F1730', medium: '#2F3A5C', soft: '#46517A', faint: '#566189', line: 'rgba(40,52,110,0.16)' },
+  ink: { strong: '#0F1730', medium: '#2F3A5C', soft: '#46517A', faint: '#566189', line: 'rgba(40,52,110,0.16)', label: '#2F3A5C', tabOn: '#0F1730' },
   light: {
     orbs: ['rgba(220,205,250,0.55)', 'rgba(150,200,245,0.5)', 'rgba(186,170,245,0.45)'],
     haze: 'rgba(255,255,255,0.55)',
     edge: 'rgba(176,184,228,0.2)',
+    ...NO_RIM,
   },
   mark: { color: '#2B3274', glow: 'rgba(110,122,230,0.3)' },
 }
 
 /**
- * ATARDECER — violet and lavender blue, pale pearl, a whisper of rose.
- * The light descends but it is not night yet.
+ * ATARDECER — ice and sky blue over a pearl ground, blue-black for depth, and a
+ * vermilion / orange light that is never a fill: it is the edge of the glass,
+ * a reflection, a halo. A prismatic hint (cyan) beside it. The first entry of
+ * the day begins with APARICIÓN (see ../aparicion), on a stage of its own.
  */
 const SUNSET: LearnTheme = {
   id: 'learn-sunset',
+  ritual: 'aparicion',
   atmosphere: {
-    tone: 'deep',
-    base: '#34327E',
-    halos: ['rgba(168,156,246,0.34)', 'rgba(84,100,210,0.44)', 'rgba(244,182,214,0.2)', 'rgba(224,226,255,0.14)'],
-    particle: 'rgba(232,226,255,0.8)',
-    glow: 'rgba(176,166,250,0.65)',
-    accent: '#CFC8FF',
+    tone: 'light',
+    base: '#E5EDF8',
+    halos: ['rgba(255,255,255,0.95)', 'rgba(140,184,238,0.55)', 'rgba(255,112,64,0.16)', 'rgba(196,232,255,0.5)'],
+    particle: 'rgba(56,104,186,0.5)',
+    glow: 'rgba(255,120,70,0.4)',
+    accent: '#C8361F',
   },
-  ink: { strong: '#FFFFFF', medium: '#F0EEFD', soft: '#E3DFF9', faint: '#D6D2F5', line: 'rgba(232,228,255,0.18)' },
+  ink: { strong: '#0B1630', medium: '#1F2945', soft: '#33405E', faint: '#445070', line: 'rgba(24,48,100,0.16)', label: '#8B1C1C', tabOn: '#8B1C1C' },
   light: {
-    orbs: ['rgba(250,206,228,0.34)', 'rgba(112,128,230,0.26)', 'rgba(190,178,255,0.28)'],
-    haze: 'rgba(236,230,255,0.16)',
-    edge: 'rgba(18,16,60,0.5)',
+    orbs: ['rgba(30,62,130,0.2)', 'rgba(255,255,255,0.7)', 'rgba(255,98,52,0.28)'],
+    haze: 'rgba(255,255,255,0.5)',
+    edge: 'rgba(20,40,96,0.14)',
+    rim: 'rgba(255,92,48,0.66)',
+    depth: 'rgba(8,30,86,0.34)',
+    spec: 'rgba(255,255,255,0.9)',
+    prism: 'rgba(110,220,255,0.55)',
   },
-  mark: { color: '#EFEBFF', glow: 'rgba(180,170,255,0.6)' },
+  mark: { color: '#FF7452', glow: 'rgba(255,96,56,0.85)' },
+  stage: { strong: '#F6F9FF', medium: '#DCE6F6', soft: '#B4C3DA' },
+  scene: {
+    white: '#FFFFFF',
+    ice: '#D4E6F8',
+    sky: '#86ABD8',
+    steel: '#3E699E',
+    night: '#071328',
+    vermilion: '#FF4A28',
+    ember: '#FF8A3D',
+    hot: '#FFE6C8',
+    cyan: '#6FE0FF',
+  },
 }
 
 /**
@@ -89,6 +155,7 @@ const SUNSET: LearnTheme = {
  */
 const NIGHT: LearnTheme = {
   id: 'learn-night',
+  ritual: 'classic',
   atmosphere: {
     tone: 'deep',
     base: '#0A0E22',
@@ -97,14 +164,24 @@ const NIGHT: LearnTheme = {
     glow: 'rgba(255,140,80,0.5)',
     accent: '#FFB787',
   },
-  ink: { strong: '#FBF3EA', medium: '#D9D2D9', soft: '#B1ACC2', faint: '#9A96B4', line: 'rgba(255,236,220,0.12)' },
+  ink: { strong: '#FBF3EA', medium: '#D9D2D9', soft: '#B1ACC2', faint: '#9A96B4', line: 'rgba(255,236,220,0.12)', label: '#D9D2D9', tabOn: '#FBF3EA' },
   light: {
     orbs: ['rgba(255,128,70,0.36)', 'rgba(70,96,190,0.26)', 'rgba(255,190,150,0.16)'],
     haze: 'rgba(255,200,160,0.06)',
     edge: 'rgba(2,3,12,0.6)',
+    ...NO_RIM,
   },
   mark: { color: '#FFE3C7', glow: 'rgba(255,140,80,0.5)' },
 }
+
+/** The colors of a crossing of polarities (see crossing.ts): the extremes of the ink and the halo that holds the text while it crosses. */
+export const CROSSING_COLORS = {
+  dark: '#000000',
+  light: '#FFFFFF',
+  /** The halo behind dark text on a ground that is going dark… and behind light text on one going light. */
+  haloOnLight: 'rgba(255,255,255,1)',
+  haloOnDark: 'rgba(0,0,0,1)',
+} as const
 
 export const LEARN_THEMES: Record<LearnThemeId, LearnTheme> = {
   'learn-day': DAY,
@@ -123,12 +200,19 @@ export function learnScreenVars(theme: LearnTheme): Record<string, string> {
     '--learn-ink-3': theme.ink.soft,
     '--learn-ink-4': theme.ink.faint,
     '--learn-line': theme.ink.line,
+    '--learn-label': theme.ink.label,
+    '--learn-tab-on': theme.ink.tabOn,
     '--learn-mark': theme.mark.color,
     '--learn-mark-glow': theme.mark.glow,
   }
 }
 
-/** What LearnLight sets on itself: its orbs, mist and edge. */
+/** What the APARICIÓN scene sets on itself: its nine colors, as tokens. */
+export function sceneVars(scene: SceneColors): Record<string, string> {
+  return Object.fromEntries(Object.entries(scene).map(([name, color]) => [`--apa-${name}`, color]))
+}
+
+/** What LearnLight sets on itself: its orbs, mist, edge, rim and fringe. */
 export function learnLightVars(theme: LearnTheme): Record<string, string> {
   const [horizon, counter, side] = theme.light.orbs
   return {
@@ -137,5 +221,9 @@ export function learnLightVars(theme: LearnTheme): Record<string, string> {
     '--learn-orb-3': side,
     '--learn-haze': theme.light.haze,
     '--learn-edge': theme.light.edge,
+    '--learn-rim': theme.light.rim,
+    '--learn-depth': theme.light.depth,
+    '--learn-spec': theme.light.spec,
+    '--learn-prism': theme.light.prism,
   }
 }

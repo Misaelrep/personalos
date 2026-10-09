@@ -73,7 +73,7 @@ export function AhoraScreen({ state, reveal, skipped, locked, onDraft, onCommit,
       ) : (
         <>
           <Reveal shown={reveal.prompt} skipped={skipped} locked={locked}>
-            <h2 id="learn-prompt" className="label-spaced text-ink-2" style={{ fontSize: 13 }}>
+            <h2 id="learn-prompt" className="label-spaced text-(--learn-label)" style={{ fontSize: 13 }}>
               ¿Qué tienes en mente?
             </h2>
           </Reveal>

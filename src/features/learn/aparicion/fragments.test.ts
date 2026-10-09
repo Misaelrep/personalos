@@ -1,0 +1,154 @@
+import { describe, expect, it } from 'vitest'
+import { BEATS, FRAGMENTS_END } from './beats'
+import { SYSTEM_WORDS, fragmentAt, fragmentsDone, makeFragments, placeFragments } from './fragments'
+import { contactPoint, expectedWordmarkRect, wordmarkDots } from './geometry'
+
+const VIEWS = [
+  { w: 320, h: 568 },
+  { w: 390, h: 844 },
+  { w: 1280, h: 800 },
+]
+
+function setup(view: { w: number; h: number }, count = 150) {
+  const seeds = makeFragments(count)
+  const contact = contactPoint(view)
+  const placed = placeFragments(seeds, view, contact, wordmarkDots(expectedWordmarkRect(view)))
+  return { seeds, contact, placed }
+}
+
+describe('the fragments are pieces of the system’s own words', () => {
+  it('every one is a lowercase piece (1–4 letters) of aprender, explorar, conectar, comprender, recordar or aplicar', () => {
+    for (const f of makeFragments(400)) {
+      expect(f.text).toBe(f.text.toLowerCase())
+      expect(f.text.length).toBeGreaterThanOrEqual(1)
+      expect(f.text.length).toBeLessThanOrEqual(4)
+      expect(SYSTEM_WORDS.some((w) => w.includes(f.text)), f.text).toBe(true)
+      expect(/\d/.test(f.text)).toBe(false) // no digits: it must not read as code
+    }
+  })
+
+  it('mostly one or two letters, now and then a syllable; a minority is warm', () => {
+    const f = makeFragments(1000)
+    const short = f.filter((x) => x.text.length <= 2).length / f.length
+    expect(short).toBeGreaterThan(0.6)
+    expect(f.some((x) => x.text.length >= 3)).toBe(true)
+    const warm = f.filter((x) => x.warm).length / f.length
+    expect(warm).toBeGreaterThan(0.08)
+    expect(warm).toBeLessThan(0.28)
+  })
+
+  it('is deterministic: the same seed, the same sky', () => {
+    expect(makeFragments(50, 3)).toEqual(makeFragments(50, 3))
+    expect(makeFragments(50, 3)).not.toEqual(makeFragments(50, 4))
+  })
+})
+
+describe('placement', () => {
+  it('keeps every fragment on the glass, at every size of screen', () => {
+    for (const view of VIEWS) {
+      const { placed } = setup(view)
+      for (const p of placed) {
+        expect(p.sx).toBeGreaterThanOrEqual(0)
+        expect(p.sx).toBeLessThanOrEqual(view.w)
+        expect(p.sy).toBeGreaterThanOrEqual(0)
+        expect(p.sy).toBeLessThanOrEqual(view.h)
+      }
+    }
+  })
+
+  it('gathers most of them around the point of contact', () => {
+    const { placed, contact } = setup({ w: 390, h: 844 }, 300)
+    const near = placed.filter((p) => Math.hypot(p.sx - contact.x, p.sy - contact.y) < 280).length / placed.length
+    expect(near).toBeGreaterThan(0.45)
+  })
+
+  it('sets each one off after the wave and brings it in by the time the structure is stable', () => {
+    for (const view of VIEWS) {
+      for (const p of setup(view).placed) {
+        expect(p.start).toBeGreaterThanOrEqual(BEATS.reorganize)
+        expect(p.dur).toBeGreaterThanOrEqual(0.4 - 1e-9)
+        expect(p.start + p.dur).toBeLessThanOrEqual(BEATS.stable + 0.1 + 1e-9)
+      }
+    }
+  })
+
+  it('the nearer to the contact, the sooner it reacts', () => {
+    const { placed, contact } = setup({ w: 390, h: 844 }, 300)
+    const by = [...placed].sort((a, b) => Math.hypot(a.sx - contact.x, a.sy - contact.y) - Math.hypot(b.sx - contact.x, b.sy - contact.y))
+    const first = by.slice(0, 40).reduce((s, p) => s + p.start, 0) / 40
+    const last = by.slice(-40).reduce((s, p) => s + p.start, 0) / 40
+    expect(first).toBeLessThan(last)
+  })
+
+  it('flows left to right: the order they rest in is the order of the dots they go to (paths do not cross)', () => {
+    const { placed } = setup({ w: 390, h: 844 }, 200)
+    const bySx = [...placed].sort((a, b) => a.sx - b.sx)
+    for (let i = 1; i < bySx.length; i++) expect(bySx[i].tx).toBeGreaterThanOrEqual(bySx[i - 1].tx - 1e-9)
+  })
+
+  it('every destination is a lit dot of the wordmark', () => {
+    const view = { w: 390, h: 844 }
+    const dots = wordmarkDots(expectedWordmarkRect(view))
+    for (const p of setup(view).placed) expect(dots.some((d) => Math.abs(d.x - p.tx) < 1e-6 && Math.abs(d.y - p.ty) < 1e-6)).toBe(true)
+  })
+})
+
+describe('a frame at any moment', () => {
+  const view = { w: 390, h: 844 }
+  const { placed, contact } = setup(view)
+
+  it('before anything has happened there is nothing; then the fragments appear where they rest', () => {
+    for (const p of placed) expect(fragmentAt(p, 0, contact, view).alpha).toBe(0)
+    const shown = placed.map((p) => fragmentAt(p, BEATS.wave - 0.02, contact, view))
+    expect(shown.filter((f) => f.alpha > 0.3).length / placed.length).toBeGreaterThan(0.8)
+    // …and they hang in the glass: within a few pixels of where they rest.
+    placed.forEach((p, i) => expect(Math.hypot(shown[i].x - p.sx, shown[i].y - p.sy)).toBeLessThan(5))
+  })
+
+  it('the wave passes through a fragment once: it warms and splits as the front reaches it, and not before', () => {
+    const p = [...placed].sort((a, b) => Math.hypot(a.sx - contact.x, a.sy - contact.y) - Math.hypot(b.sx - contact.x, b.sy - contact.y))[20]
+    const d = Math.hypot(p.sx - contact.x, p.sy - contact.y)
+    const arrives = BEATS.wave + d / (0.85 * view.w)
+    expect(fragmentAt(p, BEATS.wave - 0.05, contact, view).heat).toBe(0)
+    expect(fragmentAt(p, arrives, contact, view).heat).toBeGreaterThan(0.9)
+    expect(fragmentAt(p, arrives + 0.6, contact, view).heat).toBeLessThan(0.05)
+  })
+
+  it('each one travels toward its dot and arrives, handing over to the dot of the wordmark', () => {
+    for (const p of placed) {
+      const dist = (t: number) => {
+        const f = fragmentAt(p, t, contact, view)
+        return Math.hypot(f.x - p.tx, f.y - p.ty)
+      }
+      expect(dist(p.start + p.dur)).toBeLessThan(0.5)
+      expect(dist(p.start + p.dur * 0.5)).toBeLessThan(dist(p.start) + 1)
+      expect(fragmentAt(p, FRAGMENTS_END, contact, view).alpha).toBeLessThan(0.02)
+      expect(fragmentAt(p, p.start + p.dur - 0.2, contact, view).alpha).toBeGreaterThan(0.3)
+    }
+  })
+
+  it('is still visible while it is on its way (so the flow can be followed)', () => {
+    const mid = placed.map((p) => fragmentAt(p, p.start + p.dur * 0.5, contact, view))
+    expect(mid.filter((f) => f.alpha > 0.4).length / placed.length).toBeGreaterThan(0.8)
+  })
+
+  it('stays within the screen throughout', () => {
+    for (let t = 0; t <= FRAGMENTS_END; t += 0.05) {
+      for (const p of placed) {
+        const f = fragmentAt(p, t, contact, view)
+        expect(f.x).toBeGreaterThan(-40)
+        expect(f.x).toBeLessThan(view.w + 40)
+        expect(f.y).toBeGreaterThan(-40)
+        expect(f.y).toBeLessThan(view.h + 40)
+        expect(Number.isFinite(f.x + f.y + f.alpha + f.scale + f.heat)).toBe(true)
+      }
+    }
+  })
+
+  it('alpha is always within 0..1, and the canvas is done once the last has arrived', () => {
+    for (let t = 0; t <= FRAGMENTS_END; t += 0.1) for (const p of placed) expect(fragmentAt(p, t, contact, view).alpha).toBeLessThanOrEqual(1)
+    expect(fragmentsDone(FRAGMENTS_END - 0.01)).toBe(false)
+    expect(fragmentsDone(FRAGMENTS_END)).toBe(true)
+    expect(FRAGMENTS_END).toBeGreaterThan(BEATS.stable + 0.2)
+  })
+})

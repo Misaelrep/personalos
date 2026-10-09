@@ -1,4 +1,5 @@
 import { BEATS } from './beats'
+import { waveRadius, waveStrength } from './optics'
 
 /**
  * The fragments of APARICIÓN: pieces of the words the system is made of — not
@@ -112,6 +113,12 @@ const gauss = (u: number, v: number) => Math.sqrt(-2 * Math.log(Math.max(u, 1e-6
 
 const MARGIN = 10
 
+/** The bend of a path, as a fraction of its length: all in one sense, a little more or less each — a field that turns, not noise. */
+const swirl = (b: number) => 0.1 + 0.14 * b
+
+/** 0..1 around the contact, from the left (0) turning through the top to the right and back: the order the structure is called in. */
+const sweep = (from: Point, contact: Point) => (Math.atan2(from.y - contact.y, from.x - contact.x) + Math.PI) / (2 * Math.PI)
+
 /** Only a few sizes of type, so that the canvas has few sprites to make (and every piece of text of a size shares one). */
 const SIZES = [9, 10, 11, 12, 14, 16, 19, 22, 25]
 export const snapSize = (px: number) => SIZES.reduce((best, s) => (Math.abs(s - px) < Math.abs(best - px) ? s : best), SIZES[0])
@@ -163,17 +170,17 @@ export function placeFragments(seeds: FragmentSeed[], view: View, contact: Point
     const rank = rankOf.get(index)
     if (rank !== undefined && dots.length > 0) {
       const to = dots[Math.min(dots.length - 1, Math.round((rank * (dots.length - 1)) / Math.max(1, order.length - 1)))]
-      // The nearer to the contact, the sooner it reacts; every one is done by the time the structure is stable.
-      const start = BEATS.reorganize + 0.22 * near + 0.1 * s.d
+      // The nearer to the contact, the sooner it reacts, and the reaction sweeps around it; every one is done by the time the structure is stable.
+      const start = BEATS.reorganize + 0.18 * near + 0.1 * sweep(from, contact) + 0.05 * s.d
       const dur = clamp(0.58 + 0.24 * s.c, 0.4, BEATS.stable + 0.1 - start)
-      return { ...s, converges: true, sx: from.x, sy: from.y, tx: to.x, ty: to.y, start, dur, bend: (s.b - 0.5) * 0.22 * Math.hypot(to.x - from.x, to.y - from.y), px }
+      return { ...s, converges: true, sx: from.x, sy: from.y, tx: to.x, ty: to.y, start, dur, bend: swirl(s.b) * Math.hypot(to.x - from.x, to.y - from.y), px }
     }
     // Drawn in: a third of the way to the contact, over about the same time, and out.
-    const start = BEATS.reorganize + 0.1 + 0.25 * near + 0.1 * s.d
+    const start = BEATS.reorganize + 0.1 + 0.2 * near + 0.08 * sweep(from, contact) + 0.05 * s.d
     const dur = clamp(0.6 + 0.3 * s.c, 0.4, BEATS.stable + 0.1 - start)
     const tx = lerp(from.x, contact.x, 0.3 + 0.1 * s.b)
     const ty = lerp(from.y, contact.y, 0.3 + 0.1 * s.b)
-    return { ...s, converges: false, sx: from.x, sy: from.y, tx, ty, start, dur, bend: (s.b - 0.5) * 0.12 * Math.hypot(tx - from.x, ty - from.y), px }
+    return { ...s, converges: false, sx: from.x, sy: from.y, tx, ty, start, dur, bend: swirl(s.b) * 0.6 * Math.hypot(tx - from.x, ty - from.y), px }
   })
 }
 
@@ -185,6 +192,9 @@ export interface FragmentFrame {
   scale: number
   /** 0..1: the wave is passing through it (it brightens, warms and splits into its prismatic fringe). */
   heat: number
+  /** How the piece is turned and stretched: toward the contact as it is drawn to it, along its path as it goes to the structure; 1 and 0 at rest. */
+  stretch: number
+  angle: number
 }
 
 /** The wave: leaves the contact at BEATS.wave and crosses the glass at this many viewport widths per second. */
@@ -201,19 +211,22 @@ export function fragmentAt(p: Placed, t: number, contact: Point, view: View): Fr
   const fx = Math.sin(t * 0.8 + p.a * 6.283) * sway * settle
   const fy = Math.cos(t * 0.65 + p.b * 6.283) * sway * settle
 
-  // The wave from the point of contact: a ring of push that passes through.
+  // The wave from the point of contact: a front that is not a circle (it wanders with the angle and breaks), pushing what it crosses.
   const dx = p.sx - contact.x
   const dy = p.sy - contact.y
   const dist = Math.hypot(dx, dy) || 1
+  const angle = Math.atan2(dy, dx)
   const radius = Math.max(0, t - BEATS.wave) * WAVE_SPEED * w
-  const pulse = t < BEATS.wave ? 0 : Math.exp(-(((dist - radius) / (WAVE_WIDTH * w)) ** 2))
+  const front = t < BEATS.wave ? 0 : waveRadius(angle, t, radius)
+  const pulse = t < BEATS.wave ? 0 : Math.exp(-(((dist - front) / (WAVE_WIDTH * w)) ** 2)) * (0.35 + 0.65 * waveStrength(angle, t))
 
-  // The lens: around the contact the glass bulges while the wave leaves it — what is there swells and is pushed outward.
+  // The glass answers the touch: what is near the contact is drawn toward it, and deformed — stretched along the way it is pulled.
   const amp = smooth((t - 0.42) / 0.18) * (1 - smooth((t - 0.95) / 0.35))
   const lens = amp * Math.exp(-((dist / (0.2 * w)) ** 2))
 
   const e = easeInOut((t - p.start) / p.dur)
-  const push = pulse * w * 0.022 * (1 - e) + lens * 16 * (1 - e)
+  // Pushed out by the front as it passes, drawn in by the glass as it settles.
+  const push = pulse * w * 0.022 * (1 - e) - lens * 12 * (1 - e)
   const nx = -(p.ty - p.sy)
   const ny = p.tx - p.sx
   const nl = Math.hypot(nx, ny) || 1
@@ -222,15 +235,24 @@ export function fragmentAt(p: Placed, t: number, contact: Point, view: View): Fr
   const x = lerp(p.sx + fx, p.tx, e) + (dx / dist) * push + (nx / nl) * arc
   const y = lerp(p.sy + fy, p.ty, e) + (dy / dist) * push + (ny / nl) * arc
 
+  // The orientation: toward the contact while the glass holds it, then along its path as it goes to the structure — it lines up with the flow.
+  const flying = p.converges ? Math.sin(Math.PI * clamp((t - p.start) / p.dur, 0, 1)) : 0
+  const flow = Math.atan2(p.ty - p.sy, p.tx - p.sx)
+  const towards = Math.atan2(-dy, -dx)
+  // Angles are folded to ±90° so a letter is never turned upside down.
+  const fold = (a: number) => ((((a + Math.PI / 2) % Math.PI) + Math.PI) % Math.PI) - Math.PI / 2
+  const turn = fold(towards) * lens * 0.35 + fold(flow) * flying * 0.28
+  const stretch = 1 + 0.55 * lens + 0.3 * flying + 0.35 * pulse
+
   const base = p.layer === 'far' ? 0.42 + 0.2 * p.size : p.layer === 'mid' ? 0.72 + 0.28 * p.size : 0.92
   if (p.converges) {
     // It hands itself over to the dot of the wordmark as it arrives.
     const arrive = smooth((t - (p.start + p.dur - 0.12)) / 0.26)
     const alpha = appear * (base + 0.5 * pulse) * (1 - arrive)
-    return { x, y, alpha: clamp(alpha, 0, 1), scale: lerp(1, 0.6, e) * (1 + 0.38 * lens), heat: pulse }
+    return { x, y, alpha: clamp(alpha, 0, 1), scale: lerp(1, 0.6, e) * (1 + 0.3 * lens), heat: pulse, stretch, angle: turn }
   }
   // Drawn in and gone: it fades as it is taken.
   const gone = smooth((t - (p.start + p.dur * 0.35)) / (p.dur * 0.8))
   const alpha = appear * (base + 0.4 * pulse) * (1 - gone)
-  return { x, y, alpha: clamp(alpha, 0, 1), scale: lerp(1, 0.75, e) * (1 + 0.38 * lens), heat: pulse }
+  return { x, y, alpha: clamp(alpha, 0, 1), scale: lerp(1, 0.75, e) * (1 + 0.3 * lens), heat: pulse, stretch, angle: turn }
 }

@@ -2,10 +2,10 @@ import { BEATS } from './beats'
 import type { View } from './fragments'
 
 /**
- * The light of APARICIÓN, as functions of time: the flare where the finger touches,
- * the bloom that carries the glass over into the sky, the three rings of the wave, and
- * the finger's own comings and goings. Drawn on the canvas (not as layers of the page),
- * so a frame costs a few gradient fills and strokes and nothing is re-laid-out.
+ * The light of APARICIÓN, as functions of time: the small light where the finger touches the glass, the swell
+ * that goes through it, the three fronts of the wave the glass answers with (irregular — see optics.ts: waveRadius),
+ * and the finger's own scale. Drawn on the canvas (not as layers of the page), so a frame costs a few gradient fills
+ * and strokes and nothing is re-laid-out.
  */
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x))
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t
@@ -24,46 +24,51 @@ export function flareAt(t: number, view: View): Glow {
   const u = (t - start) / 0.9
   if (u <= 0) return { alpha: 0, radius: 0 }
   const grow = easeOut(u / 0.35)
-  const alpha = u < 0.35 ? grow : lerp(1, 0.8, easeOut((u - 0.35) / 0.65))
+  // It hands itself over to the light the deep glass keeps in that plate (pixels.ts): it is gone before the canvas stops.
+  const fade = 1 - easeOut((t - 1.0) / 0.5)
+  const alpha = (u < 0.35 ? grow : lerp(1, 0.8, easeOut((u - 0.35) / 0.65))) * fade
   const size = u < 0.35 ? lerp(0.2, 1, grow) : lerp(1, 1.15, easeOut((u - 0.35) / 0.65))
-  return { alpha, radius: 0.15 * vmin(view) * size }
+  return { alpha, radius: 0.09 * vmin(view) * size }
 }
 
-/** The bloom: a white-hot swell from the contact that grows until it has carried the glass away. */
+/** The swell: a small expansion of light from the contact, as the glass takes it — a breath, not a burst; it is gone before the structure is stable. */
 export function bloomAt(t: number, view: View): Glow {
   const u = (t - 0.62) / 1.15
   if (u <= 0 || u >= 1) return { alpha: 0, radius: 0 }
-  const alpha = u < 0.38 ? 0.62 * easeOut(u / 0.38) : 0.62 * (1 - (u - 0.38) / 0.62)
-  return { alpha, radius: 0.17 * vmin(view) * (0.5 + 2.6 * easeOut(u)) }
+  const alpha = u < 0.38 ? 0.46 * easeOut(u / 0.38) : 0.46 * (1 - (u - 0.38) / 0.62)
+  return { alpha, radius: 0.085 * vmin(view) * (0.5 + 2.8 * easeOut(u)) }
 }
 
 /**
- * The surge: for a moment, as the wave leaves and the information reacts, the red and orange at the
- * point of contact swell — a breath of heat, brightest at 0.62 s, gone by 1.2 s — and fall back.
+ * The surge: for a moment, as the wave leaves and the information reacts, the red and orange the glass holds at the
+ * point of contact swell — a breath of heat, brightest at 0.62 s, gone by 1.2 s — and fall back. It is drawn stretched along the plate.
  */
 export function surgeAt(t: number, view: View): Glow {
   const u = (t - 0.45) / 0.75
   if (u <= 0 || u >= 1) return { alpha: 0, radius: 0 }
   const rise = easeOut(u / 0.22)
-  const alpha = u < 0.22 ? 0.5 * rise : 0.5 * (1 - (u - 0.22) / 0.78) ** 1.6
-  return { alpha, radius: 0.2 * vmin(view) * (0.55 + 0.7 * easeOut(u)) }
+  const alpha = u < 0.22 ? 0.4 * rise : 0.4 * (1 - (u - 0.22) / 0.78) ** 1.6
+  return { alpha, radius: 0.13 * vmin(view) * (0.55 + 0.7 * easeOut(u)) }
 }
 
-export interface Ring {
+export interface Front {
+  /** The mean radius of the front, px (the front itself wanders around it: optics.ts, waveRadius). */
   radius: number
   alpha: number
+  /** Which of the fronts it is: each wanders differently. */
+  seed: number
 }
 
-/** The wave: three rings, one after the other, from the point of contact outward. */
-const RING_STARTS = [BEATS.wave, BEATS.wave + 0.14, BEATS.wave + 0.3]
-const RING_DURATION = 0.95
+/** The wave: three fronts, one after the other, from the point of contact outward. */
+const FRONT_STARTS = [BEATS.wave, BEATS.wave + 0.14, BEATS.wave + 0.3]
+const FRONT_DURATION = 0.95
 
-export function ringsAt(t: number, view: View): Ring[] {
-  return RING_STARTS.flatMap((start) => {
-    const u = (t - start) / RING_DURATION
+export function frontsAt(t: number, view: View): Front[] {
+  return FRONT_STARTS.flatMap((start, seed) => {
+    const u = (t - start) / FRONT_DURATION
     if (u <= 0 || u >= 1) return []
     const alpha = u < 0.12 ? 0.5 * (u / 0.12) : 0.5 * (1 - (u - 0.12) / 0.88) ** 1.4
-    return [{ radius: 0.12 * vmin(view) * (0.06 + 3.8 * easeOut(u)), alpha }]
+    return [{ radius: 0.12 * vmin(view) * (0.06 + 3.8 * easeOut(u)), alpha, seed: seed * 3.7 }]
   })
 }
 

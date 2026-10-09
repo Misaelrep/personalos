@@ -46,17 +46,17 @@ export interface LearnTheme {
     rim: string
     /** A pool of depth in the lower corner. */
     depth: string
-    /** Specular streaks (white-hot) and the thin prismatic fringe beside them. */
+    /** The edge of a plate of glass (white) and the thin prismatic fringe beside it. */
     spec: string
     prism: string
-    /** The glow that leans in from the right edge (broad and soft), and the white-hot spots in it. */
+    /** The faint red that the glass reflects, leaning in from the right edge. */
     glow: string
-    hot: string
-    /** The sheet of water along the bottom: the ice blue of its ground and the streaks of light on it. */
+    /** The ice blue of the glass's upper ground and of the sheet low on the screen. */
     sea: string
-    streak: string
-    /** Soft white masses of cloud in the glass. */
+    /** Soft white masses of mist in the glass. */
     cloud: string
+    /** The fine grain of the glass (the colour it darkens by, at the strength it is seen). */
+    grain: string
   }
   mark: { color: string; glow: string }
   /** The ink of the words on the ritual's own stage (a dark one, over this atmosphere's light ground). */
@@ -101,10 +101,9 @@ const NO_RIM = {
   spec: 'rgba(0,0,0,0)',
   prism: 'rgba(0,0,0,0)',
   glow: 'rgba(0,0,0,0)',
-  hot: 'rgba(0,0,0,0)',
   sea: 'rgba(0,0,0,0)',
-  streak: 'rgba(0,0,0,0)',
   cloud: 'rgba(0,0,0,0)',
+  grain: 'rgba(0,0,0,0)',
 }
 
 /**
@@ -144,25 +143,25 @@ const SUNSET: LearnTheme = {
   atmosphere: {
     tone: 'light',
     base: '#E5EDF8',
-    halos: ['rgba(255,255,255,0.95)', 'rgba(140,184,238,0.55)', 'rgba(255,112,64,0.16)', 'rgba(196,232,255,0.5)'],
+    halos: ['rgba(255,255,255,0.95)', 'rgba(140,184,238,0.55)', 'rgba(255,112,64,0.07)', 'rgba(196,232,255,0.5)'],
     particle: 'rgba(56,104,186,0.5)',
     glow: 'rgba(255,120,70,0.4)',
     accent: '#C8361F',
   },
   ink: { strong: '#0B1630', medium: '#1B2542', soft: '#2A3654', faint: '#374363', line: 'rgba(24,48,100,0.16)', label: '#8B1C1C', tabOn: '#8B1C1C' },
   light: {
-    orbs: ['rgba(30,62,130,0.2)', 'rgba(255,255,255,0.7)', 'rgba(255,98,52,0.28)'],
+    // The same surface as the ritual's, at a fifth of its presence: pearl and ice, two plates of glass, one trace of red, grain, almost no depth.
+    orbs: ['rgba(30,62,130,0.08)', 'rgba(255,255,255,0.7)', 'rgba(255,98,52,0.05)'],
     haze: 'rgba(255,255,255,0.5)',
-    edge: 'rgba(20,40,96,0.14)',
-    rim: 'rgba(255,92,48,0.66)',
-    depth: 'rgba(8,30,86,0.34)',
+    edge: 'rgba(20,40,96,0.09)',
+    rim: 'rgba(255,92,48,0.26)',
+    depth: 'rgba(8,30,86,0.14)',
     spec: 'rgba(255,255,255,0.9)',
-    prism: 'rgba(110,220,255,0.55)',
-    glow: 'rgba(255,120,84,0.5)',
-    hot: 'rgba(255,238,220,0.95)',
-    sea: 'rgba(122,164,208,0.55)',
-    streak: 'rgba(255,255,255,0.8)',
-    cloud: 'rgba(255,255,255,0.7)',
+    prism: 'rgba(110,220,255,0.5)',
+    glow: 'rgba(255,120,84,0.1)',
+    sea: 'rgba(122,164,208,0.34)',
+    cloud: 'rgba(255,255,255,0.5)',
+    grain: 'rgba(14,34,84,0.09)',
   },
   mark: { color: '#FF7452', glow: 'rgba(255,96,56,0.85)' },
   stage: { strong: '#F6F9FF', medium: '#DCE6F6', soft: '#B4C3DA' },
@@ -251,7 +250,7 @@ export function sceneVars(scene: SceneColors): Record<string, string> {
   return Object.fromEntries(Object.entries(scene).map(([name, color]) => [`--apa-${name}`, color]))
 }
 
-/** What LearnLight sets on itself: its orbs, mist, edge, rim and fringe. */
+/** What LearnLight sets on itself: its orbs, mist, edge, plates of glass and grain. */
 export function learnLightVars(theme: LearnTheme): Record<string, string> {
   const [horizon, counter, side] = theme.light.orbs
   return {
@@ -265,9 +264,8 @@ export function learnLightVars(theme: LearnTheme): Record<string, string> {
     '--learn-spec': theme.light.spec,
     '--learn-prism': theme.light.prism,
     '--learn-glow': theme.light.glow,
-    '--learn-hot': theme.light.hot,
     '--learn-sea': theme.light.sea,
-    '--learn-streak': theme.light.streak,
     '--learn-cloud': theme.light.cloud,
+    '--learn-grain': theme.light.grain,
   }
 }

@@ -1,15 +1,17 @@
 import type { SceneColors } from '../atmosphere/themes'
 import { parseHex, type RGB } from './color'
 import type { Point, View } from './fragments'
-import { HAND_RES, handField, handGrid, shadeHand, type HandColors } from './hand'
-import { cells, clamp01, fbm2, lerp, noise2, smoothstep } from './noise'
+import { handSample, type HandColors } from './hand'
+import { HAND_TILT_DEG, handScale } from './light'
+import { clamp01, fbm2, lerp, noise2, smoothstep } from './noise'
+import { SLABS, bendAt, bendPx, edgeLight, edgesOf, endsOf } from './optics'
 
 /**
- * The soft light of the scene as pixels: haze, clouds, the wash of warm light, the shine of the water, the
- * shaded hand. Pure numbers in, a buffer out — no canvas, no page — so it can be made in a worker, off the
- * thread that draws the frames, and tested. The buffers are low-resolution on purpose: what they hold is light, not
- * edges, and the stretch the page gives them is the blur. Nothing here is an image that was drawn elsewhere: it is
- * noise, mixed from the theme's colors.
+ * The soft light of the scene as pixels: the glass and its depth — what lies behind the plates of glass, bent, split
+ * and repeated by them (optics.ts) — and the hand behind it. Pure numbers in, a buffer out — no canvas, no page — so it
+ * can be made in a worker, off the thread that draws the frames, and tested. The buffers are low-resolution on purpose: what
+ * they hold is light, not edges (the thread of light along a plate is drawn sharp, on its own canvas), and the stretch the
+ * page gives them is the blur. Nothing here is an image that was drawn elsewhere: it is noise, mixed from the theme's colors.
  */
 
 export interface Pixels {
@@ -22,8 +24,8 @@ export interface Pixels {
 /** Pixels of the glass's texture per pixel of the screen. */
 export const TEXTURE_SCALE = 0.4
 
-/** Pixels of the sky's texture per pixel of the screen: finer than the glass's, because clouds and ripples have detail to keep. */
-export const SKY_SCALE = 0.55
+/** Pixels of the depth's texture per pixel of the screen: a little finer than the glass's, because ripples have detail to keep. */
+export const DEPTH_SCALE = 0.5
 
 export const mix3 = (a: RGB, b: RGB, t: number): RGB => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)]
 
@@ -61,180 +63,144 @@ const curve = (v: number): number => {
   return 255 * (t < 0.5 ? 0.5 * (2 * t) ** 1.18 : 1 - 0.5 * (2 * (1 - t)) ** 1.18)
 }
 
-/** Tall columns of glass behind the surface: where (0..1 across), how wide, and how much lighter (+) or darker (−) they are. */
-const PILLARS = [
-  { u: 0.05, w: 0.1, k: 0.18 },
-  { u: 0.24, w: 0.13, k: -0.34 },
-  { u: 0.42, w: 0.06, k: 0.16 },
-  { u: 0.55, w: 0.14, k: 0.14 },
-  { u: 0.7, w: 0.09, k: -0.26 },
-  { u: 0.86, w: 0.07, k: 0.2 },
-] as const
+
+/** Where the words begin, as a fraction of the height: the top of the wordmark. The wordmark and the phrase are one block, centered, about 214 px tall at every size of phone (measured on 320×480 to 430×932). */
+export const wordsFrom = (view: View): number => 0.5 - 112 / view.h
+
+/** How much the block of words is there at a height (0 outside it, 1 inside it, with soft ends: the light keeps out of it). */
+export const wordsBand = (view: View, v: number): number => smoothstep(wordsFrom(view) - 0.09, wordsFrom(view) - 0.015, v) * (1 - smoothstep(wetFrom(view) - 0.1, wetFrom(view) - 0.02, v))
+
+/** Where the wet of the surface begins, as a fraction of the height: below the phrase, which is centered with the wordmark (a phone's phrase is at most ≈ 160 px tall). */
+export const wetFrom = (view: View): number => Math.max(0.7, 0.5 + 158 / view.h)
+
+/** Which of the two states of the same surface a texture is: the light glass of APARICIÓN, or the same glass gone deep for APRENDER and its phrase. */
+type State = 'glass' | 'depth'
 
 /**
- * The glass of APARICIÓN, as light: gray-blue haze in soft blotches and tall columns of pearl and
- * deep teal, a white glare where the finger lands, a pink-white wash along the right edge.
+ * What lies behind the glass at (u, v), as a function: a luminous field of blotches and tall fibres, a light caught where the finger lands (stretched along
+ * the glass, not a sun), the red-orange that leaks along the warm plate's edges, and — low on the screen — the wet: the same field shaken by ripples,
+ * with the plates' edges mirrored as broken ribbons of light. `detail` is the fine frost: the plates are clear glass, so inside them it is not there.
  */
-export function hazePixels(view: View, scene: SceneColors, contact: Point): Pixels {
-  const w = Math.max(8, Math.round(view.w * TEXTURE_SCALE))
-  const h = Math.max(8, Math.round(view.h * TEXTURE_SCALE))
+function surfaceOf(view: View, scene: SceneColors, contact: Point, state: State) {
   const c = paletteOf(scene)
-  const dark = mix3(c.teal, c.deep, 0.5)
-  const light = mix3(c.mist, c.ice, 0.3)
+  const deep = state === 'depth'
   const cu = contact.x / view.w
   const cv = contact.y / view.h
-  const d = new Uint8ClampedArray(w * h * 4)
-  for (let y = 0; y < h; y++) {
-    const v = y / h
-    for (let x = 0; x < w; x++) {
-      const u = x / w
-      // Large blotches of light and shade, then tall bands inside them, then a fine vertical frost.
+  const wf = wetFrom(view)
+  const w0 = wordsFrom(view)
+  const dark = mix3(c.teal, c.deep, 0.5)
+  const light = mix3(c.mist, c.ice, 0.3)
+  const night = mix3(c.night, c.deep, 0.3)
+  const edges = edgesOf(1)
+  const warmEdges = edges.filter((e) => SLABS[e.slab].warm)
+  return (u0: number, v0: number, detail: boolean): RGB => {
+    const wet = smoothstep(wf - 0.03, wf + 0.1, v0)
+    // The wet shakes everything under it: a slow wave of the lookups, finer toward the bottom.
+    const ripple = wet > 0 ? wet * (0.006 * Math.sin(v0 * 120 + fbm2(u0 * 6, v0 * 9, 59, 2) * 9) + 0.034 * (fbm2(u0 * 9, v0 * 38, 61, 3) - 0.5)) : 0
+    const u = u0 + ripple
+    const v = v0
+    // The words' own band stays quiet: the light keeps out of it, except along the right edge.
+    const quiet = wordsBand(view, v) * (1 - 0.85 * smoothstep(0.86, 0.96, u))
+    const glare = Math.exp(-((((u - cu) / 0.1) ** 2) + ((v - cv) / 0.24) ** 2))
+    let col: RGB
+    if (!deep) {
       const blotch = fbm2(u * 2.3 + 0.4, v * 1.5 + 0.2, 3, 3)
       const band = fbm2(u * 7.5, v * 1.05, 14, 2)
-      const frost = noise2(u * 64, v * 2.2, 9)
-      let t = 0.5 + (blotch - 0.5) * 1.5 + (band - 0.5) * 0.6 + (frost - 0.5) * 0.1 + (0.5 - v) * 0.06
-      // Columns of glass: each is softer at the ends than in the middle, and fades toward the bottom.
-      for (const p of PILLARS) t += p.k * Math.exp(-(((u - p.u) / p.w) ** 2)) * (0.55 + 0.45 * Math.sin(v * 9 + p.u * 20)) * (1 - 0.5 * smoothstep(0.7, 1, v))
-      // The glare around the point of contact.
-      const gx = (u - cu) / 0.22
-      const gy = (v - cv) / 0.14
-      const glare = Math.exp(-(gx * gx + gy * gy))
+      let t = 0.55 + (blotch - 0.5) * 1.45 + (band - 0.5) * 0.5 + (0.5 - v) * 0.06
+      if (detail) t += (noise2(u * 64, v * 2.2, 9) - 0.5) * 0.1
       t += glare * 0.5
-      // Hue wanders between gray-blue and sky blue; the shadows lean teal.
+      // A shaft of light caught in the plate the finger touches: tall, narrow, strongest above the touch.
+      t += Math.exp(-((((u - cu) / 0.05) ** 2))) * smoothstep(0, 0.12, v) * (1 - smoothstep(0.55, 0.9, v)) * 0.3
       const tint = noise2(u * 3.1 + 5, v * 2.4, 21)
       const mid = mix3(c.haze, c.sky, 0.1 + 0.5 * tint)
-      let col = ramp(mix3(dark, c.steel, 0.3 * tint), mid, light, clamp01(t))
-      col = mix3(col, c.white, glare * glare * 0.65)
-      // The right edge is warm: pink-white, with coral deeper in it; and a breath of warmth low in the middle.
-      const wash = smoothstep(0.56, 1, u) * (0.55 + 0.45 * fbm2(u * 3 + 2, v * 2.2, 5, 2))
-      col = mix3(col, c.peach, wash * 0.5)
-      col = mix3(col, c.coral, wash * wash * (1 - smoothstep(0.1, 0.55, Math.abs(v - 0.4))) * 0.3)
-      const low = Math.exp(-(((u - 0.4) / 0.28) ** 2 + ((v - 0.62) / 0.16) ** 2))
-      col = mix3(col, c.peach, low * 0.3)
-      // The lower edge goes back into the glass: a little darker, a little colder.
-      col = mix3(col, c.steel, smoothstep(0.9, 1, v) * 0.3)
-      const i = (y * w + x) * 4
-      d[i] = curve(col[0])
-      d[i + 1] = curve(col[1])
-      d[i + 2] = curve(col[2])
-      d[i + 3] = 255
+      col = ramp(mix3(dark, c.steel, 0.3 * tint), mid, light, clamp01(t))
+      col = mix3(col, c.white, glare * glare * 0.6)
+    } else {
+      const blotch = fbm2(u * 2.1 + 7, v * 1.3 + 3, 33, 4)
+      const band = fbm2(u * 6.5, v * 0.9, 35, 2)
+      col = mix3(night, c.deep, 0.2 + 0.6 * blotch)
+      const lit = smoothstep(0.5, 0.86, fbm2(u * 2.8 + 3, v * 1.5 + 1, 41, 4)) * (0.4 + 0.6 * band)
+      col = mix3(col, mix3(c.teal, c.steel, 0.55), lit * (0.7 + 0.35 * (detail ? 0 : 1) + 0.3 * (1 - smoothstep(0, 0.3, v))) * (1 - 0.9 * quiet))
+      col = mix3(col, mix3(c.sky, c.ice, 0.4), glare * 0.4 * (1 - 0.8 * quiet))
+      col = mix3(col, c.white, glare * glare * 0.16 * (1 - quiet))
+      // Behind the words the glass is at its deepest: the wordmark's dots and the phrase need the dark.
+      col = mix3(col, c.night, 0.3 * quiet)
+      if (detail) col = mix3(col, c.steel, (noise2(u * 64, v * 2.2, 9) - 0.5) * 0.06 + 0.03)
     }
+    // The light that leaks along the warm plate's edges: in from the edge, strongest where the edge is bright — in two places, above the words and below them (the middle is theirs).
+    let leak = 0
+    const lobes = Math.max(smoothstep(0, 0.1, v) * (1 - smoothstep(w0 - 0.12, w0 - 0.02, v)), smoothstep(wf - 0.1, wf + 0.02, v) * (1 - smoothstep(0.9, 0.99, v)))
+    if (lobes > 0.01) {
+      for (const e of warmEdges) {
+        const d = u - e.x
+        const inward = e.side === 0 ? d : -d
+        const reach = inward >= 0 ? 0.05 : 0.018
+        // Smoothed along the plate: this is the soft light the crisp thread (textures.ts) is drawn over.
+        const light = (edgeLight(e.slab, e.side, v - 0.025) + edgeLight(e.slab, e.side, v) + edgeLight(e.slab, e.side, v + 0.025)) / 3
+        leak = Math.max(leak, light * Math.exp(-((Math.abs(d) / reach) ** 1.3)) * endsOf(SLABS[e.slab], v) * lobes)
+      }
+    }
+    if (leak > 0.01) {
+      const q = 1 - 0.8 * quiet
+      if (!deep) col = mix3(col, mix3(c.peach, c.coral, clamp01(leak * 1.3)), leak * 0.34 * q)
+      else col = mix3(col, mix3(mix3(c.vermilion, c.ember, 0.3), c.coral, clamp01(leak - 0.5)), leak * 0.5 * q)
+    }
+    if (wet > 0) {
+      // The plates' edges, mirrored: ribbons of light that wander and break, wider the lower they go.
+      let rib = 0
+      let ribWarm = 0
+      for (const e of edges) {
+        const width = 0.007 + 0.02 * wet
+        const k = Math.exp(-(((u - e.x) / width) ** 2)) * edgeLight(e.slab, e.side, v * 0.7 + 0.15) * (0.25 + 0.75 * fbm2(v * 26 + e.x * 9, e.slab * 3.1, 77, 2))
+        if (SLABS[e.slab].warm) ribWarm = Math.max(ribWarm, k)
+        else rib = Math.max(rib, k)
+      }
+      col = mix3(col, deep ? mix3(c.ice, c.sky, 0.4) : c.white, rib * wet * (deep ? 0.5 : 0.6))
+      col = mix3(col, mix3(c.ember, c.hot, 0.3), ribWarm * wet * (deep ? 0.72 : 0.6))
+      // The lower edge goes back into the glass: a little darker, a little colder.
+      col = mix3(col, deep ? night : c.steel, smoothstep(0.9, 1, v) * (deep ? 0.35 : 0.3))
+    }
+    return col
   }
-  return { w, h, data: d }
 }
 
-/** Where the sky meets the water, as a fraction of the height: below the phrase, which is centered with the wordmark (a phone's phrase is at most ≈ 160 px tall). */
-export const horizonOf = (view: View): number => Math.max(0.7, 0.5 + 158 / view.h)
-
 /**
- * The sky and the water of the ritual's stage, as light: cyan-blue clouds above — turbulent, lit from the
- * side where the sun is — a dark and quiet band where the words are, the sun's glare and the red it
- * stains the right side with, and below the horizon the water, with the sheen of its ripples and the
- * sun's reflection.
+ * The glass and its depth, as light. Both are the same surface — the same plates, in the same places, bending the same field — in two states: the light
+ * glass of APARICIÓN (pearl, ice, steel, a glare where the finger lands), and the glass gone deep for APRENDER and the phrase (blue-black, with the
+ * light kept in the plates' bodies and edges). Where a plate stands what lies behind it is bent, split into its colors and repeated in small zones.
  */
-export function skyPixels(view: View, scene: SceneColors, sun: Point): Pixels {
-  const w = Math.max(8, Math.round(view.w * SKY_SCALE))
-  const h = Math.max(8, Math.round(view.h * SKY_SCALE))
+export function surfacePixels(state: State, view: View, scene: SceneColors, contact: Point): Pixels {
+  const scale = state === 'glass' ? TEXTURE_SCALE : DEPTH_SCALE
+  const w = Math.max(8, Math.round(view.w * scale))
+  const h = Math.max(8, Math.round(view.h * scale))
   const c = paletteOf(scene)
-  const H = horizonOf(view)
-  const su = sun.x / view.w
-  const sv = sun.y / view.h
-  const aspect = view.w / view.h
-  const night = mix3(c.night, c.deep, 0.3)
-  const slate = mix3(c.steel, c.haze, 0.35)
+  const deep = state === 'depth'
+  const surface = surfaceOf(view, scene, contact, state)
   const d = new Uint8ClampedArray(w * h * 4)
   for (let y = 0; y < h; y++) {
     const v = y / h
     for (let x = 0; x < w; x++) {
       const u = x / w
+      const b = bendAt(u, v)
       let col: RGB
-      if (v < H) {
-        const q = v / H
-        // From cyan-blue at the top, through steel, to the dark of the words, and back to a slate haze at the horizon.
-        col =
-          q < 0.25
-            ? mix3(mix3(c.teal, c.sky, 0.5), mix3(c.steel, c.deep, 0.2), q / 0.25)
-            : q < 0.55
-              ? mix3(mix3(c.steel, c.deep, 0.2), night, (q - 0.25) / 0.3)
-              : q < 0.85
-                ? mix3(night, mix3(c.deep, c.steel, 0.25), (q - 0.55) / 0.3)
-                : mix3(mix3(c.deep, c.steel, 0.25), mix3(slate, c.ice, 0.28), (q - 0.85) / 0.15)
-        // Clouds: turbulent (the noise is bent by noise), pale cyan above with dark undersides, banked along the horizontal.
-        const wx = fbm2(u * 1.7 + 4, v * 1.9, 91, 3) - 0.5
-        const wy = fbm2(u * 1.7, v * 1.9 + 7, 92, 3) - 0.5
-        const n = fbm2(u * 2.9 + wx * 1.5, v * 4.2 + wy * 1.5, 61, 5)
-        const fine = fbm2(u * 14, v * 18, 97, 3)
-        const top = 1 - smoothstep(0.1, 0.62, q)
-        const body = smoothstep(0.5, 0.72, n)
-        col = mix3(col, mix3(c.sky, c.ice, 0.5), body * 0.9 * top * (0.75 + 0.5 * fine))
-        col = mix3(col, c.night, smoothstep(0.52, 0.2, n) * 0.62 * smoothstep(0.05, 0.4, q))
-        const bank = smoothstep(0.5, 0.9, fbm2(u * 1.5 + wx, v * 15, 67, 3))
-        col = mix3(col, mix3(c.haze, c.ice, 0.4), bank * 0.55 * smoothstep(0.72, 1, q))
-        // Near the horizon the sky lights up: ice-blue, and warm where the sun is.
-        const glow = smoothstep(0.86, 1, q)
-        col = mix3(col, mix3(c.ice, c.sky, 0.25), glow * 0.6)
-        col = mix3(col, mix3(c.peach, c.ember, 0.4), glow * Math.exp(-(((u - su) / 0.3) ** 2)) * 0.55)
-        // The sun lights what is near it: clouds are pale around it and rimmed with warm light, and the glare is white-hot.
-        const dx = (u - su) * aspect
-        const dy = v - sv
-        const dist = Math.hypot(dx, dy)
-        col = mix3(col, mix3(c.white, c.ice, 0.3), Math.exp(-((dist / 0.3) ** 2)) * (0.05 + 0.7 * body) * 0.7)
-        col = mix3(col, mix3(c.peach, c.ember, 0.4), Math.exp(-((dist / 0.22) ** 2)) * body * (1 - body) * 1.6 * 0.6)
-        col = mix3(col, c.ember, Math.exp(-((dist / 0.15) ** 2)) * 0.5)
-        col = mix3(col, c.hot, Math.exp(-((dist / 0.09) ** 2)) * 0.85)
-        // A shaft of red light that leans out from the sun to the right edge: streaky, brightest on the sun's own row,
-        // coral above, deeper red below, darker still at the very edge. It is light: it thins toward the left like a glare does.
-        const lean = Math.exp(-(((u - su - 0.22) / 0.34) ** 2 + ((v - sv - 0.03) / 0.26) ** 2))
-        const edge = clamp01((u - 0.48 + 0.1 * (fbm2(u * 6, v * 1.1, 71, 2) - 0.5)) / 0.52) ** 1.5
-        const fall = 1 - smoothstep(0.42, 0.78, v)
-        const shaft = Math.max(edge * fall * (0.5 + 0.5 * fbm2(u * 10, v * 0.7, 73, 3)), lean * 0.85)
-        const reach = Math.exp(-(((v - sv) / 0.3) ** 2))
-        const crown = smoothstep(0.34, 0.04, v)
-        const hue = mix3(mix3(c.vermilion, c.garnet, smoothstep(0.3, 0.7, v) * 0.7), mix3(c.coral, c.ember, 0.45), clamp01(reach * 0.75 + crown * 0.5))
-        col = mix3(col, hue, shaft * 0.96)
-        col = mix3(col, mix3(c.vermilion, c.garnet, 0.6), smoothstep(0.95, 1, u) * edge * 0.45)
-        // The words are quiet: the glare keeps to the sides of them.
-        const quiet = smoothstep(0.3, 0.38, v) * (1 - smoothstep(0.6, 0.7, v)) * (1 - 0.9 * smoothstep(0.7, 1, u))
-        col = mix3(col, night, quiet * 0.88)
-        // A dark mass at the left, far away: depth.
-        const mass = (1 - smoothstep(0, 0.24, u)) * smoothstep(0.26, 0.33, v) * (1 - smoothstep(0.5, 0.6, v)) * (0.6 + 0.4 * fbm2(u * 8, v * 6, 79, 3))
-        col = mix3(col, c.night, mass * 0.72)
+      if (b.weight <= 0) {
+        col = surface(u, v, true)
       } else {
-        const z = (v - H) / (1 - H)
-        // The water takes the sky's light at the horizon and goes dark toward the viewer.
-        col = mix3(mix3(c.steel, c.ice, 0.2), mix3(c.deep, c.night, 0.4), smoothstep(0, 0.4, z))
-        const r = fbm2(u * 2.2, v * 60, 83, 4)
-        col = mix3(col, mix3(c.steel, c.ice, 0.45), smoothstep(0.5, 0.86, r) * 0.4 * (1 - z * 0.5))
-        // Broken glass lies on it, in perspective: panes that are small and many at the horizon and large near the viewer,
-        // each its own shade, and along the borders between them, cracks of light.
-        const depth = 1 / (z + 0.08)
-        // The lattice is bent by noise, so the panes are not a pattern: they are broken, each its own size and angle.
-        const wxg = fbm2(u * 3.2 + 3, depth * 0.9, 51, 3) - 0.5
-        const wyg = fbm2(u * 3.2, depth * 0.9 + 9, 52, 3) - 0.5
-        const gx = (u - 0.5) * depth * 1.2 + wxg * 0.9
-        const gy = depth * 1.0 + wyg * 0.9
-        const cell = cells(gx * 1.7, gy * 1.7, 41)
-        const pane = cell.id
-        col = mix3(col, c.night, (0.28 + 0.5 * pane) * smoothstep(0.02, 0.35, z + 0.1))
-        // A few panes catch the sky.
-        col = mix3(col, mix3(c.steel, c.ice, 0.5), smoothstep(0.82, 0.97, pane) * 0.4 * (1 - z * 0.4))
-        // The sun on the water: a column of broken light, wider the nearer it is, and the red along the right.
-        const reflect = Math.exp(-((((u - su) / (0.1 + 0.2 * z)) ** 2)))
-        const redside = smoothstep(0.45, 1, u)
-        const gap = cell.f2 - cell.f1
-        const crack = 1 - smoothstep(0, 0.05 + 0.02 * z, gap)
-        const glow = 1 - smoothstep(0, 0.22, gap)
-        // Not every crack is lit: it depends on its pane, and on how near the sun's light it lies.
-        const lit = clamp01(0.14 + 0.95 * Math.max(reflect * 0.9, redside * 0.6)) * (0.3 + 0.7 * pane ** 1.4)
-        const crackColor = mix3(mix3(c.ice, c.cyan, 0.2), mix3(mix3(c.ember, c.hot, 0.55), c.coral, redside * 0.6), clamp01(lit * 1.6))
-        col = mix3(col, crackColor, glow * glow * lit * 0.5)
-        col = mix3(col, mix3(crackColor, c.white, 0.4), crack * (0.25 + 0.75 * lit))
-        // The sun's own reflection, and the red at the right and low in the corners.
-        col = mix3(col, mix3(c.hot, c.white, 0.4), reflect * (1 - z * 0.45) * (0.3 + 0.7 * r) * 0.5)
-        col = mix3(col, mix3(c.coral, c.vermilion, 0.4), redside * (0.2 + 0.5 * z) * 0.5)
-        col = mix3(col, c.vermilion, Math.exp(-(((u - 0.04) / 0.24) ** 2 + ((z - 0.88) / 0.24) ** 2)) * 0.45)
-        // The line where water meets sky holds the light.
-        col = mix3(col, c.mist, Math.exp(-(((v - H) / 0.014) ** 2)) * 0.6)
+        const uu = u + b.du
+        const vv = v + b.dv
+        // The colors parted: the red is looked for a little to one side and the blue to the other.
+        const g = surface(uu, vv, false)
+        col = [surface(uu + b.ca, vv, false)[0], g[1], surface(uu - b.ca, vv, false)[2]]
+        // The words' band keeps the light down in what follows: the plate's body, and the copy of a small zone (which would bring in light from above the words).
+        const across = Math.abs(2 * b.s - 1)
+        const hushed = 1 - 0.85 * wordsBand(view, v) * (1 - 0.8 * smoothstep(0.86, 0.96, u))
+        // A small zone, repeated: the plate holds a second, fainter copy of what is beside it.
+        const echo = surface(uu + (b.s < 0.5 ? 0.034 : -0.034), vv - 0.024, false)
+        col = mix3(col, echo, 0.22 * b.weight * (deep ? hushed : 1))
+        // The body of the plate: clear glass holds more light than the dark around it — more near its top, more toward its edges.
+        if (deep) col = mix3(col, mix3(c.steel, c.sky, 0.45), b.weight * (0.12 + 0.16 * (1 - v) ** 1.5 + 0.12 * across ** 2) * hushed)
+        // Light spills along the edges of the plate.
+        col = mix3(col, c.white, smoothstep(0.7, 1, across) * (deep ? 0.07 : 0.15) * edgeLight(b.slab, b.s < 0.5 ? 0 : 1, v) * (deep ? hushed : 1))
       }
       const i = (y * w + x) * 4
       d[i] = curve(col[0])
@@ -247,32 +213,71 @@ export function skyPixels(view: View, scene: SceneColors, sun: Point): Pixels {
 }
 
 /**
- * The hand: shaded from its field (hand.ts) into a sprite, at half resolution — the page stretches it, which is the softness
- * it needs.
+ * The finger: not a hand — an index finger and the touch, seen from behind the glass. It is shaded in the screen's own space (hand.ts: the way light lies on it), so the plates
+ * bend it like everything else: where it passes behind one it is shifted and its edges part into color. It leaves the mist at its far end: the rest of the hand is not there.
  */
-export function handPixels(scene: SceneColors): Pixels {
+export function handPixels(view: View, scene: SceneColors, contact: Point): Pixels {
   const c = paletteOf(scene)
-  const { w, h } = handGrid()
+  const w = Math.max(8, Math.round(view.w * TEXTURE_SCALE))
+  const h = Math.max(8, Math.round(view.h * TEXTURE_SCALE))
+  const hs = handScale(view)
+  const ang = (-HAND_TILT_DEG * Math.PI) / 180
+  const cos = Math.cos(ang)
+  const sin = Math.sin(ang)
   const colors: HandColors = {
-    body: mix3(c.deep, c.night, 0.55),
-    cool: mix3(c.steel, c.sky, 0.3),
+    body: mix3(c.steel, c.haze, 0.35),
+    cool: mix3(c.haze, c.ice, 0.35),
     white: c.white,
-    warm: mix3(c.coral, c.ember, 0.35),
-    deepWarm: c.vermilion,
-    glow: mix3(c.peach, c.coral, 0.3),
+    warm: mix3(c.peach, c.coral, 0.45),
+    deepWarm: mix3(c.coral, c.vermilion, 0.4),
+    glow: mix3(c.peach, c.white, 0.35),
     nail: c.mist,
+    mist: mix3(c.mist, c.ice, 0.4),
   }
-  return { w, h, data: shadeHand(handField(HAND_RES), colors, HAND_RES) }
+  // The step of the finite differences, in the hand's own units: about a pixel of the texture.
+  const step = 1 / (TEXTURE_SCALE * hs)
+  const sample = (px: number, py: number) => {
+    const dx = px - contact.x
+    const dy = py - contact.y
+    return handSample((dx * cos - dy * sin) / hs, (dx * sin + dy * cos) / hs, colors, step)
+  }
+  const d = new Uint8ClampedArray(w * h * 4)
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const px = (x + 0.5) / TEXTURE_SCALE
+      const py = (y + 0.5) / TEXTURE_SCALE
+      const b = bendPx(px, py, view)
+      const mid = sample(px + b.dx, py + b.dy)
+      let r = mid[0]
+      let g = mid[1]
+      let bl = mid[2]
+      let a = mid[3]
+      if (b.weight > 0 && b.ca > 0.1) {
+        // The colors parted: three looks at the finger, a little to one side and to the other.
+        const lo = sample(px + b.dx + b.ca, py + b.dy)
+        const hi = sample(px + b.dx - b.ca, py + b.dy)
+        r = lo[3] > 0 ? lo[0] : mid[0]
+        bl = hi[3] > 0 ? hi[2] : mid[2]
+        a = Math.max(mid[3], lo[3] * 0.85, hi[3] * 0.85)
+        if (mid[3] === 0) g = (lo[1] + hi[1]) / 2
+      }
+      const i = (y * w + x) * 4
+      d[i] = r
+      d[i + 1] = g
+      d[i + 2] = bl
+      d[i + 3] = a
+    }
+  }
+  return { w, h, data: d }
 }
 
 /** What a texture job is, and the worker's answer to it. */
 export type TextureJob =
-  | { kind: 'haze'; scene: SceneColors; view: View; contact: Point }
-  | { kind: 'hand'; scene: SceneColors }
-  | { kind: 'sky'; scene: SceneColors; view: View; contact: Point }
+  | { kind: 'glass'; scene: SceneColors; view: View; contact: Point }
+  | { kind: 'depth'; scene: SceneColors; view: View; contact: Point }
+  | { kind: 'hand'; scene: SceneColors; view: View; contact: Point }
 
 export function makePixels(job: TextureJob): Pixels {
-  if (job.kind === 'haze') return hazePixels(job.view, job.scene, job.contact)
-  if (job.kind === 'sky') return skyPixels(job.view, job.scene, job.contact)
-  return handPixels(job.scene)
+  if (job.kind === 'hand') return handPixels(job.view, job.scene, job.contact)
+  return surfacePixels(job.kind, job.view, job.scene, job.contact)
 }

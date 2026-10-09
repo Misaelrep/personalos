@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { APARICION_TIMELINE, BRIEF_TIMELINE, FULL_TIMELINE, STAGE_ORDER, introVisible, reached, stageAt } from '../domain/ritual'
-import { BEATS, CALM, FRAGMENTS_END, STAGE_LEAVES } from './beats'
+import { BEATS, CALM, FRAGMENTS_END, INTENSITY, INTENSITY_KEYS, STAGE_LEAVES, intensityAt } from './beats'
 
 describe('APARICIÓN keeps the ritual’s rhythm', () => {
   it('the beats come in the order given: surface, contact, wave, reorganization, convergence, stable', () => {
@@ -35,10 +35,31 @@ describe('APARICIÓN keeps the ritual’s rhythm', () => {
 
   it('the surface calms for the phrase — from the moment it appears, and not entirely — and leaves slowly, not as a cut', () => {
     expect(CALM.from).toBe(APARICION_TIMELINE.phrase)
-    expect(CALM.level).toBeGreaterThan(0.3)
-    expect(CALM.level).toBeLessThan(0.8)
+    expect(INTENSITY.frase).toBeGreaterThan(0.3)
+    expect(INTENSITY.frase).toBeLessThan(0.8)
     expect(CALM.from + CALM.over).toBeLessThan(APARICION_TIMELINE.defrag!)
     expect(STAGE_LEAVES.duration).toBeGreaterThanOrEqual(0.6)
+  })
+
+  it('the optical surface is at 100 % for APARICIÓN and the contact, then 75, 55, 35 and, in AHORA, 15 % — the same identity, less of it', () => {
+    expect(Object.values(INTENSITY)).toEqual([1, 1, 0.75, 0.55, 0.35, 0.15])
+    expect(intensityAt(0.75)).toBe(1)
+    expect(intensityAt(1.05)).toBe(1)
+    expect(intensityAt(1.4)).toBeCloseTo(0.75, 5)
+    expect(intensityAt(1.95)).toBeCloseTo(0.55, 5)
+    expect(intensityAt(CALM.from)).toBeCloseTo(0.55, 5)
+    expect(intensityAt(CALM.from + CALM.over)).toBeCloseTo(0.35, 5)
+    expect(intensityAt(8)).toBeCloseTo(0.35, 5)
+  })
+
+  it('the curve only ever falls, and its last key is the end of the calm', () => {
+    let last = 1
+    for (let t = 0; t <= 5; t += 0.05) {
+      const level = intensityAt(t)
+      expect(level).toBeLessThanOrEqual(last + 1e-9)
+      last = level
+    }
+    expect(INTENSITY_KEYS[INTENSITY_KEYS.length - 1][0]).toBe(CALM.from + CALM.over)
   })
 
   it('walks the same stages as the classic ritual', () => {

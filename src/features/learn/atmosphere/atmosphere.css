@@ -16,10 +16,9 @@
 @property --learn-spec { syntax: '<color>'; inherits: true; initial-value: transparent; }
 @property --learn-prism { syntax: '<color>'; inherits: true; initial-value: transparent; }
 @property --learn-glow { syntax: '<color>'; inherits: true; initial-value: transparent; }
-@property --learn-hot { syntax: '<color>'; inherits: true; initial-value: transparent; }
 @property --learn-sea { syntax: '<color>'; inherits: true; initial-value: transparent; }
-@property --learn-streak { syntax: '<color>'; inherits: true; initial-value: transparent; }
 @property --learn-cloud { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --learn-grain { syntax: '<color>'; inherits: true; initial-value: transparent; }
 
 @property --learn-ink { syntax: '<color>'; inherits: true; initial-value: black; }
 @property --learn-ink-2 { syntax: '<color>'; inherits: true; initial-value: black; }
@@ -84,10 +83,9 @@
     --learn-spec var(--atmo-dur, 1s) var(--ease-astral),
     --learn-prism var(--atmo-dur, 1s) var(--ease-astral),
     --learn-glow var(--atmo-dur, 1s) var(--ease-astral),
-    --learn-hot var(--atmo-dur, 1s) var(--ease-astral),
     --learn-sea var(--atmo-dur, 1s) var(--ease-astral),
-    --learn-streak var(--atmo-dur, 1s) var(--ease-astral),
-    --learn-cloud var(--atmo-dur, 1s) var(--ease-astral);
+    --learn-cloud var(--atmo-dur, 1s) var(--ease-astral),
+    --learn-grain var(--atmo-dur, 1s) var(--ease-astral);
 }
 
 /* While an hour changes in front of the person, the lights only ATARDECER has — the coral glow, the hot spots, the sheet of
@@ -106,10 +104,9 @@
     --learn-spec calc(var(--atmo-dur, 1s) * 0.34) ease-out,
     --learn-prism calc(var(--atmo-dur, 1s) * 0.34) ease-out,
     --learn-glow calc(var(--atmo-dur, 1s) * 0.34) ease-out,
-    --learn-hot calc(var(--atmo-dur, 1s) * 0.34) ease-out,
     --learn-sea calc(var(--atmo-dur, 1s) * 0.34) ease-out,
-    --learn-streak calc(var(--atmo-dur, 1s) * 0.34) ease-out,
-    --learn-cloud calc(var(--atmo-dur, 1s) * 0.34) ease-out;
+    --learn-cloud calc(var(--atmo-dur, 1s) * 0.34) ease-out,
+    --learn-grain calc(var(--atmo-dur, 1s) * 0.34) ease-out;
 }
 
 .learn-light[data-covered] {
@@ -189,127 +186,57 @@
   background: radial-gradient(ellipse 125% 92% at 50% 42%, transparent 50%, var(--learn-edge) 100%);
 }
 
-/* Glass: faint vertical columns of light, behind everything. */
-.learn-glass {
+/* Two plates of glass, almost clear: where the ritual's plates stand (LearnLight sets left and width from optics.ts), a body of pearl, an edge of
+   light on each side — a thread of white, a thread of the prism's cyan — and no more. */
+.learn-pane {
   position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(90deg, transparent 0 7%, color-mix(in srgb, var(--learn-spec) 22%, transparent) 11%, transparent 17%),
-    linear-gradient(90deg, transparent 0 39%, color-mix(in srgb, var(--learn-spec) 16%, transparent) 43%, transparent 49%),
-    linear-gradient(90deg, transparent 0 66%, color-mix(in srgb, var(--learn-spec) 18%, transparent) 69%, transparent 73%);
+  top: 0;
+  height: 84%;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--learn-spec) 16%, transparent), color-mix(in srgb, var(--learn-spec) 5%, transparent) 62%, transparent);
 }
 
-/* Rim: the right edge catches the light — an energetic band, soft inward, with white-hot streaks and a prismatic fringe. */
-.learn-rim {
-  position: absolute;
-  top: 4%;
-  bottom: 8%;
-  right: -1vw;
-  width: clamp(60px, 17vw, 170px);
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    color-mix(in srgb, var(--learn-rim) 14%, transparent) 26%,
-    color-mix(in srgb, var(--learn-rim) 50%, transparent) 56%,
-    var(--learn-rim) 80%,
-    color-mix(in srgb, var(--learn-rim) 78%, black) 100%
-  );
-  -webkit-mask-image: linear-gradient(180deg, transparent 0%, black 18%, black 58%, transparent 100%);
-  mask-image: linear-gradient(180deg, transparent 0%, black 18%, black 58%, transparent 100%);
-}
-
-/* The white-hot core of the edge, brightest at mid height, and the fringe beside it. */
-.learn-rim::before {
+.learn-pane::before,
+.learn-pane::after {
   content: '';
   position: absolute;
   top: 0;
   bottom: 0;
-  right: 14%;
-  width: 22%;
-  background: radial-gradient(ellipse 100% 34% at 100% 42%, color-mix(in srgb, var(--learn-spec) 85%, transparent), transparent 70%);
-}
-
-.learn-rim::after {
-  content: '';
-  position: absolute;
-  top: 6%;
-  bottom: 6%;
-  right: 24%;
   width: 1px;
-  background: linear-gradient(180deg, transparent, var(--learn-prism) 20% 80%, transparent);
-  box-shadow:
-    3px 0 0 var(--learn-spec),
-    8px 0 0 color-mix(in srgb, var(--learn-rim) 70%, transparent);
+  background: linear-gradient(180deg, transparent, var(--learn-spec) 14% 62%, transparent);
 }
 
-/* Depth: the edges recede. */
-.learn-edge {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(ellipse 125% 92% at 50% 42%, transparent 50%, var(--learn-edge) 100%);
+.learn-pane::before {
+  left: 0;
+  box-shadow: -1px 0 0 color-mix(in srgb, var(--learn-prism) 70%, transparent);
 }
 
-/* Glass: faint vertical columns of light, behind everything. */
-.learn-glass {
-  position: absolute;
-  inset: 0;
+.learn-pane::after {
+  right: 0;
+  box-shadow: 1px 0 0 color-mix(in srgb, var(--learn-prism) 70%, transparent);
+}
+
+/* The one that holds the red: a faint reflection along its left edge, the way the ritual's warm plate leaks along its own — fading with the plate's own height. */
+.learn-pane-2 {
   background:
-    linear-gradient(90deg, transparent 0 7%, color-mix(in srgb, var(--learn-spec) 22%, transparent) 11%, transparent 17%),
-    linear-gradient(90deg, transparent 0 39%, color-mix(in srgb, var(--learn-spec) 16%, transparent) 43%, transparent 49%),
-    linear-gradient(90deg, transparent 0 66%, color-mix(in srgb, var(--learn-spec) 18%, transparent) 69%, transparent 73%);
+    linear-gradient(90deg, color-mix(in srgb, var(--learn-rim) 70%, transparent), transparent 24%),
+    linear-gradient(180deg, color-mix(in srgb, var(--learn-spec) 16%, transparent), color-mix(in srgb, var(--learn-spec) 5%, transparent) 62%, transparent);
+  -webkit-mask-image: linear-gradient(180deg, transparent 4%, black 24% 62%, transparent 96%);
+  mask-image: linear-gradient(180deg, transparent 4%, black 24% 62%, transparent 96%);
 }
 
-/* Rim: the right edge catches the light — an energetic band, soft inward, with white-hot streaks and a prismatic fringe. */
+/* Rim: the right edge reflects a trace of red — a band, soft inward, thin and not bright. */
 .learn-rim {
   position: absolute;
   top: 6%;
   bottom: 10%;
   right: -1vw;
-  width: clamp(54px, 15vw, 150px);
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    color-mix(in srgb, var(--learn-rim) 22%, transparent) 38%,
-    color-mix(in srgb, var(--learn-rim) 70%, transparent) 70%,
-    var(--learn-rim) 92%,
-    transparent 100%
-  );
+  width: clamp(40px, 11vw, 110px);
+  background: linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--learn-rim) 30%, transparent) 55%, var(--learn-rim) 94%, transparent 100%);
   -webkit-mask-image: linear-gradient(180deg, transparent 0%, black 22%, black 64%, transparent 100%);
   mask-image: linear-gradient(180deg, transparent 0%, black 22%, black 64%, transparent 100%);
 }
 
-.learn-rim::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: repeating-linear-gradient(90deg, transparent 0 11px, var(--learn-spec) 11px 12px, transparent 12px 23px);
-  opacity: 0.32;
-  -webkit-mask-image: linear-gradient(90deg, transparent 30%, black 100%);
-  mask-image: linear-gradient(90deg, transparent 30%, black 100%);
-}
-
-.learn-rim::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  right: 22%;
-  width: 1px;
-  background: var(--learn-prism);
-  box-shadow: 2px 0 0 var(--learn-rim);
-}
-
-/* Depth: a pool of blue-black in the lower right corner. */
-.learn-depth {
-  position: absolute;
-  right: -30vmax;
-  bottom: -34vmax;
-  width: 90vmax;
-  height: 80vmax;
-  background: radial-gradient(closest-side, var(--learn-depth), color-mix(in srgb, var(--learn-depth) 45%, transparent) 55%, transparent);
-}
-
-/* Soft white masses in the glass: the clouds the light passes through. */
+/* Soft white masses in the glass: the mist the light passes through. */
 .learn-cloud {
   position: absolute;
   border-radius: 50%;
@@ -337,7 +264,17 @@
   top: 46%;
 }
 
-/* The glow that leans in from the right edge: coral, wide and soft toward the middle, strongest at mid height and again low. */
+/* Depth: a pool of blue-black in the lower right corner. */
+.learn-depth {
+  position: absolute;
+  right: -30vmax;
+  bottom: -34vmax;
+  width: 90vmax;
+  height: 80vmax;
+  background: radial-gradient(closest-side, var(--learn-depth), color-mix(in srgb, var(--learn-depth) 45%, transparent) 55%, transparent);
+}
+
+/* The glow that leans in from the right edge, faint: the red the glass reflects, broad and soft toward the middle. */
 .learn-glow {
   position: absolute;
   top: 6%;
@@ -345,8 +282,7 @@
   right: -4vw;
   width: 62vw;
   background:
-    radial-gradient(ellipse 100% 34% at 100% 46%, color-mix(in srgb, var(--learn-glow) 100%, transparent), color-mix(in srgb, var(--learn-glow) 50%, transparent) 46%, transparent 100%),
-    radial-gradient(ellipse 90% 18% at 100% 84%, color-mix(in srgb, var(--learn-glow) 90%, transparent), color-mix(in srgb, var(--learn-glow) 36%, transparent) 50%, transparent 100%),
+    radial-gradient(ellipse 100% 34% at 100% 46%, var(--learn-glow), color-mix(in srgb, var(--learn-glow) 50%, transparent) 46%, transparent 100%),
     linear-gradient(90deg, transparent, color-mix(in srgb, var(--learn-glow) 28%, transparent) 70%, color-mix(in srgb, var(--learn-glow) 55%, transparent));
   -webkit-mask-image: linear-gradient(180deg, transparent, black 16% 80%, transparent);
   mask-image: linear-gradient(180deg, transparent, black 16% 80%, transparent);
@@ -370,26 +306,7 @@
   mask-image: linear-gradient(180deg, transparent, black 14% 70%, transparent);
 }
 
-/* White-hot spots where the glow catches the glass's edge. */
-.learn-spot {
-  position: absolute;
-  right: -3vw;
-  width: 26vw;
-  height: 14vh;
-  background: radial-gradient(closest-side, var(--learn-hot), color-mix(in srgb, var(--learn-glow) 70%, transparent) 40%, transparent);
-}
-
-.learn-spot-1 {
-  top: 62%;
-}
-
-.learn-spot-2 {
-  top: 76%;
-  height: 10vh;
-  opacity: 0.8;
-}
-
-/* The sheet of water along the bottom: an ice-blue ground, and horizontal streaks of light lying on it. */
+/* The sheet low on the screen: an ice-blue ground that deepens toward the bottom edge, nothing lying on it. */
 .learn-sea {
   position: absolute;
   left: 0;
@@ -399,26 +316,20 @@
   background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--learn-sea) 50%, transparent) 75%, color-mix(in srgb, var(--learn-sea) 85%, transparent));
 }
 
-.learn-sea i {
-  position: absolute;
-  left: var(--x);
-  top: var(--y);
-  width: var(--w);
-  height: 1.5px;
-  opacity: var(--o);
-  background: linear-gradient(90deg, transparent, var(--learn-streak) 30% 70%, transparent);
-  filter: blur(0.5px);
-}
-
-.learn-sea i.warm {
-  background: linear-gradient(90deg, transparent, var(--learn-glow) 25%, var(--learn-hot) 55%, var(--learn-glow) 80%, transparent);
-}
-
 /* The sky: ice blue at the top, going to pearl by the middle. */
 .learn-sky {
   position: absolute;
   inset: 0 0 50% 0;
   background: linear-gradient(180deg, color-mix(in srgb, var(--learn-sea) 62%, transparent), transparent);
+}
+
+/* The fine grain of the glass: noise, as a mask over a flat color — still, never over the words' contrast. */
+.learn-grain {
+  position: absolute;
+  inset: 0;
+  background: var(--learn-grain);
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.95' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.95' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
 }
 
 /* The band that crosses the glass when the hour changes it (driven by LearnLight; clear until then). */

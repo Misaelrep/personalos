@@ -248,10 +248,9 @@ describe('how a theme reaches the screen', () => {
       '--learn-spec': day.light.spec,
       '--learn-prism': day.light.prism,
       '--learn-glow': day.light.glow,
-      '--learn-hot': day.light.hot,
       '--learn-sea': day.light.sea,
-      '--learn-streak': day.light.streak,
       '--learn-cloud': day.light.cloud,
+      '--learn-grain': day.light.grain,
     })
   })
 

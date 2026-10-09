@@ -119,13 +119,49 @@ describe('a frame at any moment', () => {
     placed.forEach((p, i) => expect(Math.hypot(shown[i].x - p.sx, shown[i].y - p.sy)).toBeLessThan(10))
   })
 
-  it('the wave passes through a fragment once: it warms and splits as the front reaches it, and not before', () => {
-    const p = [...placed].sort((a, b) => Math.hypot(a.sx - contact.x, a.sy - contact.y) - Math.hypot(b.sx - contact.x, b.sy - contact.y))[20]
-    const d = Math.hypot(p.sx - contact.x, p.sy - contact.y)
-    const arrives = BEATS.wave + d / (0.85 * view.w)
-    expect(fragmentAt(p, BEATS.wave - 0.05, contact, view).heat).toBe(0)
-    expect(fragmentAt(p, arrives, contact, view).heat).toBeGreaterThan(0.9)
-    expect(fragmentAt(p, arrives + 0.6, contact, view).heat).toBeLessThan(0.05)
+  it('the wave passes through a fragment: it warms and splits as the front reaches it — which is not a circle, so not at the same moment as its neighbours — and not before or long after', () => {
+    const near = [...placed].sort((a, b) => Math.hypot(a.sx - contact.x, a.sy - contact.y) - Math.hypot(b.sx - contact.x, b.sy - contact.y)).slice(10, 40)
+    const peaks = near.map((p) => {
+      let best = { t: 0, heat: 0 }
+      for (let t = BEATS.wave; t < BEATS.wave + 1.6; t += 0.01) {
+        const heat = fragmentAt(p, t, contact, view).heat
+        if (heat > best.heat) best = { t, heat }
+      }
+      return best
+    })
+    for (const [i, p] of near.entries()) {
+      expect(fragmentAt(p, BEATS.wave - 0.05, contact, view).heat).toBe(0)
+      expect(fragmentAt(p, BEATS.wave + 2.4, contact, view).heat).toBeLessThan(0.05)
+      expect(peaks[i].heat).toBeGreaterThan(0.3)
+    }
+    // Most are reached by the front at some moment; the front is irregular, so the moments are not all alike for pieces at the same distance.
+    expect(peaks.filter((x) => x.heat > 0.6).length).toBeGreaterThan(near.length / 3)
+  })
+
+  it('is turned and stretched only while it is being drawn in or carried: upright and unstretched at rest, never upside down', () => {
+    for (const p of placed) {
+      const rest = fragmentAt(p, 0.3, contact, view)
+      expect(rest.stretch).toBeCloseTo(1, 5)
+      expect(rest.angle).toBeCloseTo(0, 5)
+      for (let t = 0; t < 1.8; t += 0.05) {
+        const f = fragmentAt(p, t, contact, view)
+        expect(Math.abs(f.angle)).toBeLessThanOrEqual(Math.PI / 2)
+        expect(f.stretch).toBeGreaterThanOrEqual(1)
+        expect(f.stretch).toBeLessThan(2.3)
+      }
+    }
+    // …and while it flies it is lined up with its path.
+    const flyer = placed.find((p) => p.converges && Math.hypot(p.tx - p.sx, p.ty - p.sy) > 150)!
+    const mid = fragmentAt(flyer, flyer.start + flyer.dur / 2, contact, view)
+    expect(mid.stretch).toBeGreaterThan(1.15)
+    expect(Math.abs(mid.angle)).toBeGreaterThan(0.01)
+  })
+
+  it('the paths bend all the same way: a field that turns around the contact, not noise', () => {
+    for (const p of placed) expect(p.bend).toBeGreaterThanOrEqual(0)
+    const long = placed.filter((p) => p.converges && Math.hypot(p.tx - p.sx, p.ty - p.sy) > 120)
+    expect(long.length).toBeGreaterThan(30)
+    for (const p of long) expect(p.bend / Math.hypot(p.tx - p.sx, p.ty - p.sy)).toBeGreaterThan(0.09)
   })
 
   it('each one that becomes a dot travels toward it and arrives, handing over to the dot of the wordmark', () => {

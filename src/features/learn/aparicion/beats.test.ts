@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { APARICION_TIMELINE, BRIEF_TIMELINE, FULL_TIMELINE, STAGE_ORDER, introVisible, reached, stageAt } from '../domain/ritual'
-import { BEATS, DARKEN, FRAGMENTS_END, STAGE_LEAVES } from './beats'
+import { BEATS, CALM, FRAGMENTS_END, STAGE_LEAVES } from './beats'
 
 describe('APARICIÓN keeps the ritual’s rhythm', () => {
   it('the beats come in the order given: surface, contact, wave, reorganization, convergence, stable', () => {
@@ -23,8 +23,6 @@ describe('APARICIÓN keeps the ritual’s rhythm', () => {
   })
 
   it('the sky arrives while the structure forms and is complete before the phrase; the fragments are gone by then', () => {
-    expect(DARKEN.from).toBeGreaterThanOrEqual(BEATS.reorganize)
-    expect(DARKEN.to).toBeLessThan(APARICION_TIMELINE.phrase!)
     expect(FRAGMENTS_END).toBeGreaterThan(BEATS.stable + 0.2)
     expect(FRAGMENTS_END).toBeLessThan(APARICION_TIMELINE.phrase!)
   })
@@ -33,6 +31,14 @@ describe('APARICIÓN keeps the ritual’s rhythm', () => {
     const start = APARICION_TIMELINE.defrag! + STAGE_LEAVES.after
     expect(start).toBeGreaterThan(APARICION_TIMELINE.defrag!)
     expect(start + STAGE_LEAVES.duration).toBeLessThanOrEqual(APARICION_TIMELINE.prompt! + 1e-9)
+  })
+
+  it('the surface calms for the phrase — from the moment it appears, and not entirely — and leaves slowly, not as a cut', () => {
+    expect(CALM.from).toBe(APARICION_TIMELINE.phrase)
+    expect(CALM.level).toBeGreaterThan(0.3)
+    expect(CALM.level).toBeLessThan(0.8)
+    expect(CALM.from + CALM.over).toBeLessThan(APARICION_TIMELINE.defrag!)
+    expect(STAGE_LEAVES.duration).toBeGreaterThanOrEqual(0.6)
   })
 
   it('walks the same stages as the classic ritual', () => {

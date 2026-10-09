@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { BEATS } from './beats'
-import { bloomAt, fingerAt, fingerScale, flareAt, ringsAt, vmin } from './light'
+import { bloomAt, flareAt, handScale, HAND_TILT_DEG, ringsAt, surgeAt, vmin } from './light'
 
 const view = { w: 390, h: 844 }
 
@@ -18,6 +18,23 @@ describe('the flare at the point of contact', () => {
     expect(flareAt(0.43, view).radius).toBeLessThan(0.05 * vmin(view))
     expect(flareAt(1.5, view).radius).toBeGreaterThan(0.14 * vmin(view))
     for (let t = 0; t < 3; t += 0.05) expect(flareAt(t, view).radius).toBeLessThan(0.2 * vmin(view))
+  })
+})
+
+describe('the surge of red at the contact', () => {
+  it('swells as the wave leaves, brightest just after it, and is gone before the glass is', () => {
+    expect(surgeAt(0.4, view).alpha).toBe(0)
+    expect(surgeAt(0.62, view).alpha).toBeGreaterThan(0.4)
+    expect(surgeAt(0.62, view).alpha).toBeGreaterThan(surgeAt(0.9, view).alpha)
+    expect(surgeAt(1.2, view).alpha).toBe(0)
+    expect(surgeAt(2, view).alpha).toBe(0)
+  })
+
+  it('is a breath, not a fill: its reach stays within a third of the screen', () => {
+    for (let t = 0.4; t < 1.3; t += 0.02) {
+      expect(surgeAt(t, view).alpha).toBeLessThanOrEqual(0.55)
+      expect(surgeAt(t, view).radius).toBeLessThanOrEqual(0.33 * vmin(view))
+    }
   })
 })
 
@@ -46,7 +63,7 @@ describe('the wave', () => {
 
   it('each ring grows without stopping and fades as it goes', () => {
     let last = { radius: 0, alpha: 1 }
-    for (let t = BEATS.wave + 0.1; t < BEATS.wave + 1.7; t += 0.1) {
+    for (let t = BEATS.wave + 0.1; t < BEATS.wave + 0.9; t += 0.1) {
       const [ring] = ringsAt(t, view)
       expect(ring.radius).toBeGreaterThan(last.radius)
       last = ring
@@ -55,33 +72,16 @@ describe('the wave', () => {
   })
 })
 
-describe('the finger', () => {
-  it('appears at the contact beat, rests on the glass, and withdraws as the sky arrives', () => {
-    expect(fingerAt(0).alpha).toBe(0)
-    expect(fingerAt(BEATS.contact + 0.05).alpha).toBeGreaterThan(0)
-    expect(fingerAt(0.7).alpha).toBe(1)
-    expect(fingerAt(0.7).away).toBe(0)
-    expect(fingerAt(1.0).alpha).toBe(1)
-    expect(fingerAt(1.9).alpha).toBeLessThan(0.1)
-    expect(fingerAt(3).alpha).toBe(0)
+describe('the hand', () => {
+  it('scales with the screen: the index reaches the left edge of a phone, and it never grows past what a large screen needs', () => {
+    expect(handScale({ w: 320, h: 568 })).toBeGreaterThanOrEqual(1)
+    expect(handScale({ w: 390, h: 844 })).toBeCloseTo(1.28, 1)
+    expect(handScale({ w: 1440, h: 900 })).toBeLessThanOrEqual(1.7)
+    expect(handScale({ w: 320, h: 568 })).toBeLessThan(handScale({ w: 430, h: 932 }))
   })
 
-  it('comes from below and to the left (away from the tip) and goes back that way', () => {
-    expect(fingerAt(BEATS.contact + 0.01).away).toBeGreaterThan(0.5)
-    expect(fingerAt(1.5).away).toBeGreaterThan(0)
-    expect(fingerAt(1.5).away).toBeLessThan(0.5)
-  })
-
-  it('is fully there for long enough to be read as a finger (≥ 0.5 s) before the glass starts to leave', () => {
-    let full = 0
-    for (let t = 0; t < 2; t += 0.01) if (fingerAt(t).alpha >= 0.99) full += 0.01
-    expect(full).toBeGreaterThanOrEqual(0.5)
-  })
-
-  it('scales with the screen between 1.2 and 1.9', () => {
-    expect(fingerScale({ w: 320, h: 568 })).toBeGreaterThanOrEqual(1.2)
-    expect(fingerScale({ w: 390, h: 844 })).toBeLessThan(1.9)
-    expect(fingerScale({ w: 1440, h: 900 })).toBe(1.9)
-    expect(fingerScale({ w: 320, h: 568 })).toBeLessThan(fingerScale({ w: 430, h: 932 }))
+  it('points up and to the right: a turn to the left of the horizontal', () => {
+    expect(HAND_TILT_DEG).toBeLessThan(0)
+    expect(HAND_TILT_DEG).toBeGreaterThan(-60)
   })
 })

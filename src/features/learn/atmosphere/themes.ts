@@ -49,6 +49,14 @@ export interface LearnTheme {
     /** Specular streaks (white-hot) and the thin prismatic fringe beside them. */
     spec: string
     prism: string
+    /** The glow that leans in from the right edge (broad and soft), and the white-hot spots in it. */
+    glow: string
+    hot: string
+    /** The sheet of water along the bottom: the ice blue of its ground and the streaks of light on it. */
+    sea: string
+    streak: string
+    /** Soft white masses of cloud in the glass. */
+    cloud: string
   }
   mark: { color: string; glow: string }
   /** The ink of the words on the ritual's own stage (a dark one, over this atmosphere's light ground). */
@@ -58,20 +66,32 @@ export interface LearnTheme {
 }
 
 /**
- * Nine colors make the whole scene: the glass is built of white, ice and sky; its
- * shadows are steel and night (blue-black); vermilion and ember are the light that
- * crosses it (hot is its white-hot core); cyan is the prismatic fringe.
+ * The colors that make the whole scene, from pearl to blue-black — everything the scene
+ * paints is mixed from these, in CSS or in the textures it generates; none is written anywhere else.
+ *   the glass and the water   white · mist · ice (pearl and frost) · haze (gray-blue) · sky · steel · teal (deep cyan-blue) · deep · night (blue-black)
+ *   the light that crosses it vermilion · coral · ember · hot (white-hot) · peach (pink-white, where it warms the glass)
+ *   its prismatic fringe      cyan · violet · magenta
+ *   the few dark letters      garnet
  */
 export interface SceneColors {
   white: string
+  mist: string
   ice: string
+  haze: string
   sky: string
   steel: string
+  teal: string
+  deep: string
   night: string
   vermilion: string
+  coral: string
   ember: string
   hot: string
+  peach: string
   cyan: string
+  violet: string
+  magenta: string
+  garnet: string
 }
 
 /** Day and night have no edge light, depth pool or prismatic fringe: those layers are there, and clear. */
@@ -80,6 +100,11 @@ const NO_RIM = {
   depth: 'rgba(0,0,0,0)',
   spec: 'rgba(0,0,0,0)',
   prism: 'rgba(0,0,0,0)',
+  glow: 'rgba(0,0,0,0)',
+  hot: 'rgba(0,0,0,0)',
+  sea: 'rgba(0,0,0,0)',
+  streak: 'rgba(0,0,0,0)',
+  cloud: 'rgba(0,0,0,0)',
 }
 
 /**
@@ -124,7 +149,7 @@ const SUNSET: LearnTheme = {
     glow: 'rgba(255,120,70,0.4)',
     accent: '#C8361F',
   },
-  ink: { strong: '#0B1630', medium: '#1F2945', soft: '#33405E', faint: '#445070', line: 'rgba(24,48,100,0.16)', label: '#8B1C1C', tabOn: '#8B1C1C' },
+  ink: { strong: '#0B1630', medium: '#1B2542', soft: '#2A3654', faint: '#374363', line: 'rgba(24,48,100,0.16)', label: '#8B1C1C', tabOn: '#8B1C1C' },
   light: {
     orbs: ['rgba(30,62,130,0.2)', 'rgba(255,255,255,0.7)', 'rgba(255,98,52,0.28)'],
     haze: 'rgba(255,255,255,0.5)',
@@ -133,19 +158,33 @@ const SUNSET: LearnTheme = {
     depth: 'rgba(8,30,86,0.34)',
     spec: 'rgba(255,255,255,0.9)',
     prism: 'rgba(110,220,255,0.55)',
+    glow: 'rgba(255,120,84,0.5)',
+    hot: 'rgba(255,238,220,0.95)',
+    sea: 'rgba(122,164,208,0.55)',
+    streak: 'rgba(255,255,255,0.8)',
+    cloud: 'rgba(255,255,255,0.7)',
   },
   mark: { color: '#FF7452', glow: 'rgba(255,96,56,0.85)' },
   stage: { strong: '#F6F9FF', medium: '#DCE6F6', soft: '#B4C3DA' },
   scene: {
     white: '#FFFFFF',
-    ice: '#D4E6F8',
-    sky: '#86ABD8',
-    steel: '#3E699E',
+    mist: '#EAF1F9',
+    ice: '#CBE0F2',
+    haze: '#86A7C2',
+    sky: '#5FA8D6',
+    steel: '#3C7096',
+    teal: '#1B5C8A',
+    deep: '#1B3245',
     night: '#071328',
     vermilion: '#FF4A28',
+    coral: '#FF8264',
     ember: '#FF8A3D',
     hot: '#FFE6C8',
+    peach: '#F4B9A0',
     cyan: '#6FE0FF',
+    violet: '#8F7DFF',
+    magenta: '#FF6EAF',
+    garnet: '#8B1C1C',
   },
 }
 
@@ -207,7 +246,7 @@ export function learnScreenVars(theme: LearnTheme): Record<string, string> {
   }
 }
 
-/** What the APARICIÓN scene sets on itself: its nine colors, as tokens. */
+/** What the APARICIÓN scene sets on itself: its colors, as tokens. */
 export function sceneVars(scene: SceneColors): Record<string, string> {
   return Object.fromEntries(Object.entries(scene).map(([name, color]) => [`--apa-${name}`, color]))
 }
@@ -225,5 +264,10 @@ export function learnLightVars(theme: LearnTheme): Record<string, string> {
     '--learn-depth': theme.light.depth,
     '--learn-spec': theme.light.spec,
     '--learn-prism': theme.light.prism,
+    '--learn-glow': theme.light.glow,
+    '--learn-hot': theme.light.hot,
+    '--learn-sea': theme.light.sea,
+    '--learn-streak': theme.light.streak,
+    '--learn-cloud': theme.light.cloud,
   }
 }

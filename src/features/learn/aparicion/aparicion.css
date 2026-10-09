@@ -20,17 +20,20 @@
   --apa-ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* —— the light stage: glass, finger and fragments leave together as the sky comes in —— */
+/* —— the light stage: glass, hand and information, until the sky has come in over them —— */
 
 .apa-light {
   position: absolute;
   inset: 0;
-  animation: apa-out 0.9s ease-in-out 0.7s forwards;
+  /* The sky comes in over it (0.7–1.6 s) and, once it has covered it, it is not drawn at all. */
+  animation: apa-gone 1ms linear 1.65s forwards;
+  /* Until the glass's light is painted (textures.ts), the same colors in a plain gradient. */
+  background: linear-gradient(110deg, color-mix(in srgb, var(--apa-haze) 78%, var(--apa-mist)), var(--apa-haze) 40%, color-mix(in srgb, var(--apa-steel) 52%, var(--apa-haze)));
 }
 
-@keyframes apa-out {
+@keyframes apa-gone {
   to {
-    opacity: 0;
+    visibility: hidden;
   }
 }
 
@@ -43,80 +46,180 @@
   }
 }
 
-.apa-glass {
+/* The glass, painted as light (textures.ts) — until it is, a plain gradient of the same colors. */
+/* The painted textures come in as they are finished. */
+.apa-haze,
+.apa-sky {
+  opacity: 0;
+  transition: opacity 0.25s ease-out;
+}
+
+.apa-haze[data-ready],
+.apa-sky[data-ready] {
+  opacity: 1;
+}
+
+.apa-haze {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* The hand: a shaded sprite, tilted so the index points up and to the right; it arrives along its own axis, rests, and withdraws. */
+.apa-hand {
+  position: absolute;
+}
+
+.apa-hand-body {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* The hand arrives when it is painted — a little later on a slow device, never missed — and withdraws as the sky covers the glass. */
+.apa-hand-body:not([data-ready]) {
+  visibility: hidden;
+}
+
+.apa-hand-body[data-ready] {
+  animation:
+    apa-hand-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both,
+    apa-hand-out 0.7s ease-in 0.8s forwards;
+}
+
+@keyframes apa-hand-in {
+  from {
+    opacity: 0;
+    transform: translate(calc(-200px * var(--hs)), calc(26px * var(--hs)));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes apa-hand-out {
+  to {
+    opacity: 0;
+    transform: translate(calc(-80px * var(--hs)), calc(10px * var(--hs)));
+  }
+}
+
+/* A film of frost in front of the hand: it is behind the glass, not on it. */
+.apa-frost {
   position: absolute;
   inset: 0;
   background: linear-gradient(
-    104deg,
-    color-mix(in srgb, var(--apa-white) 96%, transparent) 0%,
-    color-mix(in srgb, var(--apa-ice) 96%, transparent) 16%,
-    color-mix(in srgb, var(--apa-sky) 96%, transparent) 48%,
-    color-mix(in srgb, var(--apa-steel) 98%, transparent) 100%
+    180deg,
+    color-mix(in srgb, var(--apa-mist) 12%, transparent),
+    color-mix(in srgb, var(--apa-ice) 4%, transparent) 55%,
+    color-mix(in srgb, var(--apa-ice) 14%, transparent)
   );
 }
 
-/* Columns of light, falling through the glass. */
-.apa-col {
+/* Information inside the surface: it is drawn once and, as the structure forms, drawn inward toward the contact. */
+.apa-matrix {
   position: absolute;
-  top: -4%;
-  bottom: -4%;
-  left: var(--x);
-  width: var(--w);
-  background: linear-gradient(
-    90deg,
-    transparent,
-    color-mix(in srgb, var(--apa-white) var(--o), transparent) 46%,
-    color-mix(in srgb, var(--apa-white) calc(var(--o) * 0.3), transparent) 62%,
-    transparent
-  );
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  animation: apa-matrix 1.6s ease-in-out both;
 }
 
-/* Shadows between the columns: depth. */
-.apa-pillar {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: var(--x);
-  width: var(--w);
-  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--apa-night) var(--o), transparent) 50%, transparent);
+@keyframes apa-matrix {
+  0%,
+  40% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.93);
+  }
 }
 
-/* Prismatic slits: a hairline of light, split into its warm and cool edges. */
-.apa-slit {
+/* Thin vertical beams, falling through the glass: a white core with a warm and a cool edge. */
+.apa-beam {
   position: absolute;
-  top: 0;
-  bottom: 0;
   left: var(--x);
-  width: 1px;
-  background: linear-gradient(180deg, transparent 0%, color-mix(in srgb, var(--apa-white) 85%, transparent) 14% 78%, transparent 100%);
+  top: var(--y);
+  height: var(--l);
+  width: var(--w);
+  opacity: var(--o);
+  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--apa-white) 72%, transparent) 22% 72%, transparent);
   box-shadow:
-    -2px 0 0 color-mix(in srgb, var(--apa-vermilion) 48%, transparent),
-    2px 0 0 color-mix(in srgb, var(--apa-cyan) 50%, transparent);
+    0 0 14px 4px color-mix(in srgb, var(--apa-peach) 38%, transparent),
+    -1px 0 0 color-mix(in srgb, var(--apa-coral) 42%, transparent),
+    1px 0 0 color-mix(in srgb, var(--apa-cyan) 38%, transparent);
 }
 
-/* The wet floor: the light lies down on it in short, horizontal streaks. */
-.apa-floor {
+/* Light where the glass catches it: a white-hot core in a wide, soft warm halo — a bokeh — with two faint spikes. */
+.apa-flare {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 36%;
-  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--apa-night) 55%, transparent));
+  left: var(--x);
+  top: var(--y);
+  width: calc(var(--s) * 2.6);
+  height: calc(var(--s) * 2.6);
+  margin: calc(var(--s) * -1.3) 0 0 calc(var(--s) * -1.3);
+  background: radial-gradient(
+    closest-side,
+    var(--apa-white) 0%,
+    var(--apa-hot) 8%,
+    color-mix(in srgb, var(--apa-peach) 78%, transparent) 17%,
+    color-mix(in srgb, var(--apa-ember) 46%, transparent) 33%,
+    color-mix(in srgb, var(--apa-coral) 22%, transparent) 58%,
+    transparent 100%
+  );
+  mix-blend-mode: screen;
+  animation: apa-twinkle 4s ease-in-out var(--d) infinite;
 }
 
-.apa-floor::before {
+.apa-flare::before,
+.apa-flare::after {
   content: '';
   position: absolute;
-  inset: 0;
-  background: repeating-linear-gradient(180deg, color-mix(in srgb, var(--apa-white) 38%, transparent) 0 1px, transparent 1px 9px);
-  -webkit-mask-image: radial-gradient(ellipse 60% 85% at 62% 100%, black, transparent 70%);
-  mask-image: radial-gradient(ellipse 60% 85% at 62% 100%, black, transparent 70%);
+  left: 8%;
+  right: 8%;
+  top: calc(50% - 0.5px);
+  height: 1px;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--apa-hot) 70%, transparent) 50%, transparent);
 }
 
-@keyframes apa-water {
-  to {
-    transform: translateX(-3vw);
+.apa-flare::after {
+  transform: rotate(90deg);
+}
+
+@keyframes apa-twinkle {
+  0%,
+  100% {
+    opacity: 0.72;
   }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Where an edge of the glass splits the light into its colors: a thin arc of the spectrum, with a white thread inside it. */
+.apa-prism {
+  position: absolute;
+  left: calc(var(--x) - var(--r));
+  top: calc(var(--y) - var(--r));
+  width: calc(var(--r) * 2);
+  height: calc(var(--r) * 2);
+  border-radius: 50%;
+  opacity: calc(var(--o) * 0.75);
+  background: radial-gradient(
+    closest-side,
+    transparent 88%,
+    color-mix(in srgb, var(--apa-cyan) 55%, transparent) 91%,
+    color-mix(in srgb, var(--apa-violet) 60%, transparent) 93.5%,
+    color-mix(in srgb, var(--apa-magenta) 52%, transparent) 96%,
+    color-mix(in srgb, var(--apa-ember) 66%, transparent) 98.5%,
+    transparent 100%
+  );
+  -webkit-mask-image: conic-gradient(from var(--a) at 50% 50%, transparent 0deg, black 30deg, black 100deg, transparent 140deg, transparent 360deg);
+  mask-image: conic-gradient(from var(--a) at 50% 50%, transparent 0deg, black 30deg, black 100deg, transparent 140deg, transparent 360deg);
 }
 
 .apa-canvas {
@@ -131,107 +234,87 @@
 .apa-stage {
   position: absolute;
   inset: 0;
-  /* Where the sky meets the water: always below the phrase, which is centered with the wordmark (a phone's phrase is at most ≈ 160 px tall). */
-  --apa-h: max(70%, calc(50% + 158px));
   opacity: 0;
   animation: apa-in 0.9s ease-in-out 0.7s forwards;
+  /* Until the sky is painted (textures.ts), the same colors in a plain gradient. */
   background: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--apa-sky) 92%, var(--apa-white)) 0%,
-    var(--apa-steel) 17%,
-    color-mix(in srgb, var(--apa-night) 70%, var(--apa-steel)) 38%,
-    var(--apa-night) 62%,
-    color-mix(in srgb, var(--apa-night) 88%, var(--apa-steel)) 100%
+    color-mix(in srgb, var(--apa-teal) 80%, var(--apa-steel)) 0%,
+    var(--apa-deep) 45%,
+    var(--apa-night) 70%,
+    var(--apa-deep) 100%
   );
 }
 
-/* The contact has grown into a glare — a light, not a fill. */
-.apa-sun {
+.apa-sky {
   position: absolute;
-  --s: 88vmin;
-  width: var(--s);
-  height: var(--s);
-  left: calc(var(--apa-cx) - var(--s) / 2);
-  top: calc(var(--apa-cy) - var(--s) / 2);
-  background: radial-gradient(
-    closest-side,
-    var(--apa-white) 0%,
-    var(--apa-hot) 2.2%,
-    color-mix(in srgb, var(--apa-ember) 92%, transparent) 6%,
-    color-mix(in srgb, var(--apa-vermilion) 70%, transparent) 15%,
-    color-mix(in srgb, var(--apa-vermilion) 28%, transparent) 33%,
-    color-mix(in srgb, var(--apa-vermilion) 8%, transparent) 55%,
-    transparent 100%
-  );
-  animation: apa-sun 6s ease-in-out 1.7s infinite alternate;
+  inset: 0;
+  width: 100%;
+  height: 100%;
 }
 
-@keyframes apa-sun {
-  to {
-    transform: scale(1.06);
-    opacity: 0.92;
-  }
-}
-
-/* Spokes of light, thin, fading with distance. */
-.apa-rays {
+/* A slab of glass standing in the sky: a pale body, a white edge on one side and a warm one on the other. */
+.apa-monolith {
   position: absolute;
-  --s: 150vmin;
-  width: var(--s);
-  height: var(--s);
-  left: calc(var(--apa-cx) - var(--s) / 2);
-  top: calc(var(--apa-cy) - var(--s) / 2);
-  /* Two uneven sets of spokes, so the light is not a sunburst. */
-  background:
-    repeating-conic-gradient(from 6deg at 50% 50%, color-mix(in srgb, var(--apa-hot) 55%, transparent) 0deg 0.4deg, transparent 0.4deg 17deg),
-    repeating-conic-gradient(from 31deg at 50% 50%, color-mix(in srgb, var(--apa-cyan) 38%, transparent) 0deg 0.3deg, transparent 0.3deg 23deg);
-  -webkit-mask-image: radial-gradient(closest-side, black, transparent 66%);
-  mask-image: radial-gradient(closest-side, black, transparent 66%);
-  opacity: 0.3;
-  animation: apa-rays 40s linear 1.7s infinite;
-}
-
-@keyframes apa-rays {
-  to {
-    transform: rotate(8deg);
-  }
-}
-
-/* A horizontal streak of light through the glare, and the prismatic ghosts beside it. */
-.apa-streak {
-  position: absolute;
-  left: calc(var(--apa-cx) - 48vmin);
-  top: calc(var(--apa-cy) - 1px);
-  width: 96vmin;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--apa-hot) 90%, transparent) 50%, transparent);
+  left: 63%;
+  top: 6%;
+  width: 8.5%;
+  height: 27%;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--apa-ice) 28%, transparent), color-mix(in srgb, var(--apa-sky) 14%, transparent) 45%, color-mix(in srgb, var(--apa-white) 24%, transparent));
   box-shadow:
-    0 -3px 0 color-mix(in srgb, var(--apa-cyan) 26%, transparent),
-    0 3px 0 color-mix(in srgb, var(--apa-vermilion) 30%, transparent);
+    inset 1px 0 0 color-mix(in srgb, var(--apa-white) 72%, transparent),
+    inset -1px 0 0 color-mix(in srgb, var(--apa-peach) 62%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--apa-white) 55%, transparent),
+    0 0 22px color-mix(in srgb, var(--apa-cyan) 20%, transparent);
 }
 
-.apa-ghost {
+/* Hairlines of light, falling through the sky. */
+.apa-hairline {
   position: absolute;
-  --s: 9vmin;
-  width: var(--s);
-  height: var(--s);
-  left: calc(var(--apa-cx) + var(--dx) - var(--s) / 2);
-  top: calc(var(--apa-cy) + var(--dy) - var(--s) / 2);
-  border-radius: 50%;
-  background: radial-gradient(closest-side, color-mix(in srgb, var(--hue) 55%, transparent), transparent);
+  left: var(--x);
+  top: var(--y);
+  height: var(--l);
+  width: 1px;
+  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--apa-white) 85%, transparent) 20% 75%, color-mix(in srgb, var(--apa-peach) 70%, transparent) 90%, transparent);
+  box-shadow:
+    0 0 7px 1px color-mix(in srgb, var(--apa-peach) 40%, transparent),
+    -1px 0 0 color-mix(in srgb, var(--apa-coral) 40%, transparent),
+    1px 0 0 color-mix(in srgb, var(--apa-cyan) 36%, transparent);
 }
 
 /* The horizon: a hairline of light where the sky meets the water, split at its edges. */
 .apa-horizon {
   position: absolute;
-  left: 6%;
-  right: 6%;
+  left: 4%;
+  right: 4%;
   top: var(--apa-h);
   height: 1px;
-  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--apa-white) 38%, transparent) 30%, color-mix(in srgb, var(--apa-hot) 70%, transparent) calc(var(--apa-cx) / 4), color-mix(in srgb, var(--apa-white) 30%, transparent) 70%, transparent);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--apa-white) 40%, transparent) 26%, color-mix(in srgb, var(--apa-hot) 80%, transparent) calc(var(--apa-cx) / 4), color-mix(in srgb, var(--apa-white) 34%, transparent) 70%, transparent);
   box-shadow:
-    0 -1px 0 color-mix(in srgb, var(--apa-cyan) 22%, transparent),
-    0 1px 0 color-mix(in srgb, var(--apa-vermilion) 26%, transparent);
+    0 -1px 0 color-mix(in srgb, var(--apa-cyan) 24%, transparent),
+    0 1px 0 color-mix(in srgb, var(--apa-vermilion) 28%, transparent);
+}
+
+/* Long highlights lying on the water. */
+.apa-wlines {
+  position: absolute;
+  left: 0;
+  right: 0;
+}
+
+.apa-wlines i {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  width: var(--w);
+  height: 1.5px;
+  opacity: var(--o);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--apa-white) 95%, transparent) 35% 65%, transparent);
+}
+
+.apa-wlines i.e {
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--apa-ember) 90%, transparent) 25%, color-mix(in srgb, var(--apa-hot) 95%, transparent) 55%, color-mix(in srgb, var(--apa-coral) 70%, transparent) 80%, transparent);
+  box-shadow: 0 0 6px 1px color-mix(in srgb, var(--apa-ember) 40%, transparent);
 }
 
 /* Down below, the water takes the glare and breaks it. */
@@ -243,17 +326,16 @@
   bottom: 0;
   -webkit-mask-image: linear-gradient(180deg, black, transparent 82%);
   mask-image: linear-gradient(180deg, black, transparent 82%);
-  background: radial-gradient(ellipse 50% 90% at 50% 0%, color-mix(in srgb, var(--apa-ember) 42%, transparent), color-mix(in srgb, var(--apa-vermilion) 18%, transparent) 50%, transparent 100%);
+  background: radial-gradient(ellipse 50% 90% at 50% 0%, color-mix(in srgb, var(--apa-hot) 50%, transparent), color-mix(in srgb, var(--apa-ember) 34%, transparent) 30%, color-mix(in srgb, var(--apa-vermilion) 16%, transparent) 60%, transparent 100%);
 }
 
 .apa-reflect::before {
   content: '';
   position: absolute;
   inset: 0;
-  background: repeating-linear-gradient(180deg, color-mix(in srgb, var(--apa-hot) 42%, transparent) 0 1px, transparent 1px 8px);
+  background: repeating-linear-gradient(180deg, color-mix(in srgb, var(--apa-hot) 46%, transparent) 0 1px, transparent 1px 8px);
   -webkit-mask-image: radial-gradient(ellipse 50% 90% at 50% 0%, black, transparent 80%);
   mask-image: radial-gradient(ellipse 50% 90% at 50% 0%, black, transparent 80%);
-  animation: apa-water 6s ease-in-out infinite alternate;
 }
 
 /* Glints on the water: small, in prismatic pairs. */
@@ -275,29 +357,65 @@
 @keyframes apa-glint {
   0%,
   100% {
-    opacity: 0.12;
-    transform: scale(0.6);
+    opacity: 0.15;
   }
   45% {
     opacity: 1;
-    transform: scale(1);
   }
+}
+
+/* The busiest part of the sky, which settles to a calmer level while the phrase is read (beats.ts: CALM). */
+.apa-live {
+  position: absolute;
+  inset: 0;
+  animation: apa-calm var(--apa-calm-over) ease-in-out var(--apa-calm-from) forwards;
+}
+
+@keyframes apa-calm {
+  to {
+    opacity: var(--apa-calm);
+  }
+}
+
+/* What the glass and the sky share: the same flares and fans of the spectrum above both. */
+.apa-shared {
+  position: absolute;
+  inset: 0;
+}
+
+.apa-wet {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* The corners go dark: depth, and the glass's own edge. */
+.apa-shared::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 120% 100% at 50% 46%, transparent 55%, color-mix(in srgb, var(--apa-night) 42%, transparent) 100%);
 }
 
 .apa-grain {
   position: absolute;
   inset: 0;
-  opacity: 0.035;
+  opacity: 0.06;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
 }
 
 /* With reduced motion the scene is a still composition: no wave, no drift, only the fades. */
-html[data-motion='reducido'] .apa-rays {
-  display: none;
+html[data-motion='reducido'] .apa-live {
+  animation: none;
 }
 
-html[data-motion='reducido'] .apa-reflect::before,
-html[data-motion='reducido'] .apa-sun {
+html[data-motion='reducido'] .apa-hand-body,
+html[data-motion='reducido'] .apa-matrix {
+  animation: none;
+}
+
+html[data-motion='reducido'] .apa-flare {
   animation: none;
 }
 
@@ -306,8 +424,21 @@ html[data-motion='reducido'] .apa-glint {
   opacity: 0.55;
 }
 
-html[data-motion='sutil'] .apa-reflect::before,
-html[data-motion='sutil'] .apa-sun,
-html[data-motion='sutil'] .apa-rays {
-  animation: none;
+/* The sun's light — halo, spokes, the web, the streaks — is one painted canvas (textures.ts: paintSun). */
+.apa-sunfx {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* With reduced motion the pieces of type are drawn once, at rest, over the glass — and leave with it, as the sky covers it. */
+html[data-motion='reducido'] .apa-canvas {
+  animation: apa-fade-out 0.9s ease-in-out 0.7s forwards;
+}
+
+@keyframes apa-fade-out {
+  to {
+    opacity: 0;
+  }
 }

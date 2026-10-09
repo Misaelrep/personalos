@@ -15,6 +15,11 @@
 @property --learn-depth { syntax: '<color>'; inherits: true; initial-value: transparent; }
 @property --learn-spec { syntax: '<color>'; inherits: true; initial-value: transparent; }
 @property --learn-prism { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --learn-glow { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --learn-hot { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --learn-sea { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --learn-streak { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --learn-cloud { syntax: '<color>'; inherits: true; initial-value: transparent; }
 
 @property --learn-ink { syntax: '<color>'; inherits: true; initial-value: black; }
 @property --learn-ink-2 { syntax: '<color>'; inherits: true; initial-value: black; }
@@ -77,7 +82,38 @@
     --learn-rim var(--atmo-dur, 1s) var(--ease-astral),
     --learn-depth var(--atmo-dur, 1s) var(--ease-astral),
     --learn-spec var(--atmo-dur, 1s) var(--ease-astral),
-    --learn-prism var(--atmo-dur, 1s) var(--ease-astral);
+    --learn-prism var(--atmo-dur, 1s) var(--ease-astral),
+    --learn-glow var(--atmo-dur, 1s) var(--ease-astral),
+    --learn-hot var(--atmo-dur, 1s) var(--ease-astral),
+    --learn-sea var(--atmo-dur, 1s) var(--ease-astral),
+    --learn-streak var(--atmo-dur, 1s) var(--ease-astral),
+    --learn-cloud var(--atmo-dur, 1s) var(--ease-astral);
+}
+
+/* While an hour changes in front of the person, the lights only ATARDECER has — the coral glow, the hot spots, the sheet of
+   water, the clouds, the edge of light — leave in the first third of the change (when the atmosphere going in is not ATARDECER: they
+   arrive at the pace of the rest, the inks being light on light), so that by the time the ink crosses the ground
+   (see crossing.ts) the glass behind the text is the plain ground, even, and the ink's step lands where it is meant to. */
+:root[data-learn-live] .learn-light:not([data-theme='learn-sunset']) {
+  transition:
+    --learn-orb-1 var(--atmo-dur, 1s) var(--ease-astral),
+    --learn-orb-2 var(--atmo-dur, 1s) var(--ease-astral),
+    --learn-orb-3 var(--atmo-dur, 1s) var(--ease-astral),
+    --learn-haze var(--atmo-dur, 1s) var(--ease-astral),
+    --learn-edge var(--atmo-dur, 1s) var(--ease-astral),
+    --learn-rim calc(var(--atmo-dur, 1s) * 0.34) ease-out,
+    --learn-depth calc(var(--atmo-dur, 1s) * 0.34) ease-out,
+    --learn-spec calc(var(--atmo-dur, 1s) * 0.34) ease-out,
+    --learn-prism calc(var(--atmo-dur, 1s) * 0.34) ease-out,
+    --learn-glow calc(var(--atmo-dur, 1s) * 0.34) ease-out,
+    --learn-hot calc(var(--atmo-dur, 1s) * 0.34) ease-out,
+    --learn-sea calc(var(--atmo-dur, 1s) * 0.34) ease-out,
+    --learn-streak calc(var(--atmo-dur, 1s) * 0.34) ease-out,
+    --learn-cloud calc(var(--atmo-dur, 1s) * 0.34) ease-out;
+}
+
+.learn-light[data-covered] {
+  visibility: hidden;
 }
 
 .learn-orb {
@@ -271,6 +307,118 @@
   width: 90vmax;
   height: 80vmax;
   background: radial-gradient(closest-side, var(--learn-depth), color-mix(in srgb, var(--learn-depth) 45%, transparent) 55%, transparent);
+}
+
+/* Soft white masses in the glass: the clouds the light passes through. */
+.learn-cloud {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, var(--learn-cloud), color-mix(in srgb, var(--learn-cloud) 40%, transparent) 55%, transparent);
+}
+
+.learn-cloud-1 {
+  width: 120vmax;
+  height: 46vmax;
+  left: -30vmax;
+  top: 14%;
+}
+
+.learn-cloud-2 {
+  width: 90vmax;
+  height: 40vmax;
+  left: 10%;
+  top: -10%;
+}
+
+.learn-cloud-3 {
+  width: 80vmax;
+  height: 36vmax;
+  left: -20vmax;
+  top: 46%;
+}
+
+/* The glow that leans in from the right edge: coral, wide and soft toward the middle, strongest at mid height and again low. */
+.learn-glow {
+  position: absolute;
+  top: 6%;
+  bottom: 4%;
+  right: -4vw;
+  width: 62vw;
+  background:
+    radial-gradient(ellipse 100% 34% at 100% 46%, color-mix(in srgb, var(--learn-glow) 100%, transparent), color-mix(in srgb, var(--learn-glow) 50%, transparent) 46%, transparent 100%),
+    radial-gradient(ellipse 90% 18% at 100% 84%, color-mix(in srgb, var(--learn-glow) 90%, transparent), color-mix(in srgb, var(--learn-glow) 36%, transparent) 50%, transparent 100%),
+    linear-gradient(90deg, transparent, color-mix(in srgb, var(--learn-glow) 28%, transparent) 70%, color-mix(in srgb, var(--learn-glow) 55%, transparent));
+  -webkit-mask-image: linear-gradient(180deg, transparent, black 16% 80%, transparent);
+  mask-image: linear-gradient(180deg, transparent, black 16% 80%, transparent);
+}
+
+/* The left edge of the glass: a thread of light with a cool fringe — refraction at the periphery. */
+.learn-fringe {
+  position: absolute;
+  top: 3%;
+  bottom: 10%;
+  left: 0;
+  width: 16px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--learn-spec) 70%, transparent) 0,
+    color-mix(in srgb, var(--learn-prism) 55%, transparent) 3px,
+    color-mix(in srgb, var(--learn-prism) 20%, transparent) 9px,
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(180deg, transparent, black 14% 70%, transparent);
+  mask-image: linear-gradient(180deg, transparent, black 14% 70%, transparent);
+}
+
+/* White-hot spots where the glow catches the glass's edge. */
+.learn-spot {
+  position: absolute;
+  right: -3vw;
+  width: 26vw;
+  height: 14vh;
+  background: radial-gradient(closest-side, var(--learn-hot), color-mix(in srgb, var(--learn-glow) 70%, transparent) 40%, transparent);
+}
+
+.learn-spot-1 {
+  top: 62%;
+}
+
+.learn-spot-2 {
+  top: 76%;
+  height: 10vh;
+  opacity: 0.8;
+}
+
+/* The sheet of water along the bottom: an ice-blue ground, and horizontal streaks of light lying on it. */
+.learn-sea {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 30%;
+  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--learn-sea) 50%, transparent) 75%, color-mix(in srgb, var(--learn-sea) 85%, transparent));
+}
+
+.learn-sea i {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  width: var(--w);
+  height: 1.5px;
+  opacity: var(--o);
+  background: linear-gradient(90deg, transparent, var(--learn-streak) 30% 70%, transparent);
+  filter: blur(0.5px);
+}
+
+.learn-sea i.warm {
+  background: linear-gradient(90deg, transparent, var(--learn-glow) 25%, var(--learn-hot) 55%, var(--learn-glow) 80%, transparent);
+}
+
+/* The sky: ice blue at the top, going to pearl by the middle. */
+.learn-sky {
+  position: absolute;
+  inset: 0 0 50% 0;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--learn-sea) 62%, transparent), transparent);
 }
 
 /* The band that crosses the glass when the hour changes it (driven by LearnLight; clear until then). */

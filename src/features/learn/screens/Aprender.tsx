@@ -110,7 +110,7 @@ export function Aprender({ onImmersive }: AprenderProps) {
       exit={{ opacity: 0, transition: { duration: 0.4 } }}
       transition={{ duration: 0.6 }}
     >
-      <LearnLight theme={theme} />
+      <LearnLight theme={theme} covered={aparicion && !skipped && !reached(stage, 'defrag')} />
       {/* APARICIÓN: behind the words, gone before the question. A tap takes it away with everything else. */}
       <AnimatePresence>
         {aparicion && !skipped && !reached(stage, 'field') && ritualTheme.scene && <AparicionScene key="aparicion" scene={ritualTheme.scene} stage={stage} />}
@@ -143,7 +143,7 @@ export function Aprender({ onImmersive }: AprenderProps) {
       </main>
 
       <AnimatePresence>
-        {introVisible(stage, timeline) && <Intro key="intro" phrase={phrase} showPhrase={reached(stage, 'phrase')} dissolving={stage === 'defrag'} stageInk={aparicion ? ritualTheme.stage : undefined} />}
+        {introVisible(stage, timeline) && <Intro key="intro" phrase={phrase} showPhrase={reached(stage, 'phrase')} dissolving={stage === 'defrag'} stageInk={aparicion ? ritualTheme.stage : undefined} placed={aparicion} />}
       </AnimatePresence>
     </m.div>
   )
@@ -152,7 +152,7 @@ export function Aprender({ onImmersive }: AprenderProps) {
 const PHRASE_CLASS = 'font-display text-[clamp(22px,5.6vw,32px)] leading-[1.25] font-light tracking-[-0.03em] text-balance text-ink'
 
 /** The wordmark and the phrase, on their own layer above the screen. They leave by dissolving, or in SKIP_MS if skipped. */
-function Intro({ phrase, showPhrase, dissolving, stageInk }: { phrase: Phrase; showPhrase: boolean; dissolving: boolean; stageInk?: LearnTheme['stage'] }) {
+function Intro({ phrase, showPhrase, dissolving, stageInk, placed }: { phrase: Phrase; showPhrase: boolean; dissolving: boolean; stageInk?: LearnTheme['stage']; placed: boolean }) {
   // On a stage of its own (dark) the words take the stage's ink, not the screen's.
   const ink = stageInk ? ({ '--ink': stageInk.strong, '--ink-2': stageInk.medium, '--ink-3': stageInk.soft } as CSSProperties) : undefined
   return (
@@ -162,7 +162,7 @@ function Intro({ phrase, showPhrase, dissolving, stageInk }: { phrase: Phrase; s
       initial={{ opacity: 1 }}
       exit={{ opacity: 0, transition: { duration: SKIP_MS / 1000 } }}
     >
-      <Wordmark dissolving={dissolving} />
+      <Wordmark dissolving={dissolving} placed={placed} />
       {/* The phrase's space is held from the start, so the wordmark never moves when it appears. */}
       <div className="relative max-w-[26ch]">
         <p aria-hidden className={`invisible ${PHRASE_CLASS}`}>

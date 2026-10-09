@@ -24,14 +24,15 @@ export const BEATS = {
   stable: 1.5,
 } as const
 
-/** The stage deepens (light glass → dark sky) between these two moments. */
-export const DARKEN = { from: 0.7, to: 1.6 } as const
-
 /** After this the fragments are gone: the canvas stops and clears. */
 export const FRAGMENTS_END = 1.75
 
 /**
  * The ritual's stage stays until the question is about to come: once the phrase has begun to dissolve (6.0 s)
- * it leaves, 0.55 s later, and is gone at 7.0 s — the moment the question starts to appear on the light glass.
+ * it starts to leave, 0.3 s later — slowly, over 0.7 s, into the light of AHORA, which has the same glow, the same
+ * water, the same flares — and is gone at 7.0 s, the moment the question starts to appear on the light glass.
  */
-export const STAGE_LEAVES = { after: 0.55, duration: 0.45 } as const
+export const STAGE_LEAVES = { after: 0.3, duration: 0.7 } as const
+
+/** The phrase is read on a calmer surface: the web of light, the glints and the highlights on the water lose some of their activity between these two moments (s). */
+export const CALM = { from: 2.3, over: 1.4, level: 0.5 } as const

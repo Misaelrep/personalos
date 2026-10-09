@@ -195,13 +195,13 @@ describe('text is readable in every atmosphere (WCAG)', () => {
 })
 
 describe('the scene’s palette', () => {
-  it('is nine colors, only on the atmosphere that has the scene; each becomes a token', () => {
-    expect(Object.keys(sunset.scene!).sort()).toEqual(['cyan', 'ember', 'hot', 'ice', 'night', 'sky', 'steel', 'vermilion', 'white'])
+  it('is eighteen colors, only on the atmosphere that has the scene; each becomes a token', () => {
+    expect(Object.keys(sunset.scene!).sort()).toEqual(['coral', 'cyan', 'deep', 'ember', 'garnet', 'haze', 'hot', 'ice', 'magenta', 'mist', 'night', 'peach', 'sky', 'steel', 'teal', 'vermilion', 'violet', 'white'])
     for (const c of Object.values(sunset.scene!)) expect(() => parse(c)).not.toThrow()
     expect(day.scene).toBeUndefined()
     expect(night.scene).toBeUndefined()
     expect(sceneVars(sunset.scene!)['--apa-vermilion']).toBe(sunset.scene!.vermilion)
-    expect(Object.keys(sceneVars(sunset.scene!))).toHaveLength(9)
+    expect(Object.keys(sceneVars(sunset.scene!))).toHaveLength(18)
   })
 
   it('is balanced like the reference: ice and sky blue as the base, blue-black for depth, vermilion and ember as the accent, cyan as the microaccent', () => {
@@ -247,6 +247,11 @@ describe('how a theme reaches the screen', () => {
       '--learn-depth': day.light.depth,
       '--learn-spec': day.light.spec,
       '--learn-prism': day.light.prism,
+      '--learn-glow': day.light.glow,
+      '--learn-hot': day.light.hot,
+      '--learn-sea': day.light.sea,
+      '--learn-streak': day.light.streak,
+      '--learn-cloud': day.light.cloud,
     })
   })
 

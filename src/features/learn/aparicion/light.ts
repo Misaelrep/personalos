@@ -33,8 +33,20 @@ export function flareAt(t: number, view: View): Glow {
 export function bloomAt(t: number, view: View): Glow {
   const u = (t - 0.62) / 1.15
   if (u <= 0 || u >= 1) return { alpha: 0, radius: 0 }
-  const alpha = u < 0.38 ? 0.85 * easeOut(u / 0.38) : 0.85 * (1 - (u - 0.38) / 0.62)
-  return { alpha, radius: 0.17 * vmin(view) * (0.5 + 4.9 * easeOut(u)) }
+  const alpha = u < 0.38 ? 0.62 * easeOut(u / 0.38) : 0.62 * (1 - (u - 0.38) / 0.62)
+  return { alpha, radius: 0.17 * vmin(view) * (0.5 + 2.6 * easeOut(u)) }
+}
+
+/**
+ * The surge: for a moment, as the wave leaves and the information reacts, the red and orange at the
+ * point of contact swell — a breath of heat, brightest at 0.62 s, gone by 1.2 s — and fall back.
+ */
+export function surgeAt(t: number, view: View): Glow {
+  const u = (t - 0.45) / 0.75
+  if (u <= 0 || u >= 1) return { alpha: 0, radius: 0 }
+  const rise = easeOut(u / 0.22)
+  const alpha = u < 0.22 ? 0.5 * rise : 0.5 * (1 - (u - 0.22) / 0.78) ** 1.6
+  return { alpha, radius: 0.2 * vmin(view) * (0.55 + 0.7 * easeOut(u)) }
 }
 
 export interface Ring {
@@ -44,39 +56,21 @@ export interface Ring {
 
 /** The wave: three rings, one after the other, from the point of contact outward. */
 const RING_STARTS = [BEATS.wave, BEATS.wave + 0.14, BEATS.wave + 0.3]
-const RING_DURATION = 1.8
+const RING_DURATION = 0.95
 
 export function ringsAt(t: number, view: View): Ring[] {
   return RING_STARTS.flatMap((start) => {
     const u = (t - start) / RING_DURATION
     if (u <= 0 || u >= 1) return []
-    const alpha = u < 0.12 ? 0.9 * (u / 0.12) : 0.9 * (1 - (u - 0.12) / 0.88)
-    return [{ radius: 0.12 * vmin(view) * (0.06 + 5.74 * easeOut(u)), alpha }]
+    const alpha = u < 0.12 ? 0.5 * (u / 0.12) : 0.5 * (1 - (u - 0.12) / 0.88) ** 1.4
+    return [{ radius: 0.12 * vmin(view) * (0.06 + 3.8 * easeOut(u)), alpha }]
   })
 }
 
-export interface FingerPose {
-  alpha: number
-  /** Offset from resting at the contact, as a fraction of the finger's travel (along the finger's axis, away from the tip). */
-  away: number
+/** The hand's scale for the screen it is on: its index reaches the left edge of a phone. */
+export function handScale(view: View): number {
+  return Math.min(1.7, Math.max(1.0, (Math.min(view.w, view.h * 0.6) / 390) * 1.28))
 }
 
-/** The finger arrives (fading in as it comes), rests on the glass, and withdraws as the sky comes in. */
-const FINGER = { start: BEATS.contact, duration: 1.5, arrived: 0.26, leaves: 0.6 }
-
-export function fingerAt(t: number): FingerPose {
-  const u = (t - FINGER.start) / FINGER.duration
-  if (u <= 0) return { alpha: 0, away: 0.7 }
-  if (u < FINGER.arrived) {
-    const e = easeOut(u / FINGER.arrived)
-    return { alpha: e, away: lerp(0.7, 0, e) }
-  }
-  if (u < FINGER.leaves) return { alpha: 1, away: 0 }
-  const e = easeOut((u - FINGER.leaves) / (1 - FINGER.leaves))
-  return { alpha: 1 - e, away: lerp(0, 0.45, e) }
-}
-
-/** The finger's scale for the screen it is on. */
-export function fingerScale(view: View): number {
-  return Math.min(1.9, Math.max(1.2, (Math.min(view.w, view.h * 0.6) / 390) * 1.5))
-}
+/** The hand's tilt: its index points up and to the right. */
+export const HAND_TILT_DEG = -32

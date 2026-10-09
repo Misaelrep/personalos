@@ -9,17 +9,21 @@ import { WORDMARK, WORDMARK_COLS, wordmarkPitch } from '../domain/wordmark'
 /** The dots take the color and glow of the atmosphere in force (set by the screen). */
 const TINT = 'text-(--learn-mark) drop-shadow-[0_0_14px_var(--learn-mark-glow)]'
 const LETTER_GAP = 2
+/** When the last fragments land, the dots they were going to are there (seconds after the wordmark's stage begins). */
+const PLACED_DELAY = 0.95
 
 /**
  * APRENDER in dots. The dots converge into the letters and, at the end,
- * dissolve (DotWord). With reduced motion the same dots simply fade, in place.
+ * dissolve (DotWord). With reduced motion the same dots simply fade, in place — and so
+ * they do when `placed`: APARICIÓN's own fragments are what converge on them (see ../aparicion),
+ * so the dots are there, in place, as the last of the fragments lands; they do not fly in a second time.
  */
-export function Wordmark({ dissolving }: { dissolving: boolean }) {
+export function Wordmark({ dissolving, placed = false }: { dissolving: boolean; placed?: boolean }) {
   const { width } = useViewport()
   const { level } = useMotion()
   const pitch = wordmarkPitch(width)
 
-  if (level !== 'reducido') {
+  if (level !== 'reducido' && !placed) {
     return (
       <div data-learn-wordmark="">
         <DotWord word={WORDMARK} pitch={pitch} state={dissolving ? 'out' : 'in'} className={TINT} />
@@ -31,7 +35,7 @@ export function Wordmark({ dissolving }: { dissolving: boolean }) {
   const w = WORDMARK_COLS * pitch
   const h = GLYPH_ROWS * pitch
   return (
-    <m.div data-learn-wordmark="" initial={{ opacity: 0 }} animate={{ opacity: dissolving ? 0 : 1 }} transition={{ duration: 0.7, ease: EASE }}>
+    <m.div data-learn-wordmark="" initial={{ opacity: 0 }} animate={{ opacity: dissolving ? 0 : 1 }} transition={{ duration: placed && !dissolving ? 0.5 : 0.7, delay: placed && !dissolving ? PLACED_DELAY : 0, ease: EASE }}>
       <svg role="img" aria-label={WORDMARK} className={TINT} width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{ overflow: 'visible', maxWidth: '100%', height: 'auto' }}>
         {dots.map((d, i) => (
           <circle key={i} cx={d.col * pitch + pitch / 2} cy={d.row * pitch + pitch / 2} r={pitch * (d.on ? 0.32 : 0.176)} fill="currentColor" opacity={d.on ? 1 : 0.08} />

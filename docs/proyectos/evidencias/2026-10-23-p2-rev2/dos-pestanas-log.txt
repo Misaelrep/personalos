@@ -1,0 +1,9 @@
+OK  · A (HOY) carga el día viejo
+OK  · A se bloquea con el velo en cuanto B anuncia la restauración
+OK  · A se recarga sola al terminar la restauración
+OK  · A muestra el día restaurado
+OK  · El día guardado es el restaurado tras asentarse
+OK  · Un toque posterior en A conserva lo restaurado
+OK  · B detecta el cambio y no importa
+OK  · B exige de nuevo la copia de seguridad antes de importar
+OK  · A no se bloqueó (no se escribió nada)

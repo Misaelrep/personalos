@@ -1,6 +1,6 @@
 # P2 · Prueba física en el iPhone (Preview, solo datos sintéticos)
 
-**Qué se prueba:** la rama `proyectos/p2-copias` (commit `97a1f9d`). Su Preview de Vercel:
+**Qué se prueba:** la rama `proyectos/p2-copias` (commit `e7233a7`, revisión 2, con protección frente a pestañas obsoletas y cambios tras la vista previa). Su Preview de Vercel:
 
 ```
 https://personalos-git-proyectos-p2-copias-elyum.vercel.app

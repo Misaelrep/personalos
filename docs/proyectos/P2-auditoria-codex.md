@@ -17,9 +17,9 @@
 |---|---|
 | Repositorio | `Misaelrep/personalos` (público) |
 | Rama | `proyectos/p2-copias` |
-| Commit | `97a1f9de35728b83a7e9e7c63ea883adff2548bc` |
+| Commit | `e7233a78b569d220be0438cc6498c8af732dec93` (revisión 2; la revisión 1 era `97a1f9d`) |
 | Base | `main` en `dfc42a4` |
-| Diff | `git diff main...proyectos/p2-copias` (23 archivos, +1.696 / −15) |
+| Diff | `git diff main...e7233a7` · revisión 2 sola: `git diff 97a1f9d..e7233a7` |
 
 **Qué hace P2:** SISTEMA → Copias de seguridad.
 - Exporta a un archivo todos los datos de ELYUM que viven en el `localStorage` del dispositivo.
@@ -44,7 +44,9 @@
 | `ui/deliver.ts` | Web Share / descarga |
 | `ui/health.ts` | Salud del almacenamiento |
 | `ui/SystemNotice.tsx` | Aviso global |
+| `src/features/backup/storage/restore.ts` | Revisión 2: coordinación entre pestañas (marcador, `guardAction`, importaciones simultáneas) |
 | `src/features/backup/backup.test.ts` | 30 tests |
+| `src/features/backup/tabs.test.ts` | Revisión 2: 15 tests de varias pestañas y vista previa obsoleta |
 
 **Núcleo tocado (aprobado):**
 - `src/App.tsx`
@@ -63,11 +65,11 @@
 ## Cómo ejecutarlo
 
 ```
-git fetch origin proyectos/p2-copias && git checkout 97a1f9de35728b83a7e9e7c63ea883adff2548bc
+git fetch origin proyectos/p2-copias && git checkout e7233a78b569d220be0438cc6498c8af732dec93
 npm ci
-npm test            # esperado: 12 archivos, 310 tests OK (280 del núcleo + 30 de P2)
+npm test            # esperado: 13 archivos, 325 tests OK (280 del núcleo + 45 de P2)
 npx tsc -b
-npm run build       # precache ~892 KiB
+npm run build       # precache ~897 KiB
 node scripts/check-scope.mjs p2
 npm run preview     # http://localhost:4173/?entry=none&section=sistema
 ```
@@ -76,7 +78,8 @@ npm run preview     # http://localhost:4173/?entry=none&section=sistema
 
 - `docs/proyectos/pruebas/demo-restauracion.cjs`: demostración automatizada con Playwright, datos sintéticos y contextos con almacenamiento separado. Las instrucciones de uso están en su cabecera; apúntala al build de P2 con `URL=`.
 - `docs/proyectos/pruebas/copia-sintetica-v1.json`: copia sintética de ejemplo.
-- `docs/proyectos/evidencias/2026-10-23-p2/`: registro y capturas de la última ejecución.
+- `docs/proyectos/pruebas/dos-pestanas.cjs`: prueba con dos pestañas reales (en la rama `proyectos/p2-copias`).
+- `docs/proyectos/evidencias/2026-10-23-p2/` y `2026-10-23-p2-rev2/`: registros y capturas.
 
 ## Áreas que pido auditar
 
@@ -102,7 +105,7 @@ Para cada una: ¿es correcto? ¿hay un caso que lo rompa? ¿qué severidad tiene
 ### 4. Conflictos
 
 - Por defecto se conserva lo local, y elegir la copia es explícito por clave. ¿Hay algún camino en la interfaz (`Copias.tsx`, componente `Preview`) por el que se sobrescriba sin elección visible?
-- **Punto que señalo yo:** `onApply` vuelve a calcular el plan con el estado actual justo antes de escribir. Si un dato cambió entre la vista previa y la importación (otra pestaña), ¿qué ocurre con una clave cuyo conflicto ya estaba elegido? Se escribiría la copia sobre el valor nuevo, que queda apartado en `elyum:system:v1:pre-import`.
+- **Mitigado en la revisión 2. Verifícalo:** la importación escribe exactamente el plan revisado, y cada clave solo si sigue valiendo lo que mostró la vista previa (`changedSincePreview` en `apply.ts`, comprobado también dentro de `applyWrites`). Si algo cambió, no se escribe nada y se exige una nueva revisión con nueva copia externa (`reviewAgain` en `Copias.tsx`). Excepción deliberada: `sameStored` ignora `lastActiveAt` de la entrada (un latido de 30 s que se fusiona). ¿Es segura esa excepción?
 
 ### 5. Reversión
 
@@ -118,8 +121,13 @@ Para cada una: ¿es correcto? ¿hay un caso que lo rompa? ¿qué severidad tiene
 
 ### 7. Concurrencia y recarga
 
-- **Riesgo que señalo yo:** si ELYUM está abierto en **otra pestaña o ventana** (escritorio) durante una restauración, esa pestaña conserva el día en memoria. En su siguiente cambio guardará encima del día restaurado (`DayProvider.tsx:46`). Esta pestaña sí se recarga (`Copias.tsx`, hacia la línea 137) y la otra no. Evalúa la severidad y propón mitigación sin tocar el núcleo, si la hay (p. ej. `storage` event o `BroadcastChannel` para pedir recarga, o un aviso).
-- Ventana de 1,2 s entre escribir y recargar: ¿puede algo escribir encima en ese intervalo?
+- **Mitigado en la revisión 2. Verifícalo:** HOY guarda el día completo desde memoria (`DayProvider.tsx:46`) y APRENDER hace lo mismo con su estado. Para que una pestaña obsoleta no escriba encima:
+  - la importación se anuncia (`elyum:system:v1:restore`), espera 400 ms y reverifica;
+  - las demás pestañas se cubren con `RestoreGuard` (`SystemNotice.tsx`), que bloquea toques y teclas y recarga al terminar;
+  - tras asentarse se comprueba `overwrittenAfterImport`.
+
+  ¿Quedan ventanas de carrera reales? Por ejemplo, un `storage` event retrasado, iOS congelando una pestaña en segundo plano, o una pestaña de una versión antigua sin guarda.
+- Ventana de 1,5 s entre escribir y recargar: ¿puede algo escribir encima en ese intervalo? (Se comprueba al final de ese intervalo.)
 - **Cambio de día a medianoche** entre la vista previa y la importación.
 
 ### 8. iOS / PWA

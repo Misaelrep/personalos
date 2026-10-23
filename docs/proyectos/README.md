@@ -12,7 +12,7 @@ Los materiales con datos personales no se guardan aquí y se entregan aparte:
 | Rama | Commit | Contenido | Estado |
 |---|---|---|---|
 | `feature/proyectos` | — | Tronco de PROYECTOS y esta documentación | Desarrollo |
-| `proyectos/p2-copias` | `97a1f9d` | P2 · Copias de seguridad de ELYUM en SISTEMA | Candidato; pendiente de prueba física y auditoría |
+| `proyectos/p2-copias` | `e7233a7` | P2 · Copias de seguridad de ELYUM en SISTEMA (revisión 2: pestañas obsoletas y cambios tras la vista previa) | Candidato; pendiente de auditoría de Codex y prueba física |
 | `proyectos/p1-dominio` | `7982db3` | P1 · Modelo de datos de PROYECTOS | Candidato; pendiente de validar con el dossier de muestra |
 
 Nada se ha fusionado a `main` ni desplegado a producción.
@@ -22,6 +22,7 @@ Nada se ha fusionado a `main` ni desplegado a producción.
 | Documento | Contenido |
 |---|---|
 | [`DECISIONES.md`](DECISIONES.md) | Decisiones de producto, datos y proceso aprobadas |
+| [`entregas/2026-10-23-P2-revision-2.md`](entregas/2026-10-23-P2-revision-2.md) | Revisión 2 de P2: mitigaciones, pruebas, estado de las verificaciones |
 | [`entregas/2026-10-23-P1-P2.md`](entregas/2026-10-23-P1-P2.md) | Informe de entrega de P1 y P2: archivos, modelo, pruebas, demostración, riesgos y recomendación |
 | [`P2-prueba-fisica.md`](P2-prueba-fisica.md) | Procedimiento de prueba en el iPhone (Safari y app instalada desde el Preview, solo datos sintéticos) |
 | [`P2-auditoria-codex.md`](P2-auditoria-codex.md) | Handoff de la auditoría independiente de P2, sin cambios de código |
@@ -34,7 +35,8 @@ Nada se ha fusionado a `main` ni desplegado a producción.
 |---|---|
 | `pruebas/copia-sintetica-v1.json` | Copia de ELYUM **sintética** (huella `7484d68b`) para la prueba física |
 | `pruebas/demo-restauracion.cjs` | Demostración automatizada (Playwright) de exportar, restaurar, rechazar una copia alterada, conflictos, fallo a mitad y almacenamiento lleno |
-| `evidencias/2026-10-23-p2/` | Registro de la demostración y capturas resumidas |
+| `evidencias/2026-10-23-p2/` | Registro de la demostración y capturas resumidas (revisión 1) |
+| `evidencias/2026-10-23-p2-rev2/` | Revisión 2: prueba con dos pestañas reales (9/9), demostración completa repetida (18/18) |
 
 ## Validación rápida de cualquier rama
 

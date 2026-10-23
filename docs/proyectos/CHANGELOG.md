@@ -51,7 +51,7 @@ node scripts/check-scope.mjs <p1|p2>   # falla si el paquete toca algo fuera de 
 - APRENDER.
 - Service worker y manifest.
 
-### P2 · revisión 2 — riesgos de concurrencia (24/10/2026)
+### P2 · revisión 2 — riesgos de concurrencia (23/10/2026)
 
 **Pedido en la revisión:** evitar sobrescrituras desde otras pestañas con estado obsoleto, y que la importación no sobrescriba datos que cambiaron después de la vista previa. Sin rediseñar el núcleo.
 

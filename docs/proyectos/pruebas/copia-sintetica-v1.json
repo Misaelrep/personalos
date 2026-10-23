@@ -1,0 +1,40 @@
+{
+  "schema": "elyum.backup",
+  "version": 1,
+  "createdAt": "2026-10-23T14:23:58-06:00",
+  "device": "Linux · navegador",
+  "modules": {
+    "core": {
+      "keys": {
+        "personal-os:entry": "{\"dailyEntrySeenDate\":\"2026-10-23\",\"dailyMessage\":{\"date\":\"2026-10-23\",\"id\":\"m1\"},\"lastActiveAt\":1792787036665}",
+        "personal-os:day:2026-10-22": "{\"date\":\"2026-10-22\",\"records\":{\"thu-meditation-0600\":{\"status\":\"completado\"}}}",
+        "personal-os:day:2026-10-21": "{\"date\":\"2026-10-21\",\"records\":{\"wed-wellness-1000\":{\"status\":\"completado\",\"outcome\":\"no\"},\"wed-web-1400\":{\"status\":\"omitido\"}}}",
+        "personal-os:day:2026-10-23": "{\"date\":\"2026-10-23\",\"records\":{\"fri-web-0800\":{\"status\":\"completado\",\"outcome\":\"si\",\"objective\":\"Formulario de contacto probado\"},\"fri-wellness-1020\":{\"status\":\"parcial\",\"outcome\":\"parcial\",\"pendingNote\":\"Cerrar la paleta\",\"objective\":\"Paleta de color v2\"},\"fri-newsletter-1400\":{\"objective\":\"Cerrar el borrador de la edición de prueba\"}}}"
+      }
+    },
+    "learn": {
+      "keys": {
+        "elyum:learn:v1:state": "{\"v\":1,\"data\":{\"draft\":\"Borrador sintético · ñ · “comillas” · 🌅\"}}"
+      }
+    },
+    "projects": {
+      "keys": {
+        "elyum:projects:v1:data": "{\"v\":1,\"data\":{\"note\":\"datos sintéticos de prueba\"}}"
+      }
+    }
+  },
+  "counts": {
+    "core": 4,
+    "learn": 1,
+    "projects": 1
+  },
+  "integrity": {
+    "algorithm": "SHA-256",
+    "modules": {
+      "core": "0b0394a8b4be062c5f62d85b38ac0c3a12bba973a6128cadb5eb90405367ed71",
+      "learn": "dc93867aaa0f1ab70151ffeb67261b1fc224bb620df4780cae6acf349cfddd2a",
+      "projects": "fc955fa4ddc328cfa26e7226d1c2b2a8a50aab733ac9f04d154034aad44a2ad9"
+    },
+    "total": "7484d68bd27d39c4c513213c350afbceb5aca8c22e72ecdb8cb43b6635078db8"
+  }
+}

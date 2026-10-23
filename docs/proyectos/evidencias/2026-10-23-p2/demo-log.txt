@@ -1,0 +1,27 @@
+A · export: schema elyum.backup v 1 counts {"core":4,"learn":1,"projects":1} device Linux · navegador hash 7484d68b
+A · export excludes simulation and foreign keys: true
+A · independent SHA-256 of the modules matches the file: true
+B · ELYUM keys before: 2
+B · Importar disabled before the safety copy: true
+B · right after import: keys byte-for-byte equal to A: true (6 keys)
+B · right after import: SHA-256 of B’s data equals the copy’s: true
+B · differs: personal-os:entry | A: {"dailyEntrySeenDate":"2026-10-23","dailyMessage":{"date":"2026-10-23","id":"m1"},"lastActiveAt":1792787036665} | B: {"dailyEntrySeenDate":"2026-10-23","dailyMessage":{"date":"2026-10-23","id":"m1"},"lastActiveAt":1792787045124}
+B · after reload (ELYUM updates its own lastActiveAt on opening): equal except that field: true
+B · no simulation or foreign keys imported: true
+B · re-export after reload: hashes of Aprender and Proyectos equal to A: true
+B · HOY shows the restored objective: true
+B · second import of the same copy: 0 writes (all duplicates)
+T · tampered copy rejected, storage unchanged: true · No se importó nada  La integridad de «Días · HOY, FOCUS y entrada» no coincide: la copia está alterada o incompleta.
+C · conflict kept this device’s value by default: true
+C · data only on this device kept: true
+C · new data added: true
+C · replaced values set aside on device (none replaced): {} added 4
+C2 · copy chosen explicitly: value replaced true · previous kept aside: true
+D · failure halfway: ELYUM data exactly as before: true
+D · message: La importación no se completó  El almacenamiento del dispositivo está lleno. (Día 23/10/2026) Todo lo que esta importación había escrito se devolvió a su estado anterior: tus datos están como antes.
+E · HOY shows the storage notice: true
+14-sistema-320.png · horizontal overflow: false
+15-sistema-escritorio.png · horizontal overflow: false
+N · bottom nav: HOY · SEMANA · SISTEMA
+N · back to HOY: true
+N · SEMANA opens: true

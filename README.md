@@ -21,6 +21,7 @@ npm run preview    # http://localhost:4173 — el build de producción, con serv
 | `?motion=completo` · `sutil` · `reducido` | Fuerza un nivel de movimiento (por defecto: `reducido` si el sistema pide `prefers-reduced-motion`, si no `completo`). |
 | `?entry=full` · `micro` · `none` | Fuerza la entrada diaria completa, la micro entrada o ninguna, ignorando las reglas de sesión (no guarda nada). |
 | `?section=semana` | Abre directamente SEMANA (solo si no toca entrada: combínalo con `&entry=none`). Sin el parámetro, la app abre en HOY. |
+| `?section=sistema` | Abre directamente SISTEMA → Copias de seguridad (igual que `semana`: combínalo con `&entry=none`). |
 | `?field=collapse` · `fast` · `hold` | Revisión de DAYSCAPE: `collapse` acorta el mensaje, forma el día de golpe (sin nombres) y sale solo tras 1,2 s para revisar FORMAS → FRAGMENTOS → PARTÍCULAS → CONVERGENCIA → HOY a velocidad normal; `fast` acelera toda la entrada; `hold` impide la salida automática de `collapse`. Se pueden combinar (`fast,collapse`). Sin el parámetro, nada cambia: DAYSCAPE solo sale con CONTINUAR. |
 
 Semana de referencia: lunes `2026-09-28` · martes `2026-09-29` · miércoles `2026-09-30` · jueves `2026-10-01` · viernes `2026-10-02` · sábado `2026-10-03` · domingo `2026-10-04`.
@@ -174,6 +175,18 @@ Código: `src/pwa/updates.ts` (registro + comprobaciones), `src/pwa/moment.ts` (
 - **Hora local:** instalada se comporta igual que Safari: fecha, hora y día de la semana del dispositivo, nunca UTC.
 - **Iconos:** iOS guarda el icono al instalar; si el icono cambia en el futuro, hay que quitar y volver a añadir la app para verlo.
 
+### Copias de seguridad (SISTEMA)
+
+Todo lo que ELYUM guarda vive solo en el dispositivo. **SISTEMA → Copias de seguridad** lo saca a un archivo y lo devuelve (`src/features/backup/`).
+
+- **Exportar copia:** un archivo `elyum-copia-AAAA-MM-DD-HHmm.json` con los datos de días (`personal-os:day:*`, `personal-os:entry`), Aprender (`elyum:learn:*`) y Proyectos (`elyum:projects:*`), **tal cual están guardados** (texto literal, byte a byte). Nunca incluye simulaciones (`…sim…`), las claves propias de SISTEMA (`elyum:system:*`) ni nada que no sea de ELYUM. En el iPhone se entrega por la hoja de compartir (*Guardar en Archivos*, iCloud Drive…); en el escritorio, como descarga.
+- **Formato versionado** (`schema: "elyum.backup"`, `version: 1`) con conteos y **SHA-256** de cada módulo y del total sobre JSON canónico. La pantalla muestra los 8 primeros caracteres (*huella*) para comparar copias a simple vista.
+- **Importar:** la copia se verifica entera antes de mostrar nada (formato, versión, que cada clave pertenezca a su módulo, conteos, integridad). Una copia alterada, de otra app o de una versión más nueva se rechaza **sin escribir nada**.
+- **Vista previa por módulo** (restauración selectiva): *nuevos* (se añaden), *duplicados* (iguales: nada), *en conflicto* (distintos: se conserva el de este dispositivo salvo que elijas la copia, clave a clave), *solo en este dispositivo* (se conservan: **una importación nunca borra**). Excepción visible: un día que aquí existe pero está vacío (ELYUM crea así el día de hoy al abrirse) viene preseleccionado para la copia.
+- **Antes de importar** hay que exportar el estado actual y confirmar que esa copia está guardada fuera del dispositivo; además, los valores que se van a reemplazar se apartan en `elyum:system:v1:pre-import`.
+- **Escritura verificada:** cada clave se relee tras escribirla. Si una falla (almacenamiento lleno o bloqueado), todo lo que esa importación había escrito se devuelve a su estado anterior y se muestra el error. Tras restaurar días o Aprender, la app se recarga para que nada en memoria vuelva a escribir encima.
+- **Errores de almacenamiento visibles:** al abrir y al volver al primer plano se escribe y relee una clave de prueba (`elyum:system:v1:health`); si falla, aparece un aviso arriba en todas las pantallas (el núcleo sigue guardando como siempre: esto solo hace visible el fallo). No se ofrece una actualización de la app mientras se prepara o escribe una importación.
+
 ### Probar y desplegar
 
 - Local: `npm run build && npm run preview` → http://localhost:4173 (DevTools → Application: Manifest, Service workers, Cache storage; *Offline* para probar sin red). Tests: `src/pwa/pwa.test.ts` (manifest, iconos, metadatos iOS, imágenes de lanzamiento, URLs simuladas, cuándo se ofrece una versión, standalone).
@@ -280,7 +293,7 @@ Puntos donde la especificación dejaba margen. Todos son fáciles de cambiar.
 - **FOCUS** tiene *Finalizar bloque* y, discreto, *Salir sin cerrar* (vuelve a HOY sin registrar resultado). El temporizador cuenta lo que queda del bloque; si se pasa, muestra el exceso con `+`.
 - **CIERRE** (20:50 en adelante) usa la atmósfera profunda también en HOY; el resto de estados son claros.
 - **Sin respaldo de martes:** los siete días tienen rutina propia; si faltara uno, error de rutina explícito.
-- **Navegación:** HOY y SEMANA están activas; Aprender y Sistema siguen atenuadas y sin acción en desktop, solo para validar la estructura (`src/layout/sections.ts`). En móvil, una navegación inferior discreta (HOY · SEMANA) muestra solo las secciones disponibles; se oculta durante la entrada, FOCUS y al abrir un día.
+- **Navegación:** HOY, SEMANA y SISTEMA están activas; Aprender sigue atenuada y sin acción en desktop, solo para validar la estructura (`src/layout/sections.ts`). En móvil, una navegación inferior discreta (HOY · SEMANA · SISTEMA) muestra solo las secciones disponibles; se oculta durante la entrada, FOCUS y al abrir un día.
 - **DAYSCAPE de otro día (desde SEMANA):** se construye con la rutina y los registros guardados de esa fecha, a la **misma hora del día** que ahora — igual que `?date=` —, así que su AHORA es el bloque de esa fecha a esta hora. Para hoy es exactamente el DAYSCAPE en vivo.
 - **Sin marca:** el único signo de identidad es una matriz de 3×3 puntos (placeholder).
 

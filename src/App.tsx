@@ -1,6 +1,7 @@
 import { AnimatePresence } from 'framer-motion'
 import { useCallback, useEffect, useState } from 'react'
 import { Atmosphere } from './atmosphere/Atmosphere'
+import { SystemNotice } from './features/backup/ui/SystemNotice'
 import { DailyEntry, isFieldStage, type EntryStage } from './features/entry/DailyEntry'
 import { MicroEntry } from './features/entry/MicroEntry'
 import { useEntry } from './features/entry/useEntry'
@@ -8,6 +9,7 @@ import { FocusClosing } from './features/focus/FocusClosing'
 import { FocusIntro } from './features/focus/FocusIntro'
 import { FocusView } from './features/focus/FocusView'
 import { useFocusFlow } from './features/focus/useFocusFlow'
+import { Sistema } from './features/system/Sistema'
 import { TodayView, type TodayAppear } from './features/today/TodayView'
 import { Semana } from './features/week/Semana'
 import { BottomNav, NavRail } from './layout/NavRail'
@@ -35,10 +37,14 @@ export function App() {
     if (phase !== 'today') setAppear('fade')
   }, [phase])
 
-  // SEMANA opens straight onto the week (never a second daily entry). `?section=semana` for review.
-  const [section, setSection] = useState<SectionId>(() =>
-    entry.kind === 'none' && new URLSearchParams(window.location.search).get('section') === 'semana' ? 'semana' : 'hoy',
-  )
+  // SEMANA and SISTEMA open straight onto their screen (never a second daily entry).
+  // `?section=semana` / `?section=sistema` for review.
+  const [section, setSection] = useState<SectionId>(() => {
+    const requested = new URLSearchParams(window.location.search).get('section')
+    return entry.kind === 'none' && (requested === 'semana' || requested === 'sistema') ? requested : 'hoy'
+  })
+  // An import in SISTEMA must not be cut by an update reload.
+  const [systemBusy, setSystemBusy] = useState(false)
   // A day opening from SEMANA takes the whole stage; today's DAYSCAPE lands on HOY like the entry does.
   const [immersive, setImmersive] = useState(false)
   const [weekHandoff, setWeekHandoff] = useState(false)
@@ -49,7 +55,9 @@ export function App() {
 
   const focusBlock = view.timeline.find((b) => b.id === (state.focus?.blockId ?? flow.closedBlockId))
   const inWeek = section === 'semana' && !entry.active && phase === 'today'
-  const showToday = (!entry.active || handoff) && (phase === 'today' || phase === 'entering') && (!inWeek || weekHandoff)
+  const inSystem = section === 'sistema' && !entry.active && phase === 'today'
+  const activeSection: SectionId = inWeek ? 'semana' : inSystem ? 'sistema' : 'hoy'
+  const showToday = (!entry.active || handoff) && (phase === 'today' || phase === 'entering') && (!inWeek || weekHandoff) && !inSystem
   const navHidden = entry.active || immersive || !(phase === 'today' || (phase === 'entering' && step < 2))
   // The entry's floating points become the DAY FIELD's first nodes; they return once HOY is back.
   const particles = entry.active
@@ -60,7 +68,7 @@ export function App() {
   const showFocus = focusBlock && ((phase === 'entering' && step >= 5) || phase === 'focus' || phase === 'exiting')
   const showClosing = focusBlock && (phase === 'result' || phase === 'next')
   // A new version waits until the app is at rest: never during Focus, the entry or an open day.
-  const update = useUpdates(isUpdateMoment({ phase, focusOpen: Boolean(state.focus), entryActive: entry.active, immersive }))
+  const update = useUpdates(isUpdateMoment({ phase, focusOpen: Boolean(state.focus), entryActive: entry.active, immersive, systemBusy }))
 
   return (
     <>
@@ -70,8 +78,8 @@ export function App() {
         scene={phase === 'today' || (phase === 'entering' && step < 3) ? 'today' : 'flow'}
         gather={phase === 'entering' && step >= 2}
       />
-      <NavRail hidden={navHidden} active={inWeek ? 'semana' : 'hoy'} onNavigate={navigate} />
-      <BottomNav hidden={navHidden} active={inWeek ? 'semana' : 'hoy'} onNavigate={navigate} />
+      <NavRail hidden={navHidden} active={activeSection} onNavigate={navigate} />
+      <BottomNav hidden={navHidden} active={activeSection} onNavigate={navigate} />
 
       <AnimatePresence>
         {entry.active && entry.kind === 'full' && (
@@ -107,6 +115,8 @@ export function App() {
         )}
       </AnimatePresence>
 
+      <AnimatePresence>{inSystem && <Sistema key="sistema" onBusy={setSystemBusy} />}</AnimatePresence>
+
       <AnimatePresence>
         {phase === 'entering' && step >= 4 && <FocusIntro key="intro" dissolving={step >= 5} />}
       </AnimatePresence>
@@ -136,6 +146,7 @@ export function App() {
       </AnimatePresence>
 
       <UpdateNotice visible={update.offer} onApply={update.apply} />
+      <SystemNotice hidden={navHidden || inSystem} onOpen={() => navigate('sistema')} />
     </>
   )
 }

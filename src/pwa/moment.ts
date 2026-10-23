@@ -8,13 +8,15 @@ export interface AppMoment {
   entryActive: boolean
   /** A day opened from SEMANA holds the whole stage. */
   immersive: boolean
+  /** SISTEMA is preparing or writing an import: a reload now could leave it half done. */
+  systemBusy?: boolean
 }
 
 /**
  * A new version is offered — and may reload the page — only at rest on HOY or
  * SEMANA: never during Focus (entering, the session itself, its closing), the
- * daily entry, or a day opened from the week.
+ * daily entry, a day opened from the week, or an import in SISTEMA.
  */
-export function isUpdateMoment({ phase, focusOpen, entryActive, immersive }: AppMoment): boolean {
-  return phase === 'today' && !focusOpen && !entryActive && !immersive
+export function isUpdateMoment({ phase, focusOpen, entryActive, immersive, systemBusy = false }: AppMoment): boolean {
+  return phase === 'today' && !focusOpen && !entryActive && !immersive && !systemBusy
 }

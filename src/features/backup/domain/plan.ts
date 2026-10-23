@@ -103,6 +103,20 @@ export function defaultSelection(plan: ImportPlan): ImportSelection {
   }
 }
 
+/**
+ * A person's choices, carried over to a new preview of the same copy (after
+ * this device changed): the same modules; a chosen conflict stays chosen only
+ * if it is still a conflict; untouched days are pre-selected as always.
+ */
+export function carrySelection(plan: ImportPlan, previous: ImportSelection): ImportSelection {
+  const conflicts = new Set(MODULE_IDS.flatMap((id) => plan.modules[id].entries.filter((e) => e.kind === 'conflict').map((e) => e.key)))
+  const base = defaultSelection(plan)
+  return {
+    modules: [...new Set([...previous.modules, ...base.modules])].filter((id) => MODULE_IDS.includes(id)),
+    takeBackup: [...new Set([...previous.takeBackup.filter((k) => conflicts.has(k)), ...base.takeBackup])],
+  }
+}
+
 /** The writes a selection means. Only new keys and explicitly chosen conflicts; never a deletion. */
 export function plannedWrites(plan: ImportPlan, selection: ImportSelection): PlannedWrite[] {
   const chosen = new Set(selection.takeBackup)

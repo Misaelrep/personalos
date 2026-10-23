@@ -51,6 +51,27 @@ node scripts/check-scope.mjs <p1|p2>   # falla si el paquete toca algo fuera de 
 - APRENDER.
 - Service worker y manifest.
 
+### P2 · revisión 2 — riesgos de concurrencia (24/10/2026)
+
+**Pedido en la revisión:** evitar sobrescrituras desde otras pestañas con estado obsoleto, y que la importación no sobrescriba datos que cambiaron después de la vista previa. Sin rediseñar el núcleo.
+
+| Archivo | Cambio |
+|---|---|
+| `src/features/backup/storage/restore.ts` | Nuevo: marcador de restauración entre pestañas (`elyum:system:v1:restore`), regla de la guarda (`guardAction`), importaciones simultáneas (`restoreInProgressElsewhere`) |
+| `src/features/backup/domain/apply.ts` | Comprobación previa (`changedSincePreview`): si algo cambió desde la vista previa, no se escribe nada. Comprobación posterior (`overwrittenAfterImport`). `sameStored` ignora solo `lastActiveAt` de la entrada |
+| `src/features/backup/domain/plan.ts` | `carrySelection`: conserva las elecciones en la vista previa actualizada |
+| `src/features/backup/ui/Copias.tsx` | Anunciar → esperar 400 ms → reverificar → escribir → cerrar el anuncio. Vista previa actualizada con lo que cambió, nueva copia externa obligatoria; aviso si otra pestaña restaura |
+| `src/features/backup/ui/SystemNotice.tsx` | `RestoreGuard`: velo que bloquea toques y teclas en las demás pestañas y recarga al terminar. Aviso persistente de «Restauración incompleta» |
+| `src/features/backup/ui/health.ts` | El aviso de restauración lleva las claves sobrescritas |
+| `src/App.tsx` | Montar `<RestoreGuard />` (1 línea + import) |
+| `src/features/backup/tabs.test.ts` | 15 tests: el riesgo sin guarda (control), bloqueo y recarga, pestaña en segundo plano, pestaña abierta en mitad de la restauración (y liberada si esta se abandona), varias pestañas, restauración abandonada, marcador antiguo, importaciones simultáneas, sobrescritura detectada, vista previa obsoleta (no escribe nada), conflicto elegido con valor nuevo, latido de la entrada, elecciones conservadas |
+| `docs/proyectos/pruebas/dos-pestanas.cjs` | Prueba en navegador real con dos pestañas y eventos `storage` reales: 9/9 comprobaciones correctas |
+| `README.md` | Explicación de ambos mecanismos |
+
+**Núcleo:** sin cambios fuera de lo ya aprobado (`App.tsx`).
+
+**Tests:** 325 (280 + 45).
+
 ## P1 · Modelo de PROYECTOS — `proyectos/p1-dominio`
 
 Ver su sección cuando se añada en esa rama.

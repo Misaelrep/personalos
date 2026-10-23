@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Button } from '../../../components/ui/Button'
 import { Label } from '../../../components/ui/Label'
-import { applyWrites, type ApplyReport } from '../domain/apply'
+import { applyWrites, changedSincePreview, overwrittenAfterImport, type ApplyReport } from '../domain/apply'
 import { canonicalJson } from '../domain/canonical'
 import { collectModules } from '../domain/collect'
 import { backupFileName, createBackup, localIsoString, serializeBackup } from '../domain/create'
@@ -9,7 +9,8 @@ import { keyLabel, valueSummary } from '../domain/describe'
 import { MODULE_IDS, MODULE_LABEL, type BackupFile, type ModuleId } from '../domain/format'
 import { shortHash } from '../domain/integrity'
 import { parseBackup } from '../domain/parse'
-import { defaultSelection, planImport, plannedWrites, type ImportPlan, type ImportSelection } from '../domain/plan'
+import { carrySelection, defaultSelection, planImport, plannedWrites, type ImportPlan, type ImportSelection } from '../domain/plan'
+import { ownRestores, restoreInProgressElsewhere, writeMarker } from '../storage/restore'
 import { browserStorage } from '../storage/storage'
 import { daysSince, loadMeta, saveMeta } from '../storage/system'
 import { deliverFile, deviceLabel } from './deliver'
@@ -23,9 +24,21 @@ interface CopiasProps {
 type ImportState =
   | { step: 'idle' }
   | { step: 'rejected'; message: string }
-  | { step: 'preview'; file: BackupFile; plan: ImportPlan; selection: ImportSelection; safety?: SafetyCopy; confirmed: boolean }
+  | {
+      step: 'preview'
+      file: BackupFile
+      plan: ImportPlan
+      selection: ImportSelection
+      safety?: SafetyCopy
+      confirmed: boolean
+      /** Keys that changed on this device after an earlier preview: this one replaces it. */
+      changed?: string[]
+      /** Another tab is restoring: this one waits. */
+      elsewhere?: boolean
+    }
   | { step: 'failed'; report: ApplyReport }
-  | { step: 'done'; written: number; reloading: boolean }
+  | { step: 'writing' }
+  | { step: 'done'; written: number; reloading: boolean; overwritten: string[] }
 
 interface SafetyCopy {
   hash: string
@@ -66,7 +79,7 @@ export function Copias({ onBusy }: CopiasProps) {
     }
   }, [storage, imp.step, exported])
 
-  const busy = imp.step === 'preview' || imp.step === 'done' || working
+  const busy = imp.step === 'preview' || imp.step === 'writing' || imp.step === 'done' || working
   useEffect(() => onBusy(busy), [busy, onBusy])
   useEffect(() => () => onBusy(false), [onBusy])
 
@@ -119,25 +132,61 @@ export function Copias({ onBusy }: CopiasProps) {
     if (r) setImp({ ...imp, safety: { hash: r.hash, delivered: r.delivered }, confirmed: false })
   }
 
-  const onApply = () => {
+  /** The device changed since the preview: show the new one; the safety copy and the confirmation must be done again. */
+  const reviewAgain = (prev: Extract<ImportState, { step: 'preview' }>, changed: string[]) => {
+    if (!storage) return
+    const plan = planImport(prev.file, storage)
+    setImp({ step: 'preview', file: prev.file, plan, selection: carrySelection(plan, prev.selection), confirmed: false, changed })
+  }
+
+  const onApply = async () => {
     if (imp.step !== 'preview' || !storage || !imp.safety || !imp.confirmed) return
-    // Re-read this device right before writing: the preview must still be true.
-    const fresh = planImport(imp.file, storage)
-    const writes = plannedWrites(fresh, imp.selection)
+    const preview = imp
+    if (restoreInProgressElsewhere(storage, Date.now(), ownRestores)) {
+      setImp({ ...preview, elsewhere: true })
+      return
+    }
+    // Exactly what the person reviewed: every key over the value the preview showed.
+    const writes = plannedWrites(preview.plan, preview.selection)
+    const before = changedSincePreview(storage, writes)
+    if (before.length) return reviewAgain(preview, before)
+
+    // Tell every other tab first, so they stop (and cannot save an old state) before anything is written.
+    const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+    ownRestores.add(id)
+    try {
+      writeMarker(storage, { id, phase: 'writing', at: Date.now() })
+    } catch {
+      setImp({ step: 'failed', report: { ok: false, written: 0, localSafetyCopy: false, failure: { kind: 'unavailable', message: 'No se pudo avisar a las demás pestañas de ELYUM: no se escribió nada.' } } })
+      return
+    }
+    setImp({ step: 'writing' })
+    await new Promise((r) => window.setTimeout(r, 400))
+
     const report = applyWrites(storage, writes, Date.now())
+    try {
+      writeMarker(storage, { id, phase: report.ok ? 'done' : 'failed', at: Date.now() })
+    } catch {
+      // Other tabs treat a restore that never ends as abandoned and reload anyway.
+    }
     recheck()
     if (!report.ok) {
+      if (report.failure?.kind === 'stale') return reviewAgain(preview, report.changed ?? [])
       setImp({ step: 'failed', report })
       return
     }
-    saveMeta(storage, { lastImport: { at: Date.now(), hash: imp.file.integrity.total, written: report.written } })
+    saveMeta(storage, { lastImport: { at: Date.now(), hash: preview.file.integrity.total, written: report.written } })
     // Days and APRENDER are held in memory by their screens: reload so nothing stale is saved back over the restored data.
     const reload = writes.some((w) => w.key.startsWith('personal-os:') || w.key.startsWith('elyum:learn:'))
-    setImp({ step: 'done', written: report.written, reloading: reload })
-    if (reload) {
-      leaveImportNotice({ written: report.written, at: Date.now() })
-      window.setTimeout(() => window.location.reload(), 1200)
-    }
+    setImp({ step: 'done', written: report.written, reloading: reload, overwritten: [] })
+    // Once other tabs have had time to stop and reload: is everything still what was written?
+    window.setTimeout(() => {
+      const overwritten = overwrittenAfterImport(storage, writes)
+      if (reload) {
+        leaveImportNotice({ written: report.written, at: Date.now(), overwritten })
+        window.location.reload()
+      } else setImp({ step: 'done', written: report.written, reloading: false, overwritten })
+    }, 1500)
   }
 
   const last = meta.lastExport
@@ -210,15 +259,21 @@ export function Copias({ onBusy }: CopiasProps) {
             onSelection={(selection) => setImp({ ...imp, selection })}
             onSafetyCopy={onSafetyCopy}
             onConfirm={(confirmed) => setImp({ ...imp, confirmed })}
-            onApply={onApply}
+            onApply={() => void onApply()}
             onCancel={() => setImp({ step: 'idle' })}
           />
+        )}
+        {imp.step === 'writing' && (
+          <p role="status" className="mt-6 text-[15px] text-ink">
+            Restaurando…
+          </p>
         )}
         {imp.step === 'done' && (
           <p role="status" className="mt-6 text-[15px] text-ink">
             Restaurado: {plural(imp.written, 'dato escrito', 'datos escritos')} y verificados.{imp.reloading ? ' Recargando ELYUM…' : ''}
           </p>
         )}
+        {imp.step === 'done' && imp.overwritten.length > 0 && <Overwritten keys={imp.overwritten} />}
       </section>
     </div>
   )
@@ -241,7 +296,7 @@ function Preview({
   onApply: () => void
   onCancel: () => void
 }) {
-  const { file, plan, selection, safety, confirmed } = state
+  const { file, plan, selection, safety, confirmed, changed, elsewhere } = state
   const writes = plannedWrites(plan, selection)
   const toggleModule = (id: ModuleId, on: boolean) =>
     onSelection({ ...selection, modules: on ? [...selection.modules, id] : selection.modules.filter((m) => m !== id) })
@@ -254,6 +309,17 @@ function Preview({
 
   return (
     <div className="mt-6 flex flex-col gap-5">
+      {changed && changed.length > 0 && (
+        <Problem title="Este dispositivo cambió después de la vista previa">
+          No se escribió nada. Cambió: {changed.map(keyLabel).join(', ')}. Esta es la vista previa actualizada: revísala, exporta otra vez el estado actual
+          y confirma de nuevo.
+        </Problem>
+      )}
+      {elsewhere && (
+        <Problem title="Otra pestaña está restaurando una copia">
+          No se escribió nada. Espera a que termine (las pestañas se recargan solas) y vuelve a intentarlo.
+        </Problem>
+      )}
       <div className="text-[14px] leading-relaxed text-ink-2">
         <p>
           Copia del <span className="text-ink">{formatCreated(file.createdAt)}</span>
@@ -340,6 +406,15 @@ function Preview({
         </Button>
       </div>
     </div>
+  )
+}
+
+function Overwritten({ keys }: { keys: string[] }) {
+  return (
+    <Problem title="La restauración no se conservó entera">
+      Otra pestaña de ELYUM cambió {keys.map(keyLabel).join(', ')} durante la restauración. Cierra las demás pestañas y vuelve a importar la copia: lo que
+      había antes sigue en la copia que exportaste.
+    </Problem>
   )
 }
 

@@ -8,6 +8,8 @@ export const IMPORT_REPORT_KEY = 'elyum:system:v1:import-report'
 export interface ImportNotice {
   written: number
   at: number
+  /** Keys another tab wrote over after the import (shown as a problem until dismissed). */
+  overwritten?: string[]
 }
 
 /**

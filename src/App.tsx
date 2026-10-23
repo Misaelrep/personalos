@@ -1,7 +1,7 @@
 import { AnimatePresence } from 'framer-motion'
 import { useCallback, useEffect, useState } from 'react'
 import { Atmosphere } from './atmosphere/Atmosphere'
-import { SystemNotice } from './features/backup/ui/SystemNotice'
+import { RestoreGuard, SystemNotice } from './features/backup/ui/SystemNotice'
 import { DailyEntry, isFieldStage, type EntryStage } from './features/entry/DailyEntry'
 import { MicroEntry } from './features/entry/MicroEntry'
 import { useEntry } from './features/entry/useEntry'
@@ -147,6 +147,7 @@ export function App() {
 
       <UpdateNotice visible={update.offer} onApply={update.apply} />
       <SystemNotice hidden={navHidden || inSystem} onOpen={() => navigate('sistema')} />
+      <RestoreGuard />
     </>
   )
 }

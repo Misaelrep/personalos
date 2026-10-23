@@ -10,7 +10,10 @@ export interface ApplyReport {
   written: number
   /** The values about to be replaced were also kept on this device (an extra net: the external copy is the real one). */
   localSafetyCopy: boolean
-  failure?: { key?: string; kind: StorageErrorKind; message: string }
+  /** `stale`: this device changed since the preview — nothing was written, the preview must be reviewed again. */
+  failure?: { key?: string; kind: StorageErrorKind | 'stale'; message: string }
+  /** For `stale`: the keys that changed since the preview. */
+  changed?: string[]
   /** On failure, every key written by this import was returned to what it held before. */
   rolledBack?: boolean
   /** Keys whose previous value could not be put back (should be empty; shown if not). */
@@ -24,6 +27,18 @@ export interface ApplyReport {
  * its previous value — and the failure is reported. Nothing else is touched.
  */
 export function applyWrites(storage: StorageLike, writes: PlannedWrite[], now: number): ApplyReport {
+  // The preview is a promise: every key is written over exactly the value the person reviewed. If anything changed
+  // since (another tab, the clock crossing midnight…), nothing is written and the preview must be reviewed again.
+  const changed = changedSincePreview(storage, writes)
+  if (changed.length)
+    return {
+      ok: false,
+      written: 0,
+      localSafetyCopy: false,
+      changed,
+      failure: { kind: 'stale', message: 'Los datos de este dispositivo cambiaron después de la vista previa. No se escribió nada.' },
+    }
+
   let localSafetyCopy = false
   const replaced = Object.fromEntries(writes.filter((w) => w.previous !== null).map((w) => [w.key, w.previous]))
   try {
@@ -68,4 +83,38 @@ function rollback(storage: StorageLike, writes: PlannedWrite[]): string[] {
     }
   }
   return failures
+}
+
+/**
+ * Two stored values mean the same for an import. Exact text, except the entry
+ * memory's `lastActiveAt`: a heartbeat every open tab refreshes every 30 s
+ * (merging, never overwriting the rest). It is not the person's data.
+ */
+export function sameStored(key: string, a: string | null, b: string | null): boolean {
+  if (a === b) return true
+  if (key !== 'personal-os:entry' || a === null || b === null) return false
+  try {
+    const strip = (v: string) => {
+      const o = JSON.parse(v) as Record<string, unknown>
+      delete o.lastActiveAt
+      return JSON.stringify(Object.keys(o).sort().map((k) => [k, o[k]]))
+    }
+    return strip(a) === strip(b)
+  } catch {
+    return false
+  }
+}
+
+/** Keys the import would write whose value here is no longer the one the preview showed. */
+export function changedSincePreview(storage: StorageLike, writes: PlannedWrite[]): string[] {
+  return writes.filter((w) => !sameStored(w.key, storage.getItem(w.key), w.previous)).map((w) => w.key)
+}
+
+/**
+ * After the import, once things have settled: keys that no longer hold what
+ * was written — something (a tab that missed the warning) wrote over them.
+ * Reported to the person; never silently accepted.
+ */
+export function overwrittenAfterImport(storage: StorageLike, writes: PlannedWrite[]): string[] {
+  return writes.filter((w) => !sameStored(w.key, storage.getItem(w.key), w.value)).map((w) => w.key)
 }

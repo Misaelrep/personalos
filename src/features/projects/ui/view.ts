@@ -30,8 +30,10 @@ export interface ProjectSummary {
   open: number
   /** Next actions the person wrote on open tasks. */
   nextActions: Task[]
-  /** Tasks that could be the next action (P1 rules). Never chosen automatically. */
+  /** The person's tasks that could be the next action (P1 rules). Never chosen automatically. */
   candidates: Task[]
+  /** P4b · Open tasks given to an agent: listed apart from the person's own. */
+  agents: Task[]
   blocked: { task: Task; blockers: Blockers }[]
   milestones: Milestone[]
   references: number
@@ -52,8 +54,9 @@ export function projectSummary(data: ProjectsData, projectId: string): ProjectSu
     tasks,
     stages,
     open: openTasks.length,
-    nextActions: openTasks.filter((t) => t.nextAction?.trim()),
-    candidates: nextActionCandidates(data, projectId),
+    nextActions: openTasks.filter((t) => t.nextAction?.trim() && t.owner?.kind !== 'agente'),
+    candidates: nextActionCandidates(data, projectId, 'humano'),
+    agents: openTasks.filter((t) => t.owner?.kind === 'agente'),
     blocked: openTasks.filter((t) => stageOf(data, t, index) === 'bloqueada').map((task) => ({ task, blockers: blockersOf(data, task, index) })),
     milestones: data.milestones.filter((m) => m.projectId === projectId),
     references: (data.references ?? []).filter((r) => r.projectId === projectId).length,
@@ -69,7 +72,7 @@ export function projectSummary(data: ProjectsData, projectId: string): ProjectSu
 export interface Track {
   executed: { state: 'si' | 'no' | 'sin-decidir'; workClass?: WorkClass; literal: string }
   verified: { state: VerificationState | 'sin-dato'; literal?: string }
-  approved: { state: ApprovalState; literal?: string; returned: boolean }
+  approved: { state: ApprovalState; literal?: string; returned: boolean; decidedAt?: string }
 }
 
 export function trackOf(data: ProjectsData, t: Task): Track {
@@ -77,7 +80,7 @@ export function trackOf(data: ProjectsData, t: Task): Track {
   return {
     executed: { state: c === 'ejecutada' ? 'si' : c === undefined || c === 'sin-decidir' ? 'sin-decidir' : 'no', ...(c ? { workClass: c } : {}), literal: t.status },
     verified: { state: t.verification?.state ?? 'sin-dato', ...(t.verification?.literal ? { literal: t.verification.literal } : {}) },
-    approved: { state: t.approval.state, ...(t.approval.original?.literal ? { literal: t.approval.original.literal } : {}), returned: isReturned(t) },
+    approved: { state: t.approval.state, ...(t.approval.original?.literal ? { literal: t.approval.original.literal } : {}), returned: isReturned(t), ...(t.approval.decidedAt ? { decidedAt: t.approval.decidedAt } : {}) },
   }
 }
 

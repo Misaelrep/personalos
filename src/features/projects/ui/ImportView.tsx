@@ -3,9 +3,10 @@ import { useEffect, useRef, useState } from 'react'
 import { Button } from '../../../components/ui/Button'
 import { Label } from '../../../components/ui/Label'
 import { APPROVAL_STATES, WORK_CLASSES, type ApprovalState, type ProjectsData, type WorkClass } from '../domain/types'
-import { SYNTHETIC_DOSSIER, SYNTHETIC_DOSSIER_NAME, SYNTHETIC_DOSSIER_V2, SYNTHETIC_DOSSIER_V2_NAME } from '../import/fixtures'
+import { SYNTHETIC_DOSSIER, SYNTHETIC_DOSSIER_NAME, SYNTHETIC_DOSSIER_V2, SYNTHETIC_DOSSIER_V2_NAME, SYNTHETIC_TALLER, SYNTHETIC_TALLER_NAME } from '../import/fixtures'
 import type { DossierField, ImportDecisions, PlanItem, Resolutions } from '../import/plan'
 import type { DossierBundle } from '../import/bundle'
+import { similarProjects } from '../domain/operations'
 import { readDossierFile, type DossierFile } from '../import/readers'
 import type { PreviewedImport } from '../store/session'
 import { APPROVAL_LABEL, dateTime, FIELD_LABEL, fieldText, shortHash, WORK_CLASS_LABEL } from './labels'
@@ -48,6 +49,7 @@ export function ImportView({ p }: { p: Projects }) {
   const [readError, setReadError] = useState<string>()
   const [target, setTarget] = useState<Target>()
   const [targetWhy, setTargetWhy] = useState<string>()
+  const [distinctAck, setDistinctAck] = useState(false)
   const [classes, setClasses] = useState<Record<string, WorkClass>>({})
   const [approvals, setApprovals] = useState<Record<string, ApprovalState>>({})
   const [resolutions, setResolutions] = useState<Resolutions>({})
@@ -102,6 +104,7 @@ export function ImportView({ p }: { p: Projects }) {
     setReadError(undefined)
     setTarget(undefined)
     setTargetWhy(undefined)
+    setDistinctAck(false)
     setClasses({})
     setApprovals({})
     setResolutions({})
@@ -134,7 +137,9 @@ export function ImportView({ p }: { p: Projects }) {
     )
 
   const plan = preview?.plan
-  const existingNames = data!.projects.filter((x) => target?.kind === 'nuevo' && x.name.trim().toLowerCase() === target.name.trim().toLowerCase())
+  // P4b · A new project whose name looks like an existing one needs an explicit choice: link to it, or say it is another.
+  const similar = target?.kind === 'nuevo' ? similarProjects(data!, target.name) : []
+  const needsLinkChoice = similar.length > 0 && !distinctAck
   const vocab = plan ? data!.vocabularies[plan.dossierKey] : undefined
   const approvalLiterals = plan ? [...new Set(plan.bundle.tasks.flatMap((t) => (t.approvalLiteral !== undefined ? [t.approvalLiteral] : [])))].filter((l) => !vocab?.approval.some((a) => a.literal === l)) : []
   const conflicts = plan?.items.filter((i) => i.kind === 'conflicto') ?? []
@@ -185,6 +190,9 @@ export function ImportView({ p }: { p: Projects }) {
                 <Button variant="choice" className="h-10 min-w-0 px-4 text-[11.5px]" onClick={() => choose(synthetic(SYNTHETIC_DOSSIER_V2_NAME, SYNTHETIC_DOSSIER_V2))}>
                   Huerto v2 · cambios
                 </Button>
+                <Button variant="choice" className="h-10 min-w-0 px-4 text-[11.5px]" onClick={() => choose(synthetic(SYNTHETIC_TALLER_NAME, SYNTHETIC_TALLER))}>
+                  Taller
+                </Button>
               </div>
             </Card>
             {readError && (
@@ -229,7 +237,22 @@ export function ImportView({ p }: { p: Projects }) {
                       onChange={(e) => setTarget({ kind: 'nuevo', name: e.target.value })}
                     />
                   )}
-                  {existingNames.length > 0 && <Banner tone="warn">Ya existe un proyecto llamado «{existingNames[0].name}». Si es el mismo, elígelo arriba: así no se duplica.</Banner>}
+                  {similar.length > 0 && (
+                    <div className="flex flex-col gap-2" data-testid="similar">
+                      <Banner tone="warn">
+                        Se parece a {similar.map((x) => `«${x.name}»`).join(', ')}. Si este dossier es de ese proyecto, vincúlalo; si no, confirma que es otro.
+                      </Banner>
+                      {similar.map((x) => (
+                        <Button key={x.id} variant="choice" className="h-10 min-w-0 px-4 text-[11.5px]" onClick={() => (setTarget({ kind: 'existente', projectId: x.id }), setTargetWhy(`Vinculado a «${x.name}» por tu elección.`))} data-testid="link-similar">
+                          Importar en «{x.name}»
+                        </Button>
+                      ))}
+                      <label className="flex items-start gap-2.5 px-1 text-[14px] text-ink-2">
+                        <input type="checkbox" className="mt-1 accent-[var(--color-electric)]" checked={distinctAck} onChange={(e) => setDistinctAck(e.target.checked)} data-testid="distinct" />
+                        Es otro proyecto: crearlo nuevo.
+                      </label>
+                    </div>
+                  )}
                 </Card>
               </Section>
 
@@ -403,7 +426,7 @@ export function ImportView({ p }: { p: Projects }) {
                   </div>
                 )}
                 <div className="flex flex-col gap-2">
-                  <Button data-testid="confirm" disabled={!plan.ok || !s.writable || busy || preview?.baseGeneration !== s.generation} onClick={confirm} className="w-full">
+                  <Button data-testid="confirm" disabled={!plan.ok || !s.writable || busy || needsLinkChoice || preview?.baseGeneration !== s.generation} onClick={confirm} className="w-full">
                     {plan.creating ? `Crear «${target.kind === 'nuevo' ? target.name : ''}» e importar` : 'Confirmar importación'}
                   </Button>
                   <Button variant="quiet" onClick={reset} data-testid="cancel">

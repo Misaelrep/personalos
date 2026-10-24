@@ -49,3 +49,27 @@ export const SYNTHETIC_DOSSIER_V2 = SYNTHETIC_DOSSIER.replace('20 de octubre de 
   .replace('| Cambiar el goteo |', '| Cambiar el goteo de la parcela norte |')
   .replace('| Elegir semillas | Borrador existente |', '| Elegir semillas | En curso |')
   .replace(/\| HUE-06 .*\n/, '| HUE-07 | Registro | Fotografiar los brotes | Pendiente | Carpeta de fotos | HUE-04 | 10 min | — | Una foto por parcela | F2 |\n')
+
+/** P4b · A second SYNTHETIC project, so the weekly review has more than one backlog. Invented words only. */
+export const SYNTHETIC_TALLER_NAME = 'DOSSIER_SINTETICO_TALLER_2026-10-21.md'
+
+export const SYNTHETIC_TALLER = `# DOSSIER OPERATIVO — TALLER DE PRUEBA
+
+**Fecha de elaboración:** 21 de octubre de 2026.
+**Finalidad:** ordenar un taller inventado para probar la revisión semanal.
+
+## 1. Fuentes
+
+| Clave | Fuente | Evidencia específica |
+|---|---|---|
+| F1 | \`inventario_ficticio.md\` | Herramientas disponibles |
+
+## 8. Backlog
+
+| ID | Área | Tarea concreta | Estado | Entregable | Dependencia | Tiempo humano | Agente posible | Hecho cuando… | Fuente |
+|---|---|---|---|---|---|---|---|---|---|
+| TAL-01 | Orden | Vaciar la mesa de trabajo | Pendiente | Mesa libre | — | 30 min | — | La mesa está vacía | F1 |
+| TAL-02 | Orden | Etiquetar los cajones | Pendiente | Cajones con etiqueta | TAL-01 | 45 min | IA propone etiquetas | Cada cajón tiene etiqueta | F1 |
+| TAL-03 | Registro | Escribir el inventario | Pendiente | Lista de herramientas | — | 1 h | Claude Code | La lista está completa | F1 |
+| TAL-04 | Compras | Pedir tornillos | Hecho | Pedido | — | 10 min | — | Pedido enviado | F1 |
+`

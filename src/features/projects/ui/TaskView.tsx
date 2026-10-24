@@ -16,7 +16,10 @@ import {
 } from './labels'
 import { Card, Chip, Empty, Field, Mono, RowLink, Section, StageChip, Title, TopBar } from './parts'
 import { taskHref } from './ProjectView'
+import { committedWeeks } from './review'
+import { ConditionButtons, DecisionControl, EvidenceForm, OwnerControl, StatusControl } from './TaskActions'
 import { taskDetail, type Track } from './view'
+import { useWrite } from './write'
 
 /** P4a · TAREA: everything known about one task, with where it came from. Read-only. */
 
@@ -40,7 +43,7 @@ function TrackRow({ track }: { track: Track }) {
       label: 'Aprobada',
       value: APPROVAL_LABEL[track.approved.state],
       on: track.approved.state === 'aprobada',
-      note: track.approved.literal ? `dossier: «${track.approved.literal}»` : 'sin decisión registrada',
+      note: track.approved.decidedAt ? `tu decisión · ${dateTime(track.approved.decidedAt)}` : track.approved.literal ? `dossier: «${track.approved.literal}»` : 'sin decisión registrada',
     },
   ]
   return (
@@ -58,6 +61,7 @@ function TrackRow({ track }: { track: Track }) {
 
 export function TaskView({ data, taskId }: { data: ProjectsData; taskId: string }) {
   const d = taskDetail(data, taskId)
+  const { writable } = useWrite()
   if (!d) {
     return (
       <>
@@ -88,9 +92,22 @@ export function TaskView({ data, taskId }: { data: ProjectsData; taskId: string 
         <StageChip stage={d.stage} />
         <span className="text-[13px] text-ink-3">{STAGE_HINT[d.stage]}</span>
         {d.track.approved.returned && <Chip tone="warn">Devuelta</Chip>}
+        {t.owner?.kind === 'agente' && <Chip>Encargo · {t.owner.name}</Chip>}
+        {committedWeeks(data, t.id).map((w) => (
+          <Chip key={w}>Compromiso · semana del {w.slice(8)}/{w.slice(5, 7)}</Chip>
+        ))}
       </div>
 
       <TrackRow track={d.track} />
+
+      {writable && (
+        <Section label="Decidir">
+          <Card className="overflow-hidden" key={t.id}>
+            <StatusControl data={data} t={t} />
+            <DecisionControl data={data} t={t} />
+          </Card>
+        </Section>
+      )}
 
       <Section label="Hecho cuando…">
         {t.acceptance.length ? (
@@ -138,6 +155,7 @@ export function TaskView({ data, taskId }: { data: ProjectsData; taskId: string 
                         ) : (
                           <span>
                             <Inline text={o.literal} /> · <span className="text-ink-3">{CONDITION_LABEL[o.state]}</span>
+                            <ConditionButtons t={t} requirementId={r.id} optionIndex={i} state={o.state} />
                           </span>
                         )}
                       </li>
@@ -158,19 +176,28 @@ export function TaskView({ data, taskId }: { data: ProjectsData; taskId: string 
           <Field label="Prioridad" missing="Sin asignar">
             {lit(t.priority)}
           </Field>
-          <Field label="Responsable" missing="Sin asignar">
-            {t.owner ? `${t.owner.name} · ${t.owner.kind}` : undefined}
-          </Field>
+          {!writable && (
+            <Field label="Responsable" missing="Sin asignar">
+              {t.owner ? `${t.owner.name} · ${t.owner.kind}` : undefined}
+            </Field>
+          )}
           <Field label="Agente posible (dossier)" missing="El dossier no lo indica">
             {lit(t.delegation?.literal)}
           </Field>
           <Field label="Candidatos a delegación" missing="Ninguno decidido">
             {t.delegation?.candidates.length ? t.delegation.candidates.map((c) => c.name).join(', ') : undefined}
           </Field>
-          <Field label="Siguiente acción" missing="Sin escribir">
-            {lit(t.nextAction)}
-          </Field>
+          {!writable && (
+            <Field label="Siguiente acción" missing="Sin escribir">
+              {lit(t.nextAction)}
+            </Field>
+          )}
         </Card>
+        {writable && (
+          <Card className="mt-2 overflow-hidden" key={t.id}>
+            <OwnerControl t={t} />
+          </Card>
+        )}
       </Section>
 
       <Section label="Trabajo">
@@ -204,6 +231,7 @@ export function TaskView({ data, taskId }: { data: ProjectsData; taskId: string 
             ))}
           </Card>
         )}
+        {writable && <EvidenceForm key={t.id} t={t} />}
       </Section>
 
       {d.usedBy.length > 0 && (

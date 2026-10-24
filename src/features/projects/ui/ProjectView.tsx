@@ -84,7 +84,7 @@ export function ProjectView({ data, projectId }: { data: ProjectsData; projectId
         </Section>
       )}
 
-      <Section label="Siguientes acciones" count={s.nextActions.length + s.candidates.length}>
+      <Section label="Tus siguientes acciones" count={s.nextActions.length + s.candidates.filter((t) => !s.nextActions.includes(t)).length}>
         {s.nextActions.length === 0 && s.candidates.length === 0 ? (
           <Empty>
             Ninguna tarea está lista todavía{notReady.length ? `: ${notReady.join(', ')}` : ''}. Una tarea es candidata cuando su estado tiene clase y no le queda ningún requisito pendiente ni por verificar.
@@ -99,6 +99,18 @@ export function ProjectView({ data, projectId }: { data: ProjectsData; projectId
               .map((t) => (
                 <TaskLine key={t.id} t={t} data={data} note="Candidata · sin siguiente acción escrita" />
               ))}
+          </Card>
+        )}
+      </Section>
+
+      <Section label="Encargos a agentes" count={s.agents.length}>
+        {s.agents.length === 0 ? (
+          <Empty>Ningún encargo abierto en este proyecto.</Empty>
+        ) : (
+          <Card className="overflow-hidden">
+            {s.agents.map((t) => (
+              <TaskLine key={t.id} t={t} data={data} note={`${t.owner!.name}${t.nextAction ? ` · ${t.nextAction}` : ' · sin instrucción escrita'}`} />
+            ))}
           </Card>
         )}
       </Section>

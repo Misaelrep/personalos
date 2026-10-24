@@ -6,7 +6,10 @@ import { Overview } from './Overview'
 import { Banner, RowLink } from './parts'
 import { ProjectView } from './ProjectView'
 import { TaskView } from './TaskView'
+import { NewProjectView } from './NewProjectView'
+import { ReviewView } from './ReviewView'
 import { useProjects } from './useProjects'
+import { WriteProvider } from './write'
 
 /**
  * P4a · PROYECTOS on its test page (proyectos.html), outside the app's
@@ -17,9 +20,19 @@ import { useProjects } from './useProjects'
  *   #/proyecto/<id>    PROYECTO
  *   #/tarea/<id>       TAREA
  *   #/importar  #/exportar  #/prueba-iphone
+ *   #/semana           REVISIÓN SEMANAL (P4b)
+ *   #/nuevo-proyecto   NUEVO PROYECTO (P4b)
  */
 
-type Route = { kind: 'inicio' } | { kind: 'proyecto'; id: string } | { kind: 'tarea'; id: string } | { kind: 'importar' } | { kind: 'exportar' } | { kind: 'prueba' }
+type Route =
+  | { kind: 'inicio' }
+  | { kind: 'proyecto'; id: string }
+  | { kind: 'tarea'; id: string }
+  | { kind: 'importar' }
+  | { kind: 'exportar' }
+  | { kind: 'prueba' }
+  | { kind: 'semana' }
+  | { kind: 'nuevo-proyecto' }
 
 export function parseRoute(hash: string): Route {
   const [, a, b] = hash.replace(/^#/, '').split('/')
@@ -28,6 +41,8 @@ export function parseRoute(hash: string): Route {
   if (a === 'importar') return { kind: 'importar' }
   if (a === 'exportar') return { kind: 'exportar' }
   if (a === 'prueba-iphone') return { kind: 'prueba' }
+  if (a === 'semana') return { kind: 'semana' }
+  if (a === 'nuevo-proyecto') return { kind: 'nuevo-proyecto' }
   return { kind: 'inicio' }
 }
 
@@ -81,11 +96,21 @@ export function ProjectsApp() {
   else if (route.kind === 'importar') body = <ImportView p={p} />
   else if (route.kind === 'proyecto') body = <ProjectView data={s.data} projectId={route.id} />
   else if (route.kind === 'tarea') body = <TaskView data={s.data} taskId={route.id} />
+  else if (route.kind === 'semana') body = <ReviewView data={s.data} />
+  else if (route.kind === 'nuevo-proyecto') body = <NewProjectView data={s.data} />
   else
     body = (
       <>
         <Overview data={s.data} />
         <div className="mt-8 surface-quiet overflow-hidden rounded-[20px]">
+          <RowLink href="#/semana" testId="go-review">
+            <p className="text-[15px] text-ink">Revisión semanal</p>
+            <p className="text-[12.5px] text-ink-3">Capacidad, compromisos, encargos y aprobaciones</p>
+          </RowLink>
+          <RowLink href="#/nuevo-proyecto" testId="go-new-project">
+            <p className="text-[15px] text-ink">Nuevo proyecto</p>
+            <p className="text-[12.5px] text-ink-3">Nombre y objetivo, sin dossier</p>
+          </RowLink>
           <RowLink href="#/importar" testId="go-import">
             <p className="text-[15px] text-ink">Importar un dossier</p>
             <p className="text-[12.5px] text-ink-3">Con vista previa; nada se guarda sin confirmar</p>
@@ -103,6 +128,7 @@ export function ProjectsApp() {
     )
 
   return (
+    <WriteProvider p={p}>
     <div className="relative min-h-dvh">
       <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 bg-[var(--color-soft)]">
         <div className="absolute -top-[30vmax] -right-[25vmax] size-[80vmax] rounded-full bg-[radial-gradient(closest-side,rgba(216,231,250,0.9),transparent)]" />
@@ -129,5 +155,6 @@ export function ProjectsApp() {
         </p>
       </div>
     </div>
+    </WriteProvider>
   )
 }

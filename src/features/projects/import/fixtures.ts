@@ -37,3 +37,15 @@ Regla del proyecto: máximo **dos parcelas activas**.
 | HUE-05 | Registro | Anotar el riego \\| diario | No iniciado | Hoja de riego | HUE-02,03 | 15–25 min/sem | IA agrega | Cada día tiene dato | F1; F9 |
 | HUE-06 | Registro | Medir la cosecha | Pendiente | Tabla de pesos | HUE-04 + báscula | 1 h | — | Pesos con fecha | F2 |
 `
+
+/**
+ * P4a · The same SYNTHETIC dossier, a later version: HUE-02 changes its title,
+ * HUE-03 its status (a word the first version did not use), HUE-06 is gone and
+ * HUE-07 is new. For trying a re-import on the test page.
+ */
+export const SYNTHETIC_DOSSIER_V2_NAME = 'DOSSIER_SINTETICO_HUERTO_2026-11-02.md'
+
+export const SYNTHETIC_DOSSIER_V2 = SYNTHETIC_DOSSIER.replace('20 de octubre de 2026', '2 de noviembre de 2026')
+  .replace('| Cambiar el goteo |', '| Cambiar el goteo de la parcela norte |')
+  .replace('| Elegir semillas | Borrador existente |', '| Elegir semillas | En curso |')
+  .replace(/\| HUE-06 .*\n/, '| HUE-07 | Registro | Fotografiar los brotes | Pendiente | Carpeta de fotos | HUE-04 | 10 min | — | Una foto por parcela | F2 |\n')

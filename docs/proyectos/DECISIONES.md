@@ -57,3 +57,34 @@ Registro técnico de las decisiones tomadas durante la revisión del 23/10/2026.
   - importar datos reales;
   - cambios en la rutina;
   - pantallas fuera de estos paquetes.
+
+## Tras la auditoría de P2 (decisiones del 24/10/2026)
+
+- **P2 (`proyectos/p2-copias`)** sigue **NO APTO**. La restauración (P2-R) queda **aplazada**:
+  - el informe de Codex y la matriz de corrección se conservan como requisitos;
+  - no se implementa todavía.
+- **Excepciones del núcleo:**
+
+  | Excepción | Decisión |
+  |---|---|
+  | X1 (arranque protegido en `main.tsx`) | No autorizada; reservada para P2-R |
+  | X2 (interceptar `Storage`) | No autorizada. Alternativas y límites documentados; cualquier excepción posterior requiere aprobación específica |
+  | X3 | Aplazada a P2-R |
+  | X4 | No autorizada. `clients.matchAll()` o un mecanismo equivalente **no** se presenta como garantía de detectar todas las pestañas antiguas; H03 sigue pendiente |
+  | X5, opción A | Aprobada conceptualmente como **paquete independiente**. Antes de implementarla: diff acotado, pruebas y garantías de que no altera datos en silencio |
+
+- **P2-E autorizado:** solo exportación y verificación de archivos, en rama independiente desde una base limpia.
+  - Sin restauración ni rutas de importación.
+  - Formato versionado con integridad.
+  - Verificación sin escribir.
+  - Límites visibles.
+  - Errores tratados.
+  - Sin datos reales.
+  - Prueba física en iPhone.
+  - Auditoría independiente antes de proponer integración.
+- **`@playwright/test`** aprobado como dependencia de desarrollo. Las pruebas deben ser reproducibles y fallar cuando falla una comprobación.
+- **P1:** validar con el dossier de muestra.
+  - Sin incorporarlo al repositorio.
+  - Sin importar datos en ELYUM.
+  - Sin avanzar a P3 ni P4 sin autorización.
+- **Persistencia de PROYECTOS:** con su propia estrategia de copia y recuperación, sin dar por hecho que está libre de problemas de concurrencia.

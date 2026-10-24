@@ -10,6 +10,8 @@ const ALLOWED = {
   p2: ['src/features/backup/', 'src/features/system/', 'src/App.tsx', 'src/layout/sections.ts', 'src/pwa/moment.ts', 'README.md', ...SHARED],
   // P1 · Modelo de PROYECTOS: pure domain only. No navigation, HOY, FOCUS, SEMANA or APRENDER.
   p1: ['src/features/projects/', ...SHARED],
+  // P3 · Almacén e importación de PROYECTOS: its own module and its browser test harness. No navigation yet.
+  p3: ['src/features/projects/', 'e2e/projects/', ...SHARED],
 }
 // Never, in any package of PROYECTOS.
 const FORBIDDEN = ['src/features/learn/', 'src/data/routine/', 'src/state/', 'src/domain/', 'src/features/focus/', 'src/features/week/', 'src/features/today/', 'src/features/dayscape/', 'src/features/entry/']

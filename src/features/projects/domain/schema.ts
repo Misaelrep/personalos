@@ -39,7 +39,7 @@ export function validateProjectsData(input: unknown): ValidationResult {
 
   const lists = ['projects', 'milestones', 'tasks', 'atlas', 'routineLinks', 'weeks', 'history'] as const
   for (const k of lists) if (!Array.isArray(input[k])) err(k, 'debe ser una lista')
-  for (const k of ['sources', 'references'] as const) if (input[k] !== undefined && !Array.isArray(input[k])) err(k, 'debe ser una lista')
+  for (const k of ['sources', 'references', 'imports'] as const) if (input[k] !== undefined && !Array.isArray(input[k])) err(k, 'debe ser una lista')
   if (!isObject(input.vocabularies)) err('vocabularies', 'faltan los vocabularios')
   if (errors.length) return { ok: false, errors, warnings }
 
@@ -173,6 +173,10 @@ export function validateProjectsData(input: unknown): ValidationResult {
   const refIds = (d.references ?? []).map((r) => (isObject(r) ? (r.id as string) : undefined))
   for (const id of duplicates(refIds)) err('references', `identificador repetido: ${id}`)
   for (const id of refIds) if (id !== undefined && internal.includes(id)) err('references', `identificador ya usado por otra entidad: ${id}`)
+  ;(d.imports ?? []).forEach((r, i) => {
+    if (!isObject(r) || !isStr(r.id) || !isStr(r.at) || !isStr(r.projectId) || !isStr(r.dossier) || !isStr(r.dossierHash) || !isObject(r.counts) || !Array.isArray(r.resolutions))
+      err(`imports[${i}]`, 'registro de importación incompleto')
+  })
   // Sources a task cites must exist in its dossier's list, when the dossier has one.
   d.tasks.forEach((t, i) => {
     const p = projects.get(t.projectId)

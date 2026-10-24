@@ -68,6 +68,12 @@ export interface Origin {
   /** Version of the converter that read it. */
   converter?: string
   importedAt: string
+  /**
+   * P3: the values the import derived from `raw`, by field. A re-import
+   * compares the new dossier with these (did the dossier change?) and the
+   * record with these (did the person change it in ELYUM?).
+   */
+  snapshot?: Record<string, unknown>
 }
 
 /**
@@ -199,7 +205,7 @@ export interface Requirement {
   kind: RequirementKind
   mode: 'todas' | 'alguna'
   options: RequirementOption[]
-  /** How the literal was read when it was not plain (e.g. «COM-02,03 → COM-02, COM-03»). Shown to the person. */
+  /** How the literal was read when it was not plain (e.g. «AAA-02,03 → AAA-02, AAA-03»). Shown to the person. */
   reading?: string
 }
 
@@ -331,7 +337,7 @@ export interface WeekPlan {
 export interface HistoryEntry {
   at: string
   by: 'usuario' | 'importación'
-  entity: 'task' | 'project' | 'milestone' | 'week' | 'routine-link' | 'vocabulary'
+  entity: 'task' | 'project' | 'milestone' | 'week' | 'routine-link' | 'vocabulary' | 'import'
   id: string
   field: string
   from?: unknown
@@ -357,8 +363,24 @@ export interface ProjectsData {
   /** P1.1 · M7. Optional so that data written before P1.1 still reads. */
   sources?: DossierSource[]
   references?: DossierReference[]
+  /** P3: one line per confirmed import, append-only. Optional so that earlier data still reads. */
+  imports?: ImportRecord[]
   routineLinks: RoutineLink[]
   weeks: WeekPlan[]
   /** Append-only. */
   history: HistoryEntry[]
+}
+
+/** P3: what one confirmed import did. Written once; never rewritten. */
+export interface ImportRecord {
+  id: string
+  at: string
+  projectId: string
+  dossier: string
+  dossierVersion?: string
+  dossierHash: string
+  converter: string
+  counts: { new: number; changed: number; unchanged: number; conflicts: number; missing: number; references: number; sources: number }
+  /** Every conflict and how the person resolved it. */
+  resolutions: { taskId: string; field: string; choice: 'mantener-elyum' | 'usar-dossier' }[]
 }

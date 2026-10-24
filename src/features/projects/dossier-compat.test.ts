@@ -1,7 +1,10 @@
 import { createHash } from 'node:crypto'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { blockersOf, nextActionCandidates } from './domain/derive'
+import { blockersOf, nextActionCandidates, readinessOf } from './domain/derive'
+import { applyImport, currentValues, dossierValues, planImport } from './import/plan'
+import { readDossierFile } from './import/readers'
+import { emptyProjectsData } from './store/session'
 import { importedId, prefixReport } from './domain/ids'
 import { validateProjectsData } from './domain/schema'
 import type { ProjectsData, Task, Vocabulary } from './domain/types'
@@ -279,6 +282,61 @@ describe.skipIf(!env.PROYECTOS_DOSSIER)('P1 · compatibilidad con dossier real (
         warnings,
       }
       writeFileSync(env.PROYECTOS_REPORT, JSON.stringify(report, null, 2))
+    }
+  })
+})
+
+describe.skipIf(!env.PROYECTOS_DOSSIER)('P3 · conversor con el dossier real (privado, fuera del repositorio)', () => {
+  it('imports the real dossier through the P3 reader without loss and without inventing', async () => {
+    const path = env.PROYECTOS_DOSSIER!
+    const bytes = new Uint8Array(readFileSync(path))
+    const name = path.split('/').pop()!
+    const read = await readDossierFile({ name, bytes })
+    expect(read.ok).toBe(true)
+    if (!read.ok) return
+    const b = read.bundle
+    expect(b.issues).toEqual([])
+    // Only the two literals with an unambiguous class are decided; everything else stays `sin-decidir`.
+    const decisions = { target: { create: { name: 'Proyecto real (prueba privada)' } }, statusClasses: { Pendiente: 'pendiente' as const, 'No iniciado': 'pendiente' as const } }
+    const at = { now: AT, random: () => 'privado' }
+    const plan = planImport(emptyProjectsData(), b, decisions, at)
+    expect(plan.errors).toEqual([])
+    const data = applyImport(emptyProjectsData(), plan, decisions, at)
+    const v = validateProjectsData(JSON.parse(JSON.stringify(data)))
+    expect(v.ok).toBe(true)
+
+    const lines = new TextDecoder().decode(bytes).split(/\r?\n/)
+    for (const d of b.tasks) {
+      const t = data.tasks.find((x) => x.sourceId === d.sourceId)!
+      expect(currentValues(t)).toEqual(dossierValues(d))
+      expect(t.origin!.raw).toBe(lines[d.place.line - 1])
+      expect(t.approval).toEqual({ state: 'sin-dato' })
+      expect(t.owner).toBeUndefined()
+      expect(t.priority).toBeUndefined()
+    }
+    for (const r of data.references ?? []) expect(lines).toContain(r.origin!.raw)
+    for (const s of data.sources ?? []) expect(lines).toContain(s.origin!.raw)
+    const tableRows = lines.filter((l, i) => l.trim().startsWith('|') && !/^\s*\|[\s:|-]+\|\s*$/.test(l) && !/^\s*\|[\s:|-]+\|\s*$/.test(lines[i + 1] ?? ''))
+    expect(b.tasks.length + b.sources.length + b.references.length).toBe(tableRows.length)
+
+    if (env.PROYECTOS_REPORT) {
+      const readiness: Record<string, string[]> = {}
+      for (const t of data.tasks) (readiness[readinessOf(data, t)] ??= []).push(t.sourceId!)
+      const report = {
+        dossier: name,
+        sha256: b.dossier.sha256,
+        counts: plan.counts,
+        statusLiterals: plan.newStatusLiterals,
+        requirements: Object.fromEntries(data.tasks.map((t) => [t.sourceId, (t.requirements ?? []).map((r) => ({ literal: r.literal, kind: r.kind, mode: r.mode, reading: r.reading, options: r.options }))])),
+        estimates: Object.fromEntries(data.tasks.map((t) => [t.sourceId, t.estimate])),
+        readiness,
+        candidates: nextActionCandidates(data, plan.projectId).map((t) => t.sourceId),
+        referenceGroups: [...new Set((data.references ?? []).map((r) => r.group))].map((g) => [g, (data.references ?? []).filter((r) => r.group === g).length]),
+        sources: (data.sources ?? []).map((s) => s.key),
+        warnings: v.ok ? v.warnings : [],
+        objective: data.projects[0].objective,
+      }
+      writeFileSync(env.PROYECTOS_REPORT.replace(/\.json$/, '-p3.json'), JSON.stringify(report, null, 2))
     }
   })
 })

@@ -1,6 +1,6 @@
 import { weekStartOf } from './cycle'
 import { allIds, newId } from './ids'
-import type { ApprovalState, Evidence, HistoryEntry, Owner, ProjectsData, RoutineLink, Task, WeekPlan } from './types'
+import type { ApprovalPart, ApprovalState, ConditionState, Evidence, HistoryEntry, Owner, ProjectsData, RoutineLink, Task, Verification, WeekPlan, WorkClass } from './types'
 
 /**
  * The changes a person makes in ELYUM. Pure: each returns new data and adds
@@ -175,4 +175,73 @@ export function removeRoutineLink(data: ProjectsData, projectId: string, tag: Ro
     routineLinks: data.routineLinks.filter((l) => !(l.projectId === projectId && l.tag === tag)),
     history: log(data, ctx, { entity: 'routine-link', id: `${projectId}:${tag}`, field: 'removed' }),
   }
+}
+
+// ── P1.1 ────────────────────────────────────────────────────────────────────
+
+/**
+ * The person decides what a dossier's status literal means (M1). The literal
+ * itself never changes, and every task using it keeps it.
+ */
+export function classifyStatus(data: ProjectsData, dossier: string, literal: string, workClass: WorkClass, ctx: Ctx): ProjectsData {
+  const v = data.vocabularies[dossier]
+  const entry = v?.status.find((s) => s.literal === literal)
+  if (!v || !entry) throw new OpError(`El estado «${literal}» no está en el vocabulario de ${dossier}.`)
+  return {
+    ...data,
+    vocabularies: { ...data.vocabularies, [dossier]: { ...v, status: v.status.map((s) => (s.literal === literal ? { ...s, workClass } : s)) } },
+    history: log(data, ctx, { entity: 'vocabulary', id: dossier, field: `status:${literal}`, from: entry.workClass, to: workClass }),
+  }
+}
+
+/** M2. `undefined` removes it. */
+export function setVerification(data: ProjectsData, taskId: string, verification: Omit<Verification, 'at'> | undefined, ctx: Ctx): ProjectsData {
+  return withTask(data, taskId, ctx, 'verification', (x) => {
+    const { verification: _, ...rest } = x
+    return verification ? { ...rest, verification: { ...(x.verification?.literal ? { literal: x.verification.literal } : {}), ...verification, at: ctx.now } } : rest
+  })
+}
+
+/**
+ * M3. The person states whether a condition of a requirement holds. The
+ * requirement's literal and its other options are untouched; a task option has
+ * no state of its own (it follows the task).
+ */
+export function setCondition(data: ProjectsData, taskId: string, requirementId: string, optionIndex: number, state: ConditionState, ctx: Ctx, note?: string): ProjectsData {
+  const t = data.tasks.find((x) => x.id === taskId)
+  const r = t?.requirements?.find((x) => x.id === requirementId)
+  const o = r?.options[optionIndex]
+  if (!t || !r || !o) throw new OpError(`Requisito desconocido: ${taskId} · ${requirementId} · ${optionIndex}`)
+  if (o.kind !== 'condicion') throw new OpError('Esa opción es otra tarea: se cumple cuando esa tarea esté terminada.')
+  return withTask(
+    data,
+    taskId,
+    ctx,
+    'requirements',
+    (x) => ({
+      ...x,
+      requirements: x.requirements!.map((q) =>
+        q.id !== requirementId ? q : { ...q, options: q.options.map((p, i) => (i !== optionIndex || p.kind !== 'condicion' ? p : { ...p, state, at: ctx.now, ...(note ? { note } : {}) })) },
+      ),
+    }),
+    note,
+  )
+}
+
+/** M6. Who could take the task. Never the owner: assigning stays `setOwner`. */
+export function setDelegationCandidates(data: ProjectsData, taskId: string, candidates: Owner[], ctx: Ctx): ProjectsData {
+  return withTask(data, taskId, ctx, 'delegation', (x) => ({ ...x, delegation: { ...(x.delegation?.literal ? { literal: x.delegation.literal } : {}), candidates } }))
+}
+
+/**
+ * M10. Record the person's decision on one part of the work («arte», «ruta»…).
+ * It does not change the task's approval state: only `decideApproval` does.
+ */
+export function setApprovalPart(data: ProjectsData, taskId: string, part: ApprovalPart, ctx: Ctx): ProjectsData {
+  if (!part.scope.trim()) throw new OpError('La aprobación parcial necesita decir qué cubre.')
+  return withTask(data, taskId, ctx, 'approval', (x) => {
+    const parts = x.approval.parts ?? []
+    const next = parts.some((p) => p.scope === part.scope) ? parts.map((p) => (p.scope === part.scope ? part : p)) : [...parts, part]
+    return { ...x, approval: { ...x.approval, parts: next } }
+  })
 }

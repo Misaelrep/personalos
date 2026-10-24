@@ -79,8 +79,8 @@ function rowToTask(row: Row, columns: string[], projectId: string, dossier: { na
     dependsOn: [],
     acceptance: [cell(MAPPED.done)],
     evidence: [],
-    // The dossier has no approval column: the state here is a placeholder the person must decide (see report).
-    approval: { state: 'pendiente' },
+    // The dossier declares no approval: `sin-dato` (P1.1 · M11), never a guess.
+    approval: { state: 'sin-dato' },
     atlasRefs: [],
     origin: { dossier: dossier.name, dossierVersion: dossier.version, dossierHash: dossier.hash, location: `${heading} · línea ${row.line}`, raw: row.raw, converter: 'p1-compat-test', importedAt: AT },
     extra,
@@ -160,9 +160,9 @@ function checkInvariants(text: string, name: string) {
   expect(unmapped.ok).toBe(false)
   if (!unmapped.ok) for (const e of unmapped.errors) expect(e.message).toMatch(/^estado «.+» no está en el vocabulario/)
 
-  // 3. With every literal declared (classes are placeholders, not decisions), the data validates…
-  const placeholder: Vocabulary = { status: statusLiterals(tasks).map((literal) => ({ literal, workClass: 'pendiente' })), priority: [], approval: [] }
-  const { data } = buildData(text, name, placeholder)
+  // 3. With every literal declared `sin-decidir` (P1.1 · M1: nothing decided, nothing invented), the data validates…
+  const undecided: Vocabulary = { status: statusLiterals(tasks).map((literal) => ({ literal, workClass: 'sin-decidir' })), priority: [], approval: [] }
+  const { data } = buildData(text, name, undecided)
   const stored = JSON.parse(JSON.stringify(data)) as unknown
   const read = validateProjectsData(stored)
   expect(read.ok).toBe(true)
@@ -172,15 +172,50 @@ function checkInvariants(text: string, name: string) {
   expect(read.data).toEqual(data)
 
   // 5. Round trip: each row rebuilt from the task's fields equals the original row, cell by cell and byte by byte.
-  for (const table of first.backlog)
-    for (const row of table.rows) {
-      const t = read.data.tasks.find((x) => x.origin?.raw === row.raw)!
-      expect(t).toBeDefined()
-      expect(taskToCells(t, table.columns)).toEqual(row.cells)
-      expect(`| ${taskToCells(t, table.columns).join(' | ')} |`).toBe(row.raw.trim())
-    }
+  expect(conservationDiffs(first.backlog, read.data)).toEqual([])
+
+  // 6. Negative controls: the check above must catch every kind of loss or alteration.
+  for (const [label, mutate] of NEGATIVE_CONTROLS) {
+    const x = JSON.parse(JSON.stringify(read.data)) as ProjectsData
+    mutate(x)
+    const v = validateProjectsData(x)
+    const caught = !v.ok || conservationDiffs(first.backlog, x).length > 0
+    expect(caught, `control negativo no detectado: ${label}`).toBe(true)
+  }
   return { first, data: read.data, warnings: read.warnings }
 }
+
+/** Every difference between the dossier's rows and the tasks: missing, extra, or any cell or raw text changed. */
+function conservationDiffs(backlog: Table[], data: ProjectsData): string[] {
+  const diffs: string[] = []
+  const rows = backlog.flatMap((t) => t.rows.map((r) => ({ table: t, row: r })))
+  const used = new Set<Task>()
+  for (const { table, row } of rows) {
+    const sourceId = row.cells[table.columns.indexOf(MAPPED.id)]
+    const t = data.tasks.find((x) => x.sourceId === sourceId)
+    if (!t) {
+      diffs.push(`falta ${sourceId}`)
+      continue
+    }
+    used.add(t)
+    if (t.origin?.raw !== row.raw) diffs.push(`${sourceId}: fila cruda alterada`)
+    const cells = taskToCells(t, table.columns)
+    table.columns.forEach((c, i) => cells[i] !== row.cells[i] && diffs.push(`${sourceId}: «${c}» alterado`))
+    if (`| ${cells.join(' | ')} |` !== row.raw.trim()) diffs.push(`${sourceId}: la fila reconstruida no es idéntica`)
+  }
+  for (const t of data.tasks) if (t.sourceId && !used.has(t)) diffs.push(`sobra ${t.sourceId}`)
+  return diffs
+}
+
+const NEGATIVE_CONTROLS: [string, (d: ProjectsData) => void][] = [
+  ['estado alterado en un espacio', (d) => (d.tasks[0].status += ' ')],
+  ['tarea eliminada', (d) => d.tasks.pop()],
+  ['campo de extra borrado', (d) => delete d.tasks[0].extra![Object.keys(d.tasks[0].extra!)[0]]],
+  ['fila cruda alterada', (d) => (d.tasks[0].origin!.raw += 'x')],
+  ['criterio de aceptación cambiado', (d) => (d.tasks[0].acceptance[0] = d.tasks[0].acceptance[0].toUpperCase() + '.')],
+  ['ID duplicado', (d) => d.tasks.push({ ...d.tasks[0] })],
+  ['título vaciado', (d) => (d.tasks[0].title = '')],
+]
 
 describe('P1 · compatibilidad con dossier (sintético)', () => {
   const SYNTH = [
@@ -204,6 +239,7 @@ describe('P1 · compatibilidad con dossier (sintético)', () => {
     expect(t('AAA-01').estimateHours).toBeUndefined()
     expect(t('AAA-02').dependsOn).toEqual(['src:AAA-01'])
     for (const id of ['AAA-01', 'BBB-01', 'BBB-02', 'BBB-03']) expect(t(id).dependsOn).toEqual([])
+    expect(t('AAA-01').approval).toEqual({ state: 'sin-dato' })
     expect(t('BBB-01').owner).toBeUndefined()
   })
 

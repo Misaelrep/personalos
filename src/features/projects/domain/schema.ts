@@ -2,7 +2,7 @@ import { ROUTINE_TAGS } from './capacity'
 import { cycleIssues, isDateKey } from './cycle'
 import { dependencyCycles } from './derive'
 import { duplicates } from './ids'
-import { APPROVAL_STATES, OWNER_KINDS, type ProjectsData } from './types'
+import { APPROVAL_STATES, CONDITION_STATES, ESTIMATE_PERIODS, OWNER_KINDS, REQUIREMENT_KINDS, VERIFICATION_STATES, type ProjectsData } from './types'
 import { vocabularyIssues } from './vocabulary'
 
 /**
@@ -22,6 +22,9 @@ const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'obj
 const isStr = (v: unknown): v is string => typeof v === 'string'
 const isStrArray = (v: unknown): v is string[] => Array.isArray(v) && v.every(isStr)
 const optStr = (v: unknown) => v === undefined || isStr(v)
+const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
+const oneOf = (list: readonly string[], v: unknown) => isStr(v) && list.includes(v)
+const isOwner = (o: unknown) => isObject(o) && oneOf(OWNER_KINDS, o.kind) && isStr(o.name)
 
 export function validateProjectsData(input: unknown): ValidationResult {
   const errors: Issue[] = []
@@ -36,6 +39,7 @@ export function validateProjectsData(input: unknown): ValidationResult {
 
   const lists = ['projects', 'milestones', 'tasks', 'atlas', 'routineLinks', 'weeks', 'history'] as const
   for (const k of lists) if (!Array.isArray(input[k])) err(k, 'debe ser una lista')
+  for (const k of ['sources', 'references'] as const) if (input[k] !== undefined && !Array.isArray(input[k])) err(k, 'debe ser una lista')
   if (!isObject(input.vocabularies)) err('vocabularies', 'faltan los vocabularios')
   if (errors.length) return { ok: false, errors, warnings }
 
@@ -66,6 +70,15 @@ export function validateProjectsData(input: unknown): ValidationResult {
     if (!d.vocabularies[p.dossier]) err(at, `el dossier «${p.dossier}» no tiene vocabulario`)
     if (!isStrArray(p.expectedResults) || !isStrArray(p.atlasRefs)) err(at, 'resultados esperados o referencias ATLAS mal formados')
     if (!optStr(p.sourceId) || !optStr(p.objective) || !optStr(p.statusLiteral)) err(at, 'campos de texto mal formados')
+    if (p.rules !== undefined) {
+      if (!Array.isArray(p.rules)) err(at, 'reglas mal formadas')
+      else
+        p.rules.forEach((r, j) => {
+          if (!isObject(r) || !isStr(r.literal)) return err(`${at}.rules[${j}]`, 'regla sin texto')
+          if (r.kind !== undefined && r.kind !== 'wip') err(`${at}.rules[${j}]`, `tipo de regla desconocido: ${String(r.kind)}`)
+          if (r.limit !== undefined && !(Number.isInteger(r.limit) && r.limit >= 0)) err(`${at}.rules[${j}]`, 'límite no válido')
+        })
+    }
   })
 
   d.milestones.forEach((m, i) => {
@@ -93,14 +106,79 @@ export function validateProjectsData(input: unknown): ValidationResult {
       if (!m) err(at, `hito desconocido: ${t.milestoneId}`)
       else if (m.projectId !== t.projectId) err(at, `el hito ${t.milestoneId} es de otro proyecto`)
     }
-    if (!isObject(t.approval) || !(APPROVAL_STATES as readonly unknown[]).includes(t.approval.state)) err(at, 'aprobación no válida')
-    if (t.owner !== undefined && (!isObject(t.owner) || !(OWNER_KINDS as readonly unknown[]).includes(t.owner.kind) || !isStr(t.owner.name))) err(at, 'responsable no válido')
+    if (!isObject(t.approval) || !oneOf(APPROVAL_STATES, t.approval.state)) err(at, 'aprobación no válida')
+    else if (t.approval.parts !== undefined && (!Array.isArray(t.approval.parts) || !t.approval.parts.every((x) => isObject(x) && isStr(x.scope) && oneOf(APPROVAL_STATES, x.state) && optStr(x.literal))))
+      err(at, 'aprobaciones parciales mal formadas')
+    if (t.owner !== undefined && !isOwner(t.owner)) err(at, 'responsable no válido')
     if (!isStrArray(t.dependsOn) || !isStrArray(t.acceptance) || !isStrArray(t.atlasRefs) || !Array.isArray(t.evidence)) return err(at, 'listas mal formadas')
     for (const dep of t.dependsOn) {
       if (dep === t.id) err(at, 'depende de sí misma')
       else if (!tasks.has(dep)) warn(at, `depende de un ID que no existe: ${dep} (se conserva)`)
     }
     if (t.estimateHours !== undefined && !(typeof t.estimateHours === 'number' && t.estimateHours >= 0)) err(at, 'estimación no válida')
+
+    // P1.1
+    if (t.verification !== undefined && (!isObject(t.verification) || !oneOf(VERIFICATION_STATES, t.verification.state) || !optStr(t.verification.literal)))
+      err(at, 'verificación no válida')
+    if (!optStr(t.area) || !optStr(t.deliverable)) err(at, 'área o entregable mal formados')
+    if (t.estimate !== undefined) {
+      const e = t.estimate as unknown as Record<string, unknown>
+      if (!isObject(e) || !isStr(e.literal)) err(at, 'estimación literal mal formada')
+      else {
+        if ((e.minMinutes !== undefined && !(isNum(e.minMinutes) && e.minMinutes >= 0)) || (e.maxMinutes !== undefined && !(isNum(e.maxMinutes) && e.maxMinutes >= 0)))
+          err(at, 'rango de estimación no válido')
+        else if (isNum(e.minMinutes) && isNum(e.maxMinutes) && e.minMinutes > e.maxMinutes) err(at, 'rango de estimación invertido')
+        if (e.per !== undefined && !oneOf(ESTIMATE_PERIODS, e.per)) err(at, `periodicidad desconocida: ${String(e.per)}`)
+      }
+    }
+    if (t.delegation !== undefined && (!isObject(t.delegation) || !optStr(t.delegation.literal) || !Array.isArray(t.delegation.candidates) || !t.delegation.candidates.every(isOwner)))
+      err(at, 'delegación mal formada')
+    if (t.sourceRefs !== undefined && (!isObject(t.sourceRefs) || !isStr(t.sourceRefs.literal) || !isStrArray(t.sourceRefs.keys))) err(at, 'referencias de fuente mal formadas')
+    if (t.requirements !== undefined) {
+      if (!Array.isArray(t.requirements)) err(at, 'requisitos mal formados')
+      else {
+        for (const id of duplicates(t.requirements.map((r) => (isObject(r) ? (r.id as string) : undefined)))) err(at, `requisito repetido: ${id}`)
+        t.requirements.forEach((r, j) => {
+          const rat = `${at}.requirements[${j}]`
+          if (!isObject(r) || !isStr(r.id) || !isStr(r.literal)) return err(rat, 'requisito sin id o sin texto de origen')
+          if (!oneOf(REQUIREMENT_KINDS, r.kind)) err(rat, `tipo de requisito desconocido: ${String(r.kind)}`)
+          if (r.mode !== 'todas' && r.mode !== 'alguna') err(rat, `modo desconocido: ${String(r.mode)}`)
+          if (!Array.isArray(r.options) || r.options.length === 0) return err(rat, 'requisito sin opciones')
+          r.options.forEach((o, k) => {
+            if (isObject(o) && o.kind === 'tarea' && isStr(o.taskId)) {
+              if (o.taskId === t.id) err(rat, 'requisito de sí misma')
+              else if (!tasks.has(o.taskId)) warn(rat, `requisito con una tarea que no existe: ${o.taskId} (queda por verificar)`)
+            } else if (isObject(o) && o.kind === 'condicion' && isStr(o.literal)) {
+              if (!oneOf(CONDITION_STATES, o.state)) err(`${rat}.options[${k}]`, `estado de condición desconocido: ${String(o.state)}`)
+            } else err(`${rat}.options[${k}]`, 'opción mal formada')
+          })
+        })
+      }
+    }
+  })
+
+  // P1.1 · M7
+  const dossiers = new Set(d.projects.map((p) => p.dossier))
+  ;(d.sources ?? []).forEach((s, i) => {
+    if (!isObject(s) || !isStr(s.dossier) || !isStr(s.key) || !isStr(s.title)) return err(`sources[${i}]`, 'fuente sin dossier, clave o título')
+    if (!dossiers.has(s.dossier)) warn(`sources[${i}]`, `fuente de un dossier sin proyecto: ${s.dossier}`)
+  })
+  for (const k of duplicates((d.sources ?? []).map((s) => (isObject(s) ? `${String(s.dossier)} · ${String(s.key)}` : undefined)))) err('sources', `clave de fuente repetida: ${k}`)
+  ;(d.references ?? []).forEach((r, i) => {
+    const at = `references[${i}]`
+    if (!isObject(r) || !isStr(r.id) || !isStr(r.dossier) || !isStr(r.projectId) || !isStr(r.group) || !isStr(r.label)) return err(at, 'referencia incompleta')
+    if (!projects.has(r.projectId)) err(at, `proyecto desconocido: ${r.projectId}`)
+    if (!Array.isArray(r.cells) || !r.cells.every((c) => isObject(c) && isStr(c.column) && isStr(c.value))) err(at, 'celdas mal formadas')
+  })
+  const refIds = (d.references ?? []).map((r) => (isObject(r) ? (r.id as string) : undefined))
+  for (const id of duplicates(refIds)) err('references', `identificador repetido: ${id}`)
+  for (const id of refIds) if (id !== undefined && internal.includes(id)) err('references', `identificador ya usado por otra entidad: ${id}`)
+  // Sources a task cites must exist in its dossier's list, when the dossier has one.
+  d.tasks.forEach((t, i) => {
+    const p = projects.get(t.projectId)
+    const listed = (d.sources ?? []).filter((s) => s.dossier === p?.dossier).map((s) => s.key)
+    if (!t.sourceRefs || listed.length === 0) return
+    for (const k of t.sourceRefs.keys) if (!listed.includes(k)) warn(`tasks[${i}]`, `cita una fuente que el dossier no lista: ${k}`)
   })
 
   d.routineLinks.forEach((l, i) => {

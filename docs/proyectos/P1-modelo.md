@@ -90,7 +90,30 @@ Cada estado literal de un dossier se asigna a una clase **por decisión humana**
 
 Nada se compromete automáticamente.
 
-## Pendiente
+## P1.1 · Ajustes tras validar con un dossier real (aprobado el 24/10/2026)
 
-- Validar el modelo contra el **dossier de muestra de Sistema de Comunicación Wellness** (PUB, EDI, SYS, COM) cuando llegue. Criterio de P1: representarlo sin pérdida.
-- El conversor de dossiers es P3 (no autorizado todavía).
+La validación privada mostró que el modelo conservaba todo, pero obligaba a inventar una clase de trabajo y una aprobación, y que la mitad de la información solo cabía en `extra`. Cambios aprobados (M8, entidad de piezas, queda aplazado):
+
+| # | Cambio | Dónde |
+|---|---|---|
+| M1 | Clase de trabajo `sin-decidir`: el literal se conserva; la tarea es válida, sale «por clasificar» y nunca es candidata ni terminada. `classifyStatus` la decide después, con historial | `types.ts`, `derive.ts`, `ops.ts` |
+| M2 | `verification` opcional (`verificada` · `sin-verificar` · `no-consta`, con literal). No interviene en «terminada» ni en «lista» | `types.ts`, `ops.ts` |
+| M3 | `requirements`: `{id, literal, kind, mode: todas·alguna, options[]}`. Opción = otra tarea o una condición `por-verificar` · `cumplida` · `no-cumplida`. `dependsOn` sigue igual | `types.ts`, `derive.ts`, `ops.ts` |
+| M4 | `area` y `deliverable` | `types.ts` |
+| M5 | `estimate` `{literal, minMinutes?, maxMinutes?, per?}` con `parseEstimate`. Nunca se convierte en horas comprometidas | `types.ts`, `literals.ts` |
+| M6 | `delegation` `{literal?, candidates[]}`, separado de `owner` | `types.ts`, `ops.ts` |
+| M7 | `sources` por dossier (F1…), `sourceRefs` por tarea (`parseSourceRefs`) y `references`: registros que no son tareas, con sus celdas literales y sin estados | `types.ts`, `literals.ts`, `schema.ts` |
+| M9 | `Project.rules` (p. ej. límite de piezas activas), solo informativas | `types.ts` |
+| M10 | `Approval.original.scope` y `Approval.parts`; una parte nunca cambia el estado que cuenta para «terminada» | `types.ts`, `ops.ts` |
+| M11 | Aprobación `sin-dato`: no cuenta como aprobada; una tarea ejecutada con `sin-dato` espera a la persona | `types.ts`, `derive.ts` |
+
+**Requisitos (M3), reglas:**
+- `todas` exige todas las opciones; `alguna`, una opción válida.
+- Una opción de tarea se cumple solo si esa tarea está **terminada** (ejecutada y aprobada o sin requerir aprobación). Una tarea descartada nunca es una opción válida. Un ID que no existe queda **por verificar**, nunca cumplido.
+- Una condición empieza **por verificar**. Solo la persona la marca cumplida o no cumplida (`setCondition`); una opción de tarea no se marca a mano.
+- Estado de la tarea (`readinessOf`): `por-clasificar` → `bloqueada` (espera una tarea o un requisito no cumplido) → `por-verificar` → `lista`. Solo las `lista` son candidatas a siguiente acción. `projectWeek` añade los grupos `unclassified` y `toVerify`.
+- El literal del requisito se conserva siempre; `reading` muestra cómo se leyó si no era literal (p. ej. una abreviatura).
+
+**Compatibilidad:** `version` sigue en 1. Todos los campos nuevos son opcionales y no hay datos guardados de PROYECTOS todavía; los datos anteriores a P1.1 siguen siendo válidos (hay un test).
+
+**Pruebas:** `projects-p11.test.ts` (sintético) y `dossier-compat.test.ts`, que con la ruta privada `PROYECTOS_DOSSIER` comprueba un dossier real sin copiarlo, con 7 controles negativos (estado alterado en un espacio, tarea eliminada, campo borrado, fila cruda alterada, criterio cambiado, ID duplicado, título vaciado).

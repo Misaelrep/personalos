@@ -1,5 +1,5 @@
 import { displayRef } from './ids'
-import type { ProjectsData, Task, WeekPlan } from './types'
+import type { ProjectsData, Requirement, RequirementOption, Task, WeekPlan } from './types'
 import { priorityRank, workClassOf } from './vocabulary'
 
 /**
@@ -9,17 +9,59 @@ import { priorityRank, workClassOf } from './vocabulary'
  *   awaiting         executed, approval pending: technically finished, not done
  *   returned         approval returned: back to work, whatever its status says
  *   closed           done, or discarded
- *   blocked          waits for a task that is not done
+ *   blocked          waits for a task that is not done (in `dependsOn` or in a requirement)
+ *   to verify        a requirement depends on a condition nobody has confirmed
+ *   unclassified     its status literal has no class yet (`sin-decidir`)
+ *
+ * An unknown condition is never read as met: it keeps the task out of the
+ * next-action candidates and is shown, with its source text.
  */
 
 export const isDone = (data: ProjectsData, t: Task) =>
   workClassOf(data, t) === 'ejecutada' && (t.approval.state === 'no-requiere' || t.approval.state === 'aprobada')
 
-export const isAwaitingApproval = (data: ProjectsData, t: Task) => workClassOf(data, t) === 'ejecutada' && t.approval.state === 'pendiente'
+/** Executed and waiting for the person: approval pending, or none declared (`sin-dato`, which never counts as approved). */
+export const isAwaitingApproval = (data: ProjectsData, t: Task) => workClassOf(data, t) === 'ejecutada' && (t.approval.state === 'pendiente' || t.approval.state === 'sin-dato')
+
+export const isUnclassified = (data: ProjectsData, t: Task) => workClassOf(data, t) === 'sin-decidir'
 
 export const isReturned = (t: Task) => t.approval.state === 'devuelta'
 
 export const isClosed = (data: ProjectsData, t: Task) => (isDone(data, t) && !isReturned(t)) || workClassOf(data, t) === 'descartada'
+
+/**
+ * P1.1 · M3. State of one requirement option and of a whole requirement:
+ *   cumplido       met (a task done, or a condition the person confirmed)
+ *   pendiente      waits for a task that is not done yet
+ *   por-verificar  a condition nobody has checked, or a task id that does not exist
+ *   no-cumplido    a condition marked as not met, or a discarded task
+ */
+export type RequirementState = 'cumplido' | 'pendiente' | 'por-verificar' | 'no-cumplido'
+
+export interface RequirementStatus {
+  requirement: Requirement
+  state: RequirementState
+  options: { option: RequirementOption; state: RequirementState; task?: Task }[]
+}
+
+function optionState(data: ProjectsData, o: RequirementOption, index: Map<string, Task>): { state: RequirementState; task?: Task } {
+  if (o.kind === 'condicion') return { state: o.state === 'cumplida' ? 'cumplido' : o.state === 'no-cumplida' ? 'no-cumplido' : 'por-verificar' }
+  const task = index.get(o.taskId)
+  if (!task) return { state: 'por-verificar' }
+  if (workClassOf(data, task) === 'descartada') return { state: 'no-cumplido', task }
+  return { state: isDone(data, task) && !isReturned(task) ? 'cumplido' : 'pendiente', task }
+}
+
+export function requirementStatus(data: ProjectsData, r: Requirement, index = indexTasks(data)): RequirementStatus {
+  const options = r.options.map((option) => ({ option, ...optionState(data, option, index) }))
+  const states = options.map((o) => o.state)
+  const has = (s: RequirementState) => states.includes(s)
+  let state: RequirementState
+  if (states.length === 0) state = 'por-verificar'
+  else if (r.mode === 'todas') state = states.every((s) => s === 'cumplido') ? 'cumplido' : has('no-cumplido') ? 'no-cumplido' : has('pendiente') ? 'pendiente' : 'por-verificar'
+  else state = has('cumplido') ? 'cumplido' : states.every((s) => s === 'no-cumplido') ? 'no-cumplido' : has('pendiente') ? 'pendiente' : 'por-verificar'
+  return { requirement: r, state, options }
+}
 
 export interface Blockers {
   /** Dependencies that are not done yet (a discarded one does not block, but is listed apart). */
@@ -28,20 +70,43 @@ export interface Blockers {
   discarded: Task[]
   /** IDs written as dependencies that do not exist (kept, never dropped). */
   unknown: string[]
+  /** P1.1 · M3: requirements not met, with their state. */
+  requirements: RequirementStatus[]
 }
 
 export function blockersOf(data: ProjectsData, t: Task, index = indexTasks(data)): Blockers {
-  const b: Blockers = { waiting: [], discarded: [], unknown: [] }
+  const b: Blockers = { waiting: [], discarded: [], unknown: [], requirements: [] }
   for (const id of t.dependsOn) {
     const dep = index.get(id)
     if (!dep) b.unknown.push(id)
     else if (workClassOf(data, dep) === 'descartada') b.discarded.push(dep)
     else if (!isDone(data, dep) || isReturned(dep)) b.waiting.push(dep)
   }
+  for (const r of t.requirements ?? []) {
+    const st = requirementStatus(data, r, index)
+    if (st.state !== 'cumplido') b.requirements.push(st)
+  }
   return b
 }
 
-export const isBlocked = (data: ProjectsData, t: Task, index = indexTasks(data)) => blockersOf(data, t, index).waiting.length > 0
+/** Waits for a task (in `dependsOn` or in a requirement), or a requirement is marked as not met. */
+export const isBlocked = (data: ProjectsData, t: Task, index = indexTasks(data)) => {
+  const b = blockersOf(data, t, index)
+  return b.waiting.length > 0 || b.requirements.some((r) => r.state === 'pendiente' || r.state === 'no-cumplido')
+}
+
+/** A requirement depends on something nobody has checked yet. Not blocked, not ready either. */
+export const needsVerification = (data: ProjectsData, t: Task, index = indexTasks(data)) => blockersOf(data, t, index).requirements.some((r) => r.state === 'por-verificar')
+
+export type Readiness = 'por-clasificar' | 'bloqueada' | 'por-verificar' | 'lista'
+
+/** Whether an open task could be executed now, and if not, why. */
+export function readinessOf(data: ProjectsData, t: Task, index = indexTasks(data)): Readiness {
+  if (isUnclassified(data, t)) return 'por-clasificar'
+  if (isBlocked(data, t, index)) return 'bloqueada'
+  if (needsVerification(data, t, index)) return 'por-verificar'
+  return 'lista'
+}
 
 export const indexTasks = (data: ProjectsData) => new Map(data.tasks.map((t) => [t.id, t]))
 
@@ -50,7 +115,8 @@ const natural = new Intl.Collator('es', { numeric: true, sensitivity: 'base' })
 
 /**
  * Tasks of a project that could be the next action: open (pending, in progress
- * or returned), not blocked, not waiting for approval. Most urgent first; in
+ * or returned), classified, not blocked, with no requirement left to verify,
+ * not waiting for approval. Most urgent first; in
  * progress before pending; then by milestone date and reference.
  */
 export function nextActionCandidates(data: ProjectsData, projectId: string, owner?: 'humano' | 'agente'): Task[] {
@@ -61,7 +127,7 @@ export function nextActionCandidates(data: ProjectsData, projectId: string, owne
     .filter((t) => (owner ? (t.owner?.kind ?? 'humano') === owner : true))
     .filter((t) => {
       const c = workClassOf(data, t)
-      return (c === 'pendiente' || c === 'en-curso' || isReturned(t)) && c !== 'descartada' && !isAwaitingApproval(data, t) && !isBlocked(data, t, index)
+      return (c === 'pendiente' || c === 'en-curso' || (isReturned(t) && c !== 'sin-decidir')) && c !== 'descartada' && !isAwaitingApproval(data, t) && readinessOf(data, t, index) === 'lista'
     })
     .sort(
       (a, b) =>
@@ -91,6 +157,10 @@ export interface ProjectWeek {
   agentActive: Task[]
   /** 5 · executed, waiting for human approval. */
   awaitingApproval: Task[]
+  /** Open tasks whose status literal has no class yet (P1.1 · M1). */
+  unclassified: Task[]
+  /** Open tasks with a requirement nobody has verified (P1.1 · M3). */
+  toVerify: Task[]
 }
 
 export function projectWeek(data: ProjectsData, projectId: string, weekStart: string): ProjectWeek {
@@ -104,6 +174,8 @@ export function projectWeek(data: ProjectsData, projectId: string, weekStart: st
     commitments: tasks.filter((t) => committed.has(t.id)),
     agentActive: tasks.filter((t) => t.owner?.kind === 'agente' && (workClassOf(data, t) === 'en-curso' || workClassOf(data, t) === 'en-espera') && !isClosed(data, t)),
     awaitingApproval: tasks.filter((t) => isAwaitingApproval(data, t)),
+    unclassified: tasks.filter((t) => isUnclassified(data, t)),
+    toVerify: tasks.filter((t) => !isClosed(data, t) && !isUnclassified(data, t) && readinessOf(data, t) === 'por-verificar'),
   }
 }
 
@@ -150,6 +222,10 @@ export function weekLoad(data: ProjectsData, weekStart: string): WeekLoad {
 /** Approvals waiting for the person, across every project — the Sunday list. */
 export const awaitingApprovalAll = (data: ProjectsData) => data.tasks.filter((t) => isAwaitingApproval(data, t))
 
+/** Every task a task points to: `dependsOn` and the tasks named in its requirements. */
+export const linksOf = (t: Task | undefined): string[] =>
+  t ? [...t.dependsOn, ...(t.requirements ?? []).flatMap((r) => r.options.flatMap((o) => (o.kind === 'tarea' ? [o.taskId] : [])))] : []
+
 /** Dependency cycles, as lists of internal ids (each cycle once). */
 export function dependencyCycles(data: ProjectsData): string[][] {
   const index = indexTasks(data)
@@ -168,7 +244,7 @@ export function dependencyCycles(data: ProjectsData): string[][] {
       return
     }
     state.set(id, 'visiting')
-    for (const dep of index.get(id)?.dependsOn ?? []) if (index.has(dep)) walk(dep, [...path, id])
+    for (const dep of linksOf(index.get(id))) if (index.has(dep)) walk(dep, [...path, id])
     state.set(id, 'done')
   }
   for (const t of data.tasks) walk(t.id, [])

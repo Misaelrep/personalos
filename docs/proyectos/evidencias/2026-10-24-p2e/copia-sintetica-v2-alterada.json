@@ -1,0 +1,62 @@
+{
+  "schema": "elyum.backup",
+  "version": 2,
+  "meta": {
+    "createdAt": "2026-10-21T10:30:07+02:00",
+    "device": "Windows · navegador",
+    "app": "ELYUM",
+    "storage": "localStorage",
+    "excluded": {
+      "simulation": 1,
+      "system": 1,
+      "foreign": 1,
+      "unknownElyum": [
+        "elyum:futuro:v1:x"
+      ]
+    }
+  },
+  "modules": {
+    "core": {
+      "keys": {
+        "personal-os:day:2026-10-20": "{\"date\":\"2026-10-20\",\"records\":{\"tue-web-1000\":{\"status\":\"parcial\",\"outcome\":\"parcial\",\"pendingNote\":\"Nota sintética\"}},\"meditationMoved\":true}",
+        "personal-os:entry": "{\"lastActiveAt\":1792571400178}",
+        "personal-os:day:2026-10-19": "{\"date\":\"2026-10-19\",\"records\":{\"mon-web-1000\":{\"status\":\"completado\",\"objective\":\"Objetivo alterado «ñ» 🌙\"}}}",
+        "personal-os:day:2026-10-18": "{\"date\":\"2026-10-18\",\"records\":",
+        "personal-os:day:2026-10-21": "{\"date\":\"2026-10-21\",\"records\":{}}"
+      }
+    },
+    "learn": {
+      "keys": {
+        "elyum:learn:v1:state": "{\"v\":1,\"data\":{\"intention\":\"Intención sintética\"}}"
+      }
+    },
+    "projects": {
+      "keys": {
+        "elyum:projects:v1:data": "{\"version\":1,\"note\":\"sintético\"}"
+      }
+    }
+  },
+  "keyStatus": {
+    "personal-os:day:2026-10-20": "valido",
+    "personal-os:entry": "valido",
+    "personal-os:day:2026-10-19": "valido",
+    "personal-os:day:2026-10-18": "ilegible",
+    "personal-os:day:2026-10-21": "valido",
+    "elyum:learn:v1:state": "sin-validador",
+    "elyum:projects:v1:data": "sin-validador"
+  },
+  "counts": {
+    "core": 5,
+    "learn": 1,
+    "projects": 1
+  },
+  "integrity": {
+    "algorithm": "SHA-256",
+    "modules": {
+      "core": "6b4070afc2052230731e4d151079da009f9ca97c76876595074b8ccfe2afe62f",
+      "learn": "cd15686b556cb45a845c6882a8bd74749fc31187c17416e00d6537858e1aba24",
+      "projects": "7333fc02c074b2cf1b29230e06bb0b1609e464ce3b2495ab611655f2583bb625"
+    },
+    "total": "9c87af333396e6f54eb54c69bec115b8245b27b1748257c6cf709d5dde0b38c8"
+  }
+}

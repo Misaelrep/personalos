@@ -1,0 +1,119 @@
+P2-E · registro de validación · 2026-10-24T04:51Z · rama proyectos/p2e-exportar · base main dfc42a4
+Node v22.22.0 · @playwright/test 1.63.0
+
+$ npm test
+ Test Files  12 passed (12)
+      Tests  312 passed (312)
+
+$ npx tsc -b
+OK
+
+$ node scripts/check-scope.mjs p2e
+p2e: 36 archivos cambiados frente a main
+  ✓ .gitignore
+  ✓ docs/proyectos/CHANGELOG.md
+  ✓ docs/proyectos/P2E-auditoria-codex.md
+  ✓ docs/proyectos/P2E-exportacion.md
+  ✓ docs/proyectos/P2E-prueba-iphone.md
+  ✓ docs/proyectos/X2-alternativas.md
+  ✓ docs/proyectos/evidencias/2026-10-24-p2e/copia-sintetica-v2-alterada.json
+  ✓ docs/proyectos/evidencias/2026-10-24-p2e/copia-sintetica-v2.json
+  ✓ docs/proyectos/evidencias/2026-10-24-p2e/escritorio-exportada-y-verificada.jpg
+  ✓ docs/proyectos/evidencias/2026-10-24-p2e/registro.txt
+  ✓ docs/proyectos/evidencias/2026-10-24-p2e/telefono-exportar-entregada.jpg
+  ✓ docs/proyectos/evidencias/2026-10-24-p2e/telefono-verificar-alterada-rechazada.jpg
+  ✓ e2e/p2e.spec.ts
+  ✓ e2e/tsconfig.json
+  ✓ package-lock.json
+  ✓ package.json
+  ✓ playwright.config.ts
+  ✓ scripts/check-scope.mjs
+  ✓ src/App.tsx
+  ✓ src/features/backup/backup.test.ts
+  ✓ src/features/backup/domain/canonical.ts
+  ✓ src/features/backup/domain/collect.ts
+  ✓ src/features/backup/domain/create.ts
+  ✓ src/features/backup/domain/describe.ts
+  ✓ src/features/backup/domain/format.ts
+  ✓ src/features/backup/domain/integrity.ts
+  ✓ src/features/backup/domain/keyStatus.ts
+  ✓ src/features/backup/domain/sha256.ts
+  ✓ src/features/backup/domain/strictJson.ts
+  ✓ src/features/backup/domain/verify.ts
+  ✓ src/features/backup/storage/storage.ts
+  ✓ src/features/backup/ui/Copias.tsx
+  ✓ src/features/backup/ui/deliver.ts
+  ✓ src/features/backup/ui/notes.ts
+  ✓ src/features/system/Sistema.tsx
+  ✓ src/layout/sections.ts
+Solo lectura: 15 archivos de P2-E sin escrituras ni restauración.
+
+Alcance correcto.
+
+$ npm run test:e2e
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./src/pwa/config" without a file extension (vite.config.ts:5:48). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+vite v8.3.0 building client environment for production...
+transforming...
+✓ 521 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/manifest.webmanifest                                          0.53 kB
+dist/index.html                                                    3.94 kB │ gzip:   0.91 kB
+dist/assets/space-grotesk-vietnamese-wght-normal-D0rl6rjA.woff2    6.71 kB
+dist/assets/inter-tight-vietnamese-wght-normal-TKKdAiBA.woff2     10.48 kB
+dist/assets/inter-tight-greek-ext-wght-normal-DQgQPNk4.woff2      11.70 kB
+dist/assets/inter-tight-cyrillic-wght-normal-BS41q_Tv.woff2       16.99 kB
+dist/assets/space-grotesk-latin-ext-wght-normal-D9tNdqV9.woff2    18.94 kB
+dist/assets/inter-tight-greek-wght-normal-sS1B39LI.woff2          22.19 kB
+dist/assets/space-grotesk-latin-wght-normal-BhU9QXUp.woff2        22.28 kB
+dist/assets/inter-tight-cyrillic-ext-wght-normal-okcGN4Nq.woff2   26.66 kB
+dist/assets/inter-tight-latin-wght-normal-DX-nOvPD.woff2          44.87 kB
+dist/assets/inter-tight-latin-ext-wght-normal-B4u9PlvR.woff2      89.80 kB
+dist/assets/index-C4CT_qSo.css                                    71.17 kB │ gzip:  15.66 kB
+dist/assets/workbox-window.prod.es5-Bd17z0YL.js                    5.65 kB │ gzip:   2.20 kB
+dist/assets/index-BQbvVfNY.js                                    510.94 kB │ gzip: 164.01 kB
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 1.02s
+PWA v1.3.0
+mode      generateSW
+precache  20 entries (892.96 KiB)
+files generated
+  dist/sw.js
+  dist/workbox-2fbc6a65.js
+[WebServer] (!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+[WebServer]   - import "./src/pwa/config" without a file extension (vite.config.ts:5:48). Add the file extension
+[WebServer] Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+Running 16 tests using 1 worker
+  ✓   1 [chromium] › e2e/p2e.spec.ts:166:1 › exporta todos los datos guardados, byte a byte, sin escribir nada (1.3s)
+  ✓   2 [chromium] › e2e/p2e.spec.ts:179:1 › verifica el archivo guardado sin escribir nada y lo compara con el dispositivo (1.5s)
+  ✓   3 [chromium] › e2e/p2e.spec.ts:193:1 › la comparación nombra lo que cambió en el dispositivo después de exportar (1.3s)
+  ✓   4 [chromium] › e2e/p2e.spec.ts:205:1 › rechaza cada archivo alterado por su motivo, sin escribir nada (1.8s)
+  ✓   5 [chromium] › e2e/p2e.spec.ts:229:1 › un archivo demasiado grande se rechaza sin leerlo (9.2s)
+  ✓   6 [chromium] › e2e/p2e.spec.ts:239:1 › la copia es de lo guardado en el momento de pulsar, también si cambió justo antes (1.0s)
+  ✓   7 [chromium] › e2e/p2e.spec.ts:251:1 › sin Web Crypto también exporta y verifica (la huella no depende de él) (1.1s)
+  ✓   8 [chromium] › e2e/p2e.spec.ts:261:1 › si el almacenamiento no se puede leer, lo dice y no genera una copia vacía (748ms)
+  ✓   9 [chromium] › e2e/p2e.spec.ts:267:1 › no hay importación ni restauración en la pantalla (1.1s)
+  ✓  10 [chromium] › e2e/p2e.spec.ts:284:1 › teléfono: comparte el archivo verificado (1.4s)
+  ✓  11 [chromium] › e2e/p2e.spec.ts:296:1 › teléfono: cerrar el menú de compartir no se presenta como copia guardada (1.1s)
+  ✓  12 [chromium] › e2e/p2e.spec.ts:304:1 › teléfono: si el sistema no abre el menú, lo dice y ofrece descargar (1.1s)
+  ✓  13 [chromium] › e2e/p2e.spec.ts:314:1 › teléfono: un navegador que no comparte archivos lo dice (985ms)
+  -  14 [chromium] › e2e/p2e.spec.ts:324:1 › control negativo (solo con E2E_SABOTAJE=1)
+  -  15 [chromium] › e2e/p2e.spec.ts:334:1 › control negativo del detector de escrituras (solo con E2E_SABOTAJE=1)
+  -  16 [chromium] › e2e/p2e.spec.ts:344:1 › capturas (solo con E2E_CAPTURAS)
+  3 skipped
+  13 passed (26.1s)
+salida: 0
+
+$ E2E_SABOTAJE=1 npx playwright test -g "control negativo"   (debe FALLAR)
+  ✘  1 [chromium] › e2e/p2e.spec.ts:324:1 › control negativo (solo con E2E_SABOTAJE=1) (4.7s)
+  ✘  2 [chromium] › e2e/p2e.spec.ts:334:1 › control negativo del detector de escrituras (solo con E2E_SABOTAJE=1) (1.2s)
+    Error: expect(locator).toHaveAttribute(expected) failed
+    Error: escrituras en el almacenamiento durante la operación
+  2 failed
+salida: 1

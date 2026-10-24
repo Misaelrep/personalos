@@ -4,8 +4,8 @@ import { FRAGMENTS_END } from './beats'
 import { rgba } from './color'
 import { fragmentAt, makeFragments, placeFragments, type FragmentTone, type Placed } from './fragments'
 import { contactPoint, expectedWordmarkRect, wordmarkDots } from './geometry'
-import { bloomAt, flareAt, frontsAt, surgeAt, type Front } from './light'
-import { SLABS, bendPx, waveRadius, waveStrength } from './optics'
+import { FRONT_BIRTHS, bloomAt, flareAt, frontsAt, surgeAt, type Front } from './light'
+import { SLABS, bendPx, frontPresence, frontShape, frontShift, stripsIn } from './optics'
 
 /** The moment a still composition is drawn at: scattered and fully there, before the wave. */
 const STILL_AT = 0.48
@@ -147,65 +147,115 @@ export function SceneCanvas({ scene, still, onClock }: { scene: SceneColors; sti
       ctx.restore()
     }
 
-    /** The front of the glass's answer: not a ring — a band of deformed light whose radius wanders, which is not there all the way round and breaks into pieces, with its colors parted. */
-    const ARCS = 24
-    const front = (f: Front, t: number) => {
-      const width = 1.2 + f.radius * 0.012
-      const at = (k: number) => {
-        const a = (k / ARCS) * Math.PI * 2
-        return { a, s: waveStrength(a, t, f.seed) }
-      }
-      for (const [color, alpha, dr, thick] of [
-        [scene.white, 0.08, 0, 7],
-        [scene.vermilion, 0.5, width * 1.6, 1],
-        [scene.cyan, 0.5, -width * 1.6, 1],
-        [scene.white, 0.75, 0, 1.1],
-      ] as const) {
-        ctx.strokeStyle = rgba(color, 1)
-        ctx.lineCap = 'round'
-        let from = at(0)
-        for (let k = 1; k <= ARCS; k++) {
-          const to = at(k)
-          const s = Math.min(from.s, to.s)
-          if (s > 0.3) {
-            ctx.globalAlpha = f.alpha * alpha * s * s
-            ctx.lineWidth = width * thick * (0.5 + 0.8 * s)
-            ctx.beginPath()
-            const steps = 2
-            for (let j = 0; j <= steps; j++) {
-              const aa = from.a + ((to.a - from.a) * j) / steps
-              const rr = waveRadius(aa, t, f.radius, f.seed) + dr
-              const px = contact.x + Math.cos(aa) * rr
-              const py = contact.y + Math.sin(aa) * rr
-              if (j === 0) ctx.moveTo(px, py)
-              else ctx.lineTo(px, py)
+    /**
+     * The fronts of the glass's answer: not rings — bands of deformed light, each of its own shape (fixed for its life: it only grows, at its
+     * one speed), not there all the way round, with their colors parted. Behind each plate a front is seen a little to one side (optics.ts:
+     * frontShift), so at each of the 8 edges it shows a small step; inside a plate its colors part more than in the air between them.
+     */
+    const SAMPLES = 120
+    const shapes = FRONT_BIRTHS.map((_, index) => {
+      const seed = index * 3.7
+      return Array.from({ length: SAMPLES + 1 }, (_, k) => {
+        const a = (k / SAMPLES) * Math.PI * 2
+        return { cos: Math.cos(a), sin: Math.sin(a), shape: frontShape(a, seed), presence: frontPresence(a, seed) }
+      })
+    })
+    const strips = stripsIn(view)
+    /** The presence of a front is drawn at a few levels (one path each): segments fainter than the first are not drawn — the front breaks there. */
+    const LEVELS = [0.45, 0.72, 1]
+    const levelOf = (s: number) => (s < 0.3 ? -1 : s < 0.58 ? 0 : s < 0.86 ? 1 : 2)
+    const front = (f: Front) => {
+      const pts = shapes[f.index]
+      const reach = f.radius * 1.1 + 24
+      for (const strip of strips) {
+        if (strip.x1 < contact.x - reach || strip.x0 > contact.x + reach) continue
+        const shift = frontShift(strip.slab, view) * f.refraction
+        const plate = strip.slab >= 0
+        const part = plate ? 0.8 + 1.4 * SLABS[strip.slab].ca : 0.6
+        ctx.save()
+        ctx.beginPath()
+        ctx.rect(strip.x0, 0, strip.x1 - strip.x0, view.h)
+        ctx.clip()
+        for (const [color, alpha, dr, thick] of [
+          [scene.white, 0.08, 0, 7],
+          [scene.vermilion, 0.5, f.width * 1.6 * part, 1],
+          [scene.cyan, 0.5, -f.width * 1.6 * part, 1],
+          [scene.white, 0.75, 0, 1.1],
+        ] as const) {
+          const paths = LEVELS.map(() => new Path2D())
+          const used = LEVELS.map(() => false)
+          let last = -1
+          for (let k = 0; k < SAMPLES; k++) {
+            const a = pts[k]
+            const b = pts[k + 1]
+            const level = levelOf(Math.min(a.presence, b.presence))
+            const ax = contact.x + shift + a.cos * (f.radius * a.shape + dr)
+            const bx = contact.x + shift + b.cos * (f.radius * b.shape + dr)
+            if (level < 0 || Math.max(ax, bx) < strip.x0 - 2 || Math.min(ax, bx) > strip.x1 + 2) {
+              last = -1
+              continue
             }
-            ctx.stroke()
+            const path = paths[level]
+            if (last !== level) path.moveTo(ax, contact.y + a.sin * (f.radius * a.shape + dr))
+            path.lineTo(bx, contact.y + b.sin * (f.radius * b.shape + dr))
+            used[level] = true
+            last = level
           }
-          from = to
+          ctx.strokeStyle = rgba(color, 1)
+          ctx.lineCap = 'round'
+          LEVELS.forEach((s, level) => {
+            if (!used[level]) return
+            ctx.globalAlpha = f.alpha * alpha * s * s * (plate ? 1 : 0.8)
+            ctx.lineWidth = f.width * thick * (0.5 + 0.8 * s)
+            ctx.stroke(paths[level])
+          })
         }
+        ctx.restore()
       }
     }
 
-    /** Inside the first front the glass is a lens: the information there is seen again, larger and a little to one side — a small zone, repeated. */
-    let matrix: HTMLCanvasElement | null = null
-    const lens = (f: Front, t: number) => {
-      matrix ??= document.querySelector<HTMLCanvasElement>('.apa-matrix')
-      if (!matrix || !matrix.width) return
-      ctx.save()
-      ctx.beginPath()
-      const N = 36
-      for (let k = 0; k <= N; k++) {
-        const a = (k / N) * Math.PI * 2
-        const r = waveRadius(a, t, f.radius, f.seed) * 0.82
-        const px = contact.x + Math.cos(a) * r
-        const py = contact.y + Math.sin(a) * r
-        if (k === 0) ctx.moveTo(px, py)
-        else ctx.lineTo(px, py)
+    /** A front's outline (its shape at its radius, times `k`, plus `dr`), for clipping. */
+    const outline = (f: Front, k: number, dr: number, reverse = false) => {
+      const pts = shapes[f.index]
+      for (let j = 0; j <= SAMPLES; j++) {
+        const q = pts[reverse ? SAMPLES - j : j]
+        const r = Math.max(0, f.radius * q.shape * k + dr)
+        if (j === 0) ctx.moveTo(contact.x + q.cos * r, contact.y + q.sin * r)
+        else ctx.lineTo(contact.x + q.cos * r, contact.y + q.sin * r)
       }
       ctx.closePath()
+    }
+
+    /**
+     * Where a front is, the information inside the glass is seen bent: in its band, the same information a little larger, pushed outward
+     * from the contact — the front is a moving lens. Inside the first front, while it is young, the glass is a lens too: the information there
+     * is seen again, larger and a little to one side — a small zone, repeated.
+     */
+    let matrix: HTMLCanvasElement | null = null
+    const lens = (f: Front) => {
+      matrix ??= document.querySelector<HTMLCanvasElement>('.apa-matrix')
+      if (!matrix || !matrix.width) return
+      // As the front ages it bends less, until it bends nothing it crosses: the lens fades to nothing and is then not drawn.
+      const bent = Math.min(0.42, f.alpha * 1.1) * f.refraction - 0.1
+      if (bent > 0.005) {
+        const band = 9 + 0.025 * f.radius
+        ctx.save()
+        ctx.beginPath()
+        outline(f, 1, band)
+        outline(f, 1, -band, true)
+        ctx.clip()
+        ctx.globalAlpha = bent
+        const m = 1 + 0.03 * f.refraction
+        ctx.drawImage(matrix, contact.x * (1 - m), contact.y * (1 - m), view.w * m, view.h * m)
+        ctx.restore()
+      }
+      const young = f.index === 0 ? 1 - Math.min(1, Math.max(0, (f.age - 0.35) / 0.45)) : 0
+      if (young <= 0) return
+      ctx.save()
+      ctx.beginPath()
+      outline(f, 0.82, 0)
       ctx.clip()
-      ctx.globalAlpha = Math.min(0.38, f.alpha * 0.9)
+      ctx.globalAlpha = Math.min(0.38, f.alpha * 0.9) * young
       const k = 1.22
       // Only the part of the information the lens covers is drawn, not the whole canvas: a frame must stay cheap.
       const R = f.radius * 1.4
@@ -263,10 +313,10 @@ export function SceneCanvas({ scene, still, onClock }: { scene: SceneColors; sti
         glow(contact.x, contact.y, surge.radius, surge.alpha, [[0, scene.ember, 0.9], [0.3, scene.vermilion, 0.55], [0.7, scene.coral, 0.2], [1, scene.vermilion, 0]], 0.55, 1.7)
         const bloom = bloomAt(t, view)
         glow(contact.x, contact.y, bloom.radius, bloom.alpha, [[0, scene.white, 0.9], [0.25, scene.hot, 0.65], [0.55, scene.ember, 0.3], [1, scene.ember, 0]], 0.7, 1.35)
-        // …and the glass answers: a lens opens at the point and its fronts go out — wandering, broken, with their colors parted.
+        // …and the glass answers: its fronts go out, one after another, each at its one speed — a lens where each one is, broken, with its colors parted.
         const fronts = frontsAt(t, view)
-        if (fronts[0]) lens(fronts[0], t)
-        for (const f of fronts) front(f, t)
+        for (const f of fronts) lens(f)
+        for (const f of fronts) front(f)
       }
 
       // The fragments, deepest first.

@@ -33,11 +33,27 @@ export const FULL_TIMELINE: Timeline = {
 }
 
 /**
- * The first entry of the day when it begins with APARICIÓN (see ../aparicion/beats.ts).
- * The same rhythm and the same total length: only the wordmark's dots start a little
- * later (0.35 s), so the fragments can reach them as they take shape.
+ * APARICIÓN's propagation: after the touch the glass goes on answering it — fronts that cross it at a constant speed — for this long
+ * before the structure forms (s). Everything after the contact comes this much later; nothing after it is shortened to pay for it.
  */
-export const APARICION_TIMELINE: Timeline = { ...FULL_TIMELINE, wordmark: 0.35 }
+export const APARICION_PROPAGATION = 3.0
+
+/**
+ * The first entry of the day when it begins with APARICIÓN (see ../aparicion/beats.ts).
+ * The same rhythm as the classic ritual, APARICION_PROPAGATION later from the wordmark on: the wordmark's dots start
+ * a little later than the classic ones (0.35 s, plus the propagation), so the fragments can reach them as they take shape.
+ */
+const later = (at: number) => at + APARICION_PROPAGATION
+export const APARICION_TIMELINE: Timeline = {
+  atmosphere: 0,
+  wordmark: later(0.35),
+  phrase: later(FULL_TIMELINE.phrase!),
+  defrag: later(FULL_TIMELINE.defrag!),
+  prompt: later(FULL_TIMELINE.prompt!),
+  field: later(FULL_TIMELINE.field!),
+  suggestions: later(FULL_TIMELINE.suggestions!),
+  ready: later(FULL_TIMELINE.ready!),
+}
 
 /** Any later entry that day: no wordmark, no phrase, no immersive wait. */
 export const BRIEF_TIMELINE: Timeline = {

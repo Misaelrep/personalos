@@ -52,7 +52,7 @@ export function AparicionScene({ scene, stage }: AparicionSceneProps) {
   const slabs = useMemo(() => slabsIn(size), [size])
   const box = (w: number, h: number, ox = 0, oy = 0): CSSProperties => ({ left: frame.x + ox * frame.s, top: frame.y + oy * frame.s, width: w * frame.s, height: h * frame.s })
   const leaving = reached(stage, 'defrag')
-  // The light stage (glass, finger, information) is spent by 1.8 s; only the deep glass stays through the phrase.
+  // The light stage (glass, finger, information) is spent by 4.65 s; only the deep glass stays through the phrase.
   const lightStage = !reached(stage, 'phrase')
   const matrix = useRef<HTMLCanvasElement>(null)
   const wet = useRef<HTMLCanvasElement>(null)
@@ -60,7 +60,7 @@ export function AparicionScene({ scene, stage }: AparicionSceneProps) {
   const optics = useRef<HTMLDivElement>(null)
   const root = useRef<HTMLDivElement>(null)
 
-  // One clock for the whole scene: the CSS beats (B at BEATS.contact, A1's ice and A2 from BEATS.reorganize, the light stage leaving) and the
+  // One clock for the whole scene: the CSS beats (B at BEATS.contact, A1's ice and A2 after the propagation, the light stage leaving) and the
   // curve of intensity start from the instant the canvas starts counting the contact, the wave and the fragments — not from whenever the first
   // frame happens to be painted (a slow first frame used to put B and A2 ~0.3 s behind the contact).
   const anchor = useCallback((t0: number) => {

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { BEATS, FRAGMENTS_END } from './beats'
-import { SYSTEM_WORDS, fragmentAt, makeFragments, placeFragments } from './fragments'
+import { SYSTEM_WORDS, fragmentAt, frontsIn, makeFragments, placeFragments } from './fragments'
+import { FRONT_BIRTHS, frontSpeed, frontsAt } from './light'
+import { bendPx, frontShape, frontShift } from './optics'
 import { contactPoint, expectedWordmarkRect, wordmarkDots } from './geometry'
 
 const VIEWS = [
@@ -76,11 +78,12 @@ describe('placement', () => {
     expect(near).toBeGreaterThan(0.45)
   })
 
-  it('sets each one off after the wave and brings it in by the time the structure is stable', () => {
+  it('sets each one off from the convergence (while the last front is still crossing) and brings it in by the time the structure is stable', () => {
     for (const view of VIEWS) {
       for (const p of setup(view).placed) {
-        expect(p.start).toBeGreaterThanOrEqual(BEATS.reorganize)
-        expect(p.dur).toBeGreaterThanOrEqual(0.4 - 1e-9)
+        expect(p.start).toBeGreaterThanOrEqual(BEATS.converge)
+        expect(p.start).toBeLessThan(BEATS.propagated + 0.1)
+        expect(p.dur).toBeGreaterThanOrEqual(0.45 - 1e-9)
         expect(p.start + p.dur).toBeLessThanOrEqual(BEATS.stable + 0.1 + 1e-9)
       }
     }
@@ -115,35 +118,73 @@ describe('a frame at any moment', () => {
     for (const p of placed) expect(fragmentAt(p, 0, contact, view).alpha).toBe(0)
     const shown = placed.map((p) => fragmentAt(p, BEATS.wave - 0.02, contact, view))
     expect(shown.filter((f) => f.alpha > 0.3).length / placed.length).toBeGreaterThan(0.8)
-    // …and they hang in the glass: within a few pixels of where they rest (the swell around the contact has begun to lift the nearest ones).
-    placed.forEach((p, i) => expect(Math.hypot(shown[i].x - p.sx, shown[i].y - p.sy)).toBeLessThan(10))
-  })
-
-  it('the wave passes through a fragment: it warms and splits as the front reaches it — which is not a circle, so not at the same moment as its neighbours — and not before or long after', () => {
-    const near = [...placed].sort((a, b) => Math.hypot(a.sx - contact.x, a.sy - contact.y) - Math.hypot(b.sx - contact.x, b.sy - contact.y)).slice(10, 40)
-    const peaks = near.map((p) => {
-      let best = { t: 0, heat: 0 }
-      for (let t = BEATS.wave; t < BEATS.wave + 1.6; t += 0.01) {
-        const heat = fragmentAt(p, t, contact, view).heat
-        if (heat > best.heat) best = { t, heat }
-      }
-      return best
+    // …and they hang in the glass: within a few pixels of where they rest.
+    placed.forEach((p) => {
+      const f = fragmentAt(p, 0.4, contact, view)
+      expect(Math.hypot(f.x - p.sx, f.y - p.sy)).toBeLessThan(10)
     })
-    for (const [i, p] of near.entries()) {
-      expect(fragmentAt(p, BEATS.wave - 0.05, contact, view).heat).toBe(0)
-      expect(fragmentAt(p, BEATS.wave + 2.4, contact, view).heat).toBeLessThan(0.05)
-      expect(peaks[i].heat).toBeGreaterThan(0.3)
-    }
-    // Most are reached by the front at some moment; the front is irregular, so the moments are not all alike for pieces at the same distance.
-    expect(peaks.filter((x) => x.heat > 0.6).length).toBeGreaterThan(near.length / 3)
   })
 
-  it('is turned and stretched only while it is being drawn in or carried: upright and unstretched at rest, never upside down', () => {
+  it('each front reaches a piece when it really gets there: at that moment the front, as it is drawn, is exactly where the piece is seen', () => {
+    const speed = frontSpeed(view)
+    for (const p of placed.slice(0, 120)) {
+      const b = bendPx(p.sx, p.sy, view)
+      p.hits.forEach((hit, index) => {
+        const front = frontsAt(hit.at, view).find((f) => f.index === index)
+        if (!front) return expect(hit.strength).toBeLessThan(0.02)
+        const dx = p.sx - b.dx - contact.x - frontShift(b.slab, view) * front.refraction
+        const dy = p.sy - b.dy - contact.y
+        const drawn = front.radius * frontShape(Math.atan2(dy, dx), index * 3.7)
+        expect(Math.abs(drawn - Math.hypot(dx, dy))).toBeLessThan(0.02 * speed) // within 20 ms of the front
+        expect(hit.at).toBeGreaterThan(FRONT_BIRTHS[index])
+      })
+    }
+  })
+
+  it('before the front: untouched; as it passes: disturbed (warmed, split, pushed); after: left a little more in order — never all at once', () => {
+    const near = [...placed].sort((a, b) => Math.hypot(a.sx - contact.x, a.sy - contact.y) - Math.hypot(b.sx - contact.x, b.sy - contact.y)).slice(10, 60)
+    for (const p of near) {
+      const first = p.hits[0]
+      expect(fragmentAt(p, first.at - 0.4, contact, view).heat).toBe(0)
+      expect(frontsIn(p, first.at - 0.4, view).order).toBe(0)
+      expect(fragmentAt(p, first.at, contact, view).heat).toBeCloseTo(first.strength, 6)
+      // The order it is left with grows only after each passage, and only a little (the convergence does the rest).
+      let last = 0
+      for (let t = first.at - 0.4; t < p.start; t += 0.02) {
+        const { order } = frontsIn(p, t, view)
+        expect(order).toBeGreaterThanOrEqual(last - 1e-12)
+        last = order
+      }
+      expect(last).toBeGreaterThan(0.02)
+      expect(last).toBeLessThan(0.2)
+      // …and it is the start of its way to the structure: just before it sets off it is nearer its dot than where it rested.
+      if (p.converges) {
+        const f = fragmentAt(p, p.start, contact, view)
+        expect(Math.hypot(f.x - p.tx, f.y - p.ty)).toBeLessThan(Math.hypot(p.sx - p.tx, p.sy - p.ty))
+      }
+    }
+    // Most are strongly disturbed by the first front.
+    expect(near.filter((p) => p.hits[0].strength > 0.6).length).toBeGreaterThan(near.length / 3)
+  })
+
+  it('the reaction travels with the fronts: the farther from the contact, the later a piece is first disturbed — at the fronts’ own speed', () => {
+    const speed = frontSpeed(view)
+    const by = [...placed].sort((a, b) => Math.hypot(a.sx - contact.x, a.sy - contact.y) - Math.hypot(b.sx - contact.x, b.sy - contact.y))
+    const mean = (list: typeof placed) => list.reduce((s, p) => s + p.hits[0].at, 0) / list.length
+    expect(mean(by.slice(0, 40))).toBeLessThan(mean(by.slice(-40)) - 1)
+    for (const p of placed) {
+      const d = Math.hypot(p.sx - contact.x, p.sy - contact.y)
+      expect(p.hits[0].at).toBeGreaterThan(BEATS.wave + (0.8 * d - 30) / speed)
+      expect(p.hits[0].at).toBeLessThan(BEATS.wave + (1.25 * d + 40) / speed)
+    }
+  })
+
+  it('is turned and stretched only while it is being drawn in, disturbed or carried: upright and unstretched at rest, never upside down', () => {
     for (const p of placed) {
       const rest = fragmentAt(p, 0.3, contact, view)
       expect(rest.stretch).toBeCloseTo(1, 5)
       expect(rest.angle).toBeCloseTo(0, 5)
-      for (let t = 0; t < 1.8; t += 0.05) {
+      for (let t = 0; t < FRAGMENTS_END; t += 0.05) {
         const f = fragmentAt(p, t, contact, view)
         expect(Math.abs(f.angle)).toBeLessThanOrEqual(Math.PI / 2)
         expect(f.stretch).toBeGreaterThanOrEqual(1)

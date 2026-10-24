@@ -128,15 +128,43 @@ export function edgesOf(width: number, view?: { w: number; h: number }): { x: nu
 }
 
 /**
- * The wave: the glass answers where it is touched. Not a circle — a front whose radius wanders with the angle and with time,
- * so it is stronger on one side than the other and breaks. `base` is the mean radius.
+ * The fronts of the glass's answer to a touch (light.ts) are not circles: each has a shape of its own — how far it reaches toward each
+ * angle, relative to its radius (±≈8 %). The shape is fixed for the front's whole life, so toward every direction it grows at a constant speed:
+ * it never wanders, stops or jumps.
  */
-export function waveRadius(angle: number, t: number, base: number, seed = 0): number {
-  const a = fbm2(Math.cos(angle) * 1.15 + 4 + seed, Math.sin(angle) * 1.15 + 4 + t * 0.55, 407 + seed, 3)
-  return base * (0.7 + 0.62 * a + 0.07 * Math.sin(angle * 3 + t * 2.2 + seed))
+export function frontShape(angle: number, seed = 0): number {
+  const a = fbm2(Math.cos(angle) * 1.15 + 4 + seed, Math.sin(angle) * 1.15 + 4, 407 + seed, 3)
+  return 1 + 0.12 * (a - 0.5) + 0.025 * Math.sin(angle * 3 + seed)
 }
 
-/** How much of the front there is toward an angle: it is not a whole ring, parts of it are not there. */
-export function waveStrength(angle: number, t: number, seed = 0): number {
-  return smoothstep(0.18, 0.62, fbm2(Math.cos(angle) * 1.4 + 9 + seed, Math.sin(angle) * 1.4 + 9 - t * 0.4, 419 + seed, 3))
+/** How much of a front there is toward an angle (0..1): it is not a whole ring, parts of it are faint or not there. Fixed for its whole life too. */
+export function frontPresence(angle: number, seed = 0): number {
+  return smoothstep(0.18, 0.62, fbm2(Math.cos(angle) * 1.4 + 9 + seed, Math.sin(angle) * 1.4 + 9, 419 + seed, 3))
+}
+
+/**
+ * Behind a plate a front is seen a little to one side: shifted across the plate by an amount that follows the plate's k (px at 390 wide;
+ * the k are the approved ones, not changed) and is the same over the whole plate — so inside a plate the front still moves at its own constant
+ * speed, and at each of the 8 edges it shows a small, coherent step (3–9 px). Outside the plates (the air between them) it is not shifted.
+ */
+export const FRONT_STEP = 4
+
+export function frontShift(slab: number, view: { w: number; h: number }): number {
+  return slab < 0 ? 0 : FRONT_STEP * SLABS[slab].k * (Math.min(view.w, view.h) / 390)
+}
+
+/** The screen cut into vertical strips at the plates' edges: each plate, and the air between them (slab −1). They cover the whole width. */
+export function stripsIn(view: { w: number; h: number }): { x0: number; x1: number; slab: number }[] {
+  const out: { x0: number; x1: number; slab: number }[] = []
+  let x = 0
+  slabsIn(view).forEach((s, slab) => {
+    const x0 = s.u * view.w
+    const x1 = (s.u + s.w) * view.w
+    if (x1 - x0 < 0.5) return
+    if (x0 - x > 0.5) out.push({ x0: x, x1: x0, slab: -1 })
+    out.push({ x0, x1, slab })
+    x = x1
+  })
+  if (view.w - x > 0.5) out.push({ x0: x, x1: view.w, slab: -1 })
+  return out
 }

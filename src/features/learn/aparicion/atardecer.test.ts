@@ -11,7 +11,7 @@ import { PLATES_A, edgesOf } from './optics'
 
 /**
  * ATARDECER — the closing criteria of the preintegration, one test each:
- * 8 physical edges, no fictitious one, registration, B from BEATS.contact and ≤ 6 px, the scene ending at the 7.25 s target (one frame of tolerance),
+ * 8 physical edges, no fictitious one, registration, B from BEATS.contact and ≤ 6 px, the scene ending at its target (10.25 s with the propagation; one frame of tolerance),
  * the question allowed over its residue, and the glass decoded before the ritual's clock starts.
  */
 const VIEWS = [
@@ -88,12 +88,13 @@ describe('ATARDECER · FRASE → AHORA', () => {
   const start = APARICION_TIMELINE.defrag! + STAGE_LEAVES.after
   const end = start + STAGE_LEAVES.duration
 
-  it('the scene’s exit is timed to end at 7.25 s; on screen it may land up to one frame later, never more', () => {
-    expect(SCENE_END_TARGET).toBe(7.25)
+  it('the scene’s exit is timed to end at 10.25 s (the approved 7.25 s, after the 3 s of propagation); on screen it may land up to one frame later, never more', () => {
+    expect(SCENE_END_TARGET).toBeCloseTo(10.25, 9)
     expect(end).toBeCloseTo(SCENE_END_TARGET, 9)
-    // Observed in Chromium (390 and 320): opacity 0 first painted at 7.256 s — the target plus 6 ms, inside one 60 Hz frame (16.7 ms).
-    const observed = 7.256
-    expect(observed - SCENE_END_TARGET).toBeGreaterThan(0)
+    // Observed in Chromium (390 and 320): opacity 0 (to three decimals) first painted at 10.252 s (390) and 10.250 s (320) — before the
+    // propagation it was 7.256 s — the target plus at most 2 ms, inside one 60 Hz frame (16.7 ms).
+    const observed = 10.252
+    expect(observed - SCENE_END_TARGET).toBeGreaterThanOrEqual(0)
     expect(observed - SCENE_END_TARGET).toBeLessThanOrEqual(SCENE_END_FRAME_TOLERANCE)
   })
 
@@ -145,7 +146,7 @@ describe('ATARDECER · A1 is available before the ritual starts', () => {
   it('the ritual’s clock does not run while held, and runs the same timeline once released', () => {
     expect(scheduleOf(APARICION_TIMELINE, true)).toEqual([])
     const s = scheduleOf(APARICION_TIMELINE, false)
-    expect(s.find(([stage]) => stage === 'prompt')).toEqual(['prompt', 7000])
+    expect(s.find(([stage]) => stage === 'prompt')).toEqual(['prompt', 10000])
     expect(s.length).toBeGreaterThan(5)
   })
 

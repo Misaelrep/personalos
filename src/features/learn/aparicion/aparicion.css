@@ -28,8 +28,8 @@
 .apa-light {
   position: absolute;
   inset: 0;
-  /* The deep glass comes in over it (0.7–1.6 s) and, once it has covered it, it is not drawn at all. */
-  animation: apa-gone 1ms linear 1.65s forwards;
+  /* The deep glass comes in over it (3.7–4.6 s, after the propagation) and, once it has covered it, it is not drawn at all. */
+  animation: apa-gone 1ms linear 4.65s forwards;
   /* Until the glass's light is painted (textures.ts), the same colors in a plain gradient. */
   background: linear-gradient(110deg, color-mix(in srgb, var(--apa-haze) 78%, var(--apa-mist)), var(--apa-haze) 40%, color-mix(in srgb, var(--apa-steel) 52%, var(--apa-haze)));
 }
@@ -115,18 +115,18 @@
   );
 }
 
-/* Information inside the surface: it is drawn once and, as the structure forms, drawn inward toward the contact. */
+/* Information inside the surface: it is drawn once, stays while the fronts cross it and, as the structure forms (3.3 s), is drawn inward toward the contact. */
 .apa-matrix {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  animation: apa-matrix 1.6s ease-in-out both;
+  animation: apa-matrix 4.6s ease-in-out both;
 }
 
 @keyframes apa-matrix {
   0%,
-  40% {
+  72% {
     opacity: 1;
     transform: none;
   }
@@ -149,7 +149,7 @@
   position: absolute;
   inset: 0;
   opacity: 0;
-  animation: apa-in 0.9s ease-in-out 0.7s forwards;
+  animation: apa-in 0.9s ease-in-out 3.7s forwards;
   /* Until the deep glass is painted (textures.ts), the same colors in a plain gradient. */
   background: linear-gradient(110deg, var(--apa-night), var(--apa-deep) 55%, color-mix(in srgb, var(--apa-teal) 55%, var(--apa-deep)));
 }
@@ -222,7 +222,7 @@
   width: 100%;
   height: 100%;
   /* The drops on the glass are a lens on pale glass; on the deep glass their bright points would be stars: they step back as it comes in. */
-  animation: apa-wet-down 0.9s ease-in-out 0.7s forwards;
+  animation: apa-wet-down 0.9s ease-in-out 3.7s forwards;
 }
 
 @keyframes apa-wet-down {
@@ -275,9 +275,16 @@ html[data-motion='reducido'] .apa-glint {
   opacity: 0.7;
 }
 
-/* With reduced motion the pieces of type are drawn once, at rest, over the glass — and leave with it, as the deep glass covers it. */
+/* With reduced motion the pieces of type are drawn once, at rest, over the glass — no front, nothing travels — and leave with it as the structure
+   converges (from 3.6 s) and the deep glass covers it; APRENDER comes in where they were. */
 html[data-motion='reducido'] .apa-canvas {
-  animation: apa-fade-out 0.9s ease-in-out 0.7s forwards;
+  animation: apa-fade-out 0.9s ease-in-out 3.6s forwards;
+}
+
+/* …and instead of the fronts, the glass changes softly where it is: after the touch the light glass goes slowly to its ice, over the time the
+   fronts would take, with no movement at all. */
+html[data-motion='reducido'] .apa .apa-a1 {
+  animation: apa-a1-ice 2.6s ease-in-out 1.1s both;
 }
 
 @keyframes apa-fade-out {
@@ -343,9 +350,9 @@ html[data-motion='reducido'] .apa-canvas {
 }
 
 /* A1 → A2: A1 stays opaque underneath; as A2 comes in over it, the light glass is rendered icier (more of its own blue, a little
-   darker) — the asset is not touched — so the two never meet at a grey. A2's timing is the original one (0.7 s, over 0.9 s). */
+   darker) — the asset is not touched — so the two never meet at a grey. A2's timing is the original one moved by the propagation (3.7 s, over 0.9 s). */
 .apa .apa-a1 {
-  animation: apa-a1-ice 0.7s cubic-bezier(0.45, 0, 0.55, 1) 0.75s both;
+  animation: apa-a1-ice 0.7s cubic-bezier(0.45, 0, 0.55, 1) 3.75s both;
 }
 
 @keyframes apa-a1-ice {

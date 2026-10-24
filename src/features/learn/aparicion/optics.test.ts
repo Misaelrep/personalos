@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { assetFrame, contactPoint } from './geometry'
-import { PLATES_A, SLABS, bendAt, bendPx, edgeLight, edgesOf, endsOf, slabsIn, waveRadius, waveStrength } from './optics'
+import { PLATES_A, SLABS, bendAt, bendPx, edgeLight, edgesOf, endsOf, slabsIn, FRONT_STEP, frontPresence, frontShape, frontShift, stripsIn } from './optics'
 
 /** The physical edges in the A canvas (px): a shared edge once. */
 const EDGES_A = [130, 267, 339, 484, 638.5, 681.5, 725, 768.5]
@@ -122,31 +122,42 @@ describe('the thread of light along the edges', () => {
 })
 
 describe('the glass’s answer to a touch', () => {
-  it('is a front whose radius wanders with the angle: not a circle', () => {
-    const radii = Array.from({ length: 48 }, (_, k) => waveRadius((k / 48) * Math.PI * 2, 0.8, 100))
-    expect(Math.min(...radii)).toBeGreaterThan(50)
-    expect(Math.max(...radii)).toBeLessThan(160)
-    expect(Math.max(...radii) / Math.min(...radii)).toBeGreaterThan(1.25)
+  it('a front is not a circle: its reach wanders with the angle, a little (±≈8 %)', () => {
+    const k = Array.from({ length: 96 }, (_, i) => frontShape((i / 96) * Math.PI * 2))
+    expect(Math.min(...k)).toBeGreaterThan(0.88)
+    expect(Math.max(...k)).toBeLessThan(1.12)
+    expect(Math.max(...k) - Math.min(...k)).toBeGreaterThan(0.04)
   })
 
-  it('is continuous around the ring, deterministic, and grows with its mean radius', () => {
-    expect(waveRadius(0, 0.8, 100)).toBeCloseTo(waveRadius(Math.PI * 2, 0.8, 100), 6)
-    expect(waveRadius(1.3, 0.8, 100)).toBe(waveRadius(1.3, 0.8, 100))
-    expect(waveRadius(1.3, 0.8, 200)).toBeCloseTo(2 * waveRadius(1.3, 0.8, 100), 6)
-    expect(waveRadius(1.3, 0.8, 0)).toBe(0)
+  it('its shape is continuous around the ring, deterministic and its own for each front — and it does not depend on time (so it only grows)', () => {
+    expect(frontShape(0)).toBeCloseTo(frontShape(Math.PI * 2), 6)
+    expect(frontShape(1.3, 3.7)).toBe(frontShape(1.3, 3.7))
+    expect(frontShape(2, 0)).not.toBeCloseTo(frontShape(2, 3.7), 3)
+    expect(frontShape.length + frontPresence.length).toBeLessThanOrEqual(4) // (angle, seed): no time
   })
 
   it('is not there all the way round: parts of it break', () => {
-    const s = Array.from({ length: 72 }, (_, k) => waveStrength((k / 72) * Math.PI * 2, 0.9))
+    const s = Array.from({ length: 72 }, (_, k) => frontPresence((k / 72) * Math.PI * 2))
     for (const x of s) {
       expect(x).toBeGreaterThanOrEqual(0)
       expect(x).toBeLessThanOrEqual(1)
     }
-    expect(s.filter((x) => x < 0.25).length).toBeGreaterThan(6)
+    expect(s.filter((x) => x < 0.3).length).toBeGreaterThan(4)
     expect(s.filter((x) => x > 0.75).length).toBeGreaterThan(6)
   })
 
-  it('each of the fronts wanders differently', () => {
-    expect(waveRadius(2, 0.8, 100, 0)).not.toBeCloseTo(waveRadius(2, 0.8, 100, 3.7), 3)
+  it('behind a plate it is seen a little to one side, the same over the whole plate — a small coherent step at each of the 8 edges, from the approved k', () => {
+    for (const view of [{ w: 390, h: 844 }, { w: 320, h: 568 }]) {
+      const strips = stripsIn(view)
+      expect(strips[0].x0).toBe(0)
+      expect(strips[strips.length - 1].x1).toBeCloseTo(view.w, 6)
+      for (let i = 1; i < strips.length; i++) expect(strips[i].x0).toBeCloseTo(strips[i - 1].x1, 6)
+      const steps = strips.slice(1).map((s, i) => Math.abs(frontShift(s.slab, view) - frontShift(strips[i].slab, view)))
+      // The steps are at the physical edges that are on this screen (and only there): small, never zero except where k does not change.
+      for (const d of steps) expect(d).toBeLessThan(10)
+      expect(steps.filter((d) => d > 2).length).toBeGreaterThanOrEqual(Math.min(6, steps.length - 1))
+      for (const s of strips) if (s.slab >= 0) expect(frontShift(s.slab, view)).toBeCloseTo(FRONT_STEP * SLABS[s.slab].k * (Math.min(view.w, view.h) / 390), 9)
+      expect(strips.filter((s) => s.slab < 0).every((s) => frontShift(s.slab, view) === 0)).toBe(true)
+    }
   })
 })

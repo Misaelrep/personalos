@@ -94,3 +94,18 @@ Todas las codificaciones del runtime se han reproducido byte a byte desde su mas
 
 - El worker de texturas procedurales (`textures.worker.ts`) y las texturas de vidrio, profundidad y mano de `pixels.ts` ya no se usan en runtime, porque las sustituyen los assets. Siguen en el bundle. Se retirarán en una limpieza aparte.
 - `layout.json`: aplazado mientras no haya necesidad real.
+
+## Variante ONDAS continuas (rama `feature/aprender-atardecer-ondas`, pendiente de decisión)
+
+Sustituiría a `f817394` solo si se aprueba. No toca assets, geometría, k, B ni la salida FRASE → AHORA.
+
+| | Valor |
+|---|---|
+| Contacto pleno | 0,82 s (`BEATS.touched`) |
+| Frentes | Nacen en 0,85 · 1,60 · 2,32 · 3,10 s (huecos 0,75 · 0,72 · 0,78 s). Radio = velocidad × edad, exacto; velocidad = (distancia del contacto a la esquina más lejana) / 2,85 s: 233 px/s a 390, 182 px/s a 320 |
+| Forma | Propia de cada frente, fija toda su vida (±≈8 %, `frontShape`); huecos fijos por ángulo (`frontPresence`). Solo cambia su aspecto con la edad: menos intensidad, algo más ancho, menos refracción |
+| Placas | Tras cada placa el frente se ve desplazado `4 px × k` (constante en toda la placa): escalón de 3–9 px en cada uno de los 8 bordes; dentro de la placa, la misma velocidad |
+| Información | Cada fragmento reacciona cuando el frente, tal como se dibuja, pasa realmente por donde se ve el fragmento: antes, quieto; durante, perturbado; después, un poco más ordenado (≤ ≈0,18 de su camino) |
+| Convergencia | Desde 3,3 s, de dentro afuera; estable a 4,5 s; APRENDER formado a ≈4,8 s (wordmark 3,35 s + 0,95 s + 0,5 s). Fin de la propagación: 3,85 s |
+| Ritual | `APARICION_PROPAGATION = 3 s`: todo lo posterior al contacto, 3 s más tarde, sin acortar nada. Frase 5,3 s · desfragmentación 9,0 s · pregunta 10,0 s · fin de escena 10,25 s (observado: 10,252 s a 390 y 10,250 s a 320) |
+| Movimiento reducido | Sin frentes: contacto → cambio óptico suave (A1 hacia su hielo, 1,1–3,7 s) → los fragmentos se funden desde 3,6 s → A2 y APRENDER |

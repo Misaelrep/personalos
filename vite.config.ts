@@ -28,4 +28,6 @@ export default defineConfig({
       },
     }),
   ],
+  // P4 · Página de prueba de PROYECTOS (proyectos.html), fuera de la navegación hasta P4c.
+  build: { rollupOptions: { input: { main: 'index.html', proyectos: 'proyectos.html' } } },
 })

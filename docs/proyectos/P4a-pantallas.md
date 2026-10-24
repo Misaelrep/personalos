@@ -21,7 +21,7 @@ npm test && npm run build && node scripts/check-scope.mjs p4a && node e2e/projec
 | `#/exportar` | EXPORTAR: generar y verificar, guardar (hoja de compartir en el iPhone), verificar una copia guardada |
 | `#/prueba-iphone` | Prueba de Web Locks con datos sintéticos en claves propias (`elyum:prueba-p4a:*`) |
 
-- En dev, Vite sirve `/proyectos.html` sin cambiar nada. Para que **el build** (y la Preview de Vercel) la incluya hace falta la segunda entrada en `vite.config.ts`, pendiente de aprobación.
+- En dev, Vite sirve `/proyectos.html` sin cambiar nada. Para que **el build** (y la Preview de Vercel) la incluya se añade la segunda entrada en `vite.config.ts` (aprobada el 24/10/2026; solo esa línea).
 - El build mete el manifiesto de la app (`start_url: /`) en cada HTML. La página lo quita al arrancar para que, añadida a la pantalla de inicio, se abra ella misma y no ELYUM. **Sin probar en un iPhone.**
 
 ## Reglas de las pantallas

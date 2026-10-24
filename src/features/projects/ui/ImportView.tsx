@@ -1,3 +1,4 @@
+import { Inline } from './inline'
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '../../../components/ui/Button'
 import { Label } from '../../../components/ui/Label'
@@ -339,7 +340,7 @@ export function ImportView({ p }: { p: Projects }) {
                                   />
                                   <span>
                                     <span className="text-[12px] text-ink-3">{opt === 'mantener-elyum' ? 'Mantener ELYUM' : 'Usar el dossier'}</span>
-                                    <span className="block">{fieldText(opt === 'mantener-elyum' ? c.current : c.incoming)}</span>
+                                    <span className="block"><Inline text={fieldText(opt === 'mantener-elyum' ? c.current : c.incoming)} /></span>
                                   </span>
                                 </label>
                               ))}
@@ -358,7 +359,7 @@ export function ImportView({ p }: { p: Projects }) {
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <Mono>{it.sourceId}</Mono>
-                          <p className="text-[14.5px] leading-[1.4] text-ink">{it.draft.title}</p>
+                          <p className="text-[14.5px] leading-[1.4] text-ink"><Inline text={it.draft.title} /></p>
                         </div>
                         <Chip tone={it.kind === 'conflicto' ? 'warn' : it.kind === 'igual' ? 'muted' : 'plain'}>{KIND_LABEL[it.kind]}</Chip>
                       </div>
@@ -366,7 +367,7 @@ export function ImportView({ p }: { p: Projects }) {
                         <ul className="mt-1.5 flex flex-col gap-0.5 text-[13px] text-ink-3">
                           {it.changes.map((c) => (
                             <li key={c.field}>
-                              {FIELD_LABEL[c.field]}: {fieldText(c.current)} → <span className="text-ink-2">{fieldText(c.incoming)}</span>
+                              {FIELD_LABEL[c.field]}: <Inline text={fieldText(c.current)} /> → <span className="text-ink-2"><Inline text={fieldText(c.incoming)} /></span>
                             </li>
                           ))}
                         </ul>
@@ -385,14 +386,14 @@ export function ImportView({ p }: { p: Projects }) {
                   <Card className="px-4 py-1">
                     {plan.missing.map((m) => (
                       <p key={m.taskId} className="border-b border-[var(--line)] py-2.5 text-[14px] last:border-b-0">
-                        <Mono>{m.sourceId}</Mono> <span className="text-ink">{m.title}</span>
+                        <Mono>{m.sourceId}</Mono> <span className="text-ink"><Inline text={m.title} /></span>
                       </p>
                     ))}
                   </Card>
                 </Section>
               )}
 
-              <div className="sticky bottom-0 z-10 -mx-4 mt-8 bg-[linear-gradient(180deg,transparent,var(--color-soft)_30%)] px-4 pt-6 pb-[max(1rem,env(safe-area-inset-bottom))]">
+              <div className="mt-8 border-t border-[var(--line)] pt-6" data-testid="confirm-area">
                 {result && !result.ok && (
                   <div className="mb-3">
                     <Banner tone="error">

@@ -1,3 +1,4 @@
+import { Inline, lit, plainText } from './inline'
 import { Label } from '../../../components/ui/Label'
 import type { RequirementState } from '../domain/derive'
 import { displayRef } from '../domain/ids'
@@ -26,9 +27,13 @@ function TrackRow({ track }: { track: Track }) {
   const cells = [
     {
       label: 'Ejecutada',
-      value: track.executed.state === 'si' ? 'Sí' : track.executed.state === 'sin-decidir' ? 'Sin decidir' : 'No',
+      // «No» only from a class the person decided; an unclassified status is unknown, not «no».
+      value: track.executed.state === 'si' ? 'Sí' : track.executed.state === 'sin-decidir' ? 'Sin dato' : 'No',
       on: track.executed.state === 'si',
-      note: `«${track.executed.literal}»${track.executed.workClass ? ` · ${WORK_CLASS_LABEL[track.executed.workClass]}` : ''}`,
+      note:
+        track.executed.state === 'sin-decidir'
+          ? `«${plainText(track.executed.literal)}» sin clasificar`
+          : `«${plainText(track.executed.literal)}» clasificado como ${WORK_CLASS_LABEL[track.executed.workClass!]}`,
     },
     { label: 'Verificada', value: VERIFICATION_LABEL[track.verified.state], on: track.verified.state === 'verificada', note: track.verified.literal ? `«${track.verified.literal}»` : 'el dossier no lo indica' },
     {
@@ -76,7 +81,7 @@ export function TaskView({ data, taskId }: { data: ProjectsData; taskId: string 
           </div>
         }
       >
-        <span className="text-[24px]">{t.title}</span>
+        <span className="text-[24px]"><Inline text={t.title} /></span>
       </Title>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -92,7 +97,7 @@ export function TaskView({ data, taskId }: { data: ProjectsData; taskId: string 
           <Card className="px-4 py-3">
             <ul className="flex flex-col gap-1.5 text-[15px] leading-[1.45] text-ink">
               {t.acceptance.map((a, i) => (
-                <li key={i}>{a}</li>
+                <li key={i}><Inline text={a} /></li>
               ))}
             </ul>
           </Card>
@@ -112,7 +117,7 @@ export function TaskView({ data, taskId }: { data: ProjectsData; taskId: string 
               return (
                 <Card key={r.id} className="px-4 py-3" >
                   <div className="flex items-start justify-between gap-3" data-testid="requirement">
-                    <p className="text-[15px] leading-[1.45] text-ink">«{r.literal}»</p>
+                    <p className="text-[15px] leading-[1.45] text-ink">«<Inline text={r.literal} />»</p>
                     <Chip tone={REQ_TONE[state]}>{REQUIREMENT_STATE_LABEL[state]}</Chip>
                   </div>
                   <p className="mt-1 text-[12.5px] text-ink-3">
@@ -132,7 +137,7 @@ export function TaskView({ data, taskId }: { data: ProjectsData; taskId: string 
                           )
                         ) : (
                           <span>
-                            {o.literal} · <span className="text-ink-3">{CONDITION_LABEL[o.state]}</span>
+                            <Inline text={o.literal} /> · <span className="text-ink-3">{CONDITION_LABEL[o.state]}</span>
                           </span>
                         )}
                       </li>
@@ -151,31 +156,31 @@ export function TaskView({ data, taskId }: { data: ProjectsData; taskId: string 
       <Section label="Responsable y delegación">
         <Card className="px-4 py-1">
           <Field label="Prioridad" missing="Sin asignar">
-            {t.priority}
+            {lit(t.priority)}
           </Field>
           <Field label="Responsable" missing="Sin asignar">
             {t.owner ? `${t.owner.name} · ${t.owner.kind}` : undefined}
           </Field>
           <Field label="Agente posible (dossier)" missing="El dossier no lo indica">
-            {t.delegation?.literal}
+            {lit(t.delegation?.literal)}
           </Field>
           <Field label="Candidatos a delegación" missing="Ninguno decidido">
             {t.delegation?.candidates.length ? t.delegation.candidates.map((c) => c.name).join(', ') : undefined}
           </Field>
           <Field label="Siguiente acción" missing="Sin escribir">
-            {t.nextAction}
+            {lit(t.nextAction)}
           </Field>
         </Card>
       </Section>
 
       <Section label="Trabajo">
         <Card className="px-4 py-1">
-          <Field label="Área">{t.area}</Field>
-          <Field label="Entregable">{t.deliverable}</Field>
+          <Field label="Área">{lit(t.area)}</Field>
+          <Field label="Entregable">{lit(t.deliverable)}</Field>
           <Field label="Tiempo humano (literal)">{t.estimate?.literal}</Field>
           {extra.map(([k, v]) => (
             <Field key={k} label={k}>
-              {String(v)}
+              {lit(String(v))}
             </Field>
           ))}
         </Card>
@@ -207,7 +212,7 @@ export function TaskView({ data, taskId }: { data: ProjectsData; taskId: string 
             {d.usedBy.map((u) => (
               <RowLink key={u.id} href={taskHref(u)}>
                 <Mono>{displayRef(u)}</Mono>
-                <p className="text-[15px] text-ink">{u.title}</p>
+                <p className="text-[15px] text-ink"><Inline text={u.title} /></p>
               </RowLink>
             ))}
           </Card>
@@ -222,10 +227,10 @@ export function TaskView({ data, taskId }: { data: ProjectsData; taskId: string 
               <Field label="Fuentes citadas">
                 {t.sourceRefs ? (
                   <span className="flex flex-col gap-0.5">
-                    <span>{t.sourceRefs.literal}</span>
+                    <span><Inline text={t.sourceRefs.literal} /></span>
                     {d.sources.map(({ key, source }) => (
                       <span key={key} className="text-[13px] text-ink-3">
-                        {key}: {source ? source.title : 'no figura en la lista de fuentes del dossier'}
+                        {key}: {source ? <Inline text={source.title} /> : 'no figura en la lista de fuentes del dossier'}
                       </span>
                     ))}
                   </span>

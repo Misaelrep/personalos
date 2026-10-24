@@ -1,3 +1,4 @@
+import { Inline } from './inline'
 import { Label } from '../../../components/ui/Label'
 import type { Blockers } from '../domain/derive'
 import { displayRef } from '../domain/ids'
@@ -16,8 +17,8 @@ function TaskLine({ t, data, note }: { t: Task; data: ProjectsData; note?: strin
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <Mono>{displayRef(t) ?? 'sin ID'}</Mono>
-          <p className="mt-0.5 text-[15px] leading-[1.4] text-ink">{t.title}</p>
-          {note && <p className="mt-1 text-[13px] leading-[1.45] text-ink-3">{note}</p>}
+          <p className="mt-0.5 text-[15px] leading-[1.4] text-ink"><Inline text={t.title} /></p>
+          {note && <p className="mt-1 text-[13px] leading-[1.45] text-ink-3"><Inline text={note} /></p>}
         </div>
         <StageChip stage={stageOf(data, t)} />
       </div>
@@ -58,8 +59,8 @@ export function ProjectView({ data, projectId }: { data: ProjectsData; projectId
   return (
     <>
       <TopBar back="#/" backLabel="Proyectos" />
-      <Title kicker={<Label>Proyecto</Label>} sub={project.objective ?? <span className="italic text-ink-4">El dossier no indica objetivo.</span>}>
-        {project.name}
+      <Title kicker={<Label>Proyecto</Label>} sub={project.objective !== undefined ? <Inline text={project.objective} /> : <span className="italic text-ink-4">El dossier no indica objetivo.</span>}>
+        <Inline text={project.name} />
       </Title>
 
       <div className="grid grid-cols-3 gap-2" data-testid="stage-strip">
@@ -76,7 +77,7 @@ export function ProjectView({ data, projectId }: { data: ProjectsData; projectId
           <Card className="px-4 py-1">
             {project.rules.map((r, i) => (
               <Field key={i} label={r.limit !== undefined ? `Límite informativo · ${r.limit}` : 'Regla informativa'}>
-                {r.literal}
+                <Inline text={r.literal} />
               </Field>
             ))}
           </Card>
@@ -121,7 +122,7 @@ export function ProjectView({ data, projectId }: { data: ProjectsData; projectId
           <Card className="px-4 py-1">
             {s.milestones.map((m) => (
               <Field key={m.id} label={m.dueLiteral ?? m.due ?? 'Sin fecha'}>
-                {m.title}
+                <Inline text={m.title} />
                 {m.acceptance.length > 0 && <span className="mt-1 block text-[13px] text-ink-3">{m.acceptance.join(' · ')}</span>}
               </Field>
             ))}

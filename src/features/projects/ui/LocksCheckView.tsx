@@ -90,14 +90,15 @@ export function LocksCheckView() {
                 setReport(undefined)
               }}
             >
-              Borrar solo los datos de esta prueba
+              Borrar los datos de esta prueba de Web Locks
             </Button>
+            <p className="px-1 text-[12px] leading-[1.5] text-ink-4">Borra solo las claves «elyum:prueba-p4a:*». No borra el proyecto HUERTO importado ni ningún otro dato de PROYECTOS.</p>
           </div>
         </div>
       )}
       {cleared !== undefined && (
         <div className="mt-4">
-          <Banner tone="info">Borradas {cleared} claves de la prueba. Los datos de PROYECTOS no se han tocado.</Banner>
+          <Banner tone="info">Borradas {cleared} claves «elyum:prueba-p4a:*». El proyecto HUERTO importado y el resto de PROYECTOS siguen igual.</Banner>
         </div>
       )}
     </>

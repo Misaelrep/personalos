@@ -1,3 +1,4 @@
+import { Inline } from './inline'
 import { Label } from '../../../components/ui/Label'
 import type { ProjectsData } from '../domain/types'
 import { dateTime, STAGE_LABEL } from './labels'
@@ -51,12 +52,12 @@ export function Overview({ data }: { data: ProjectsData }) {
               <a key={s.project.id} href={`#/proyecto/${encodeURIComponent(s.project.id)}`} data-testid="project-card" className="block active:scale-[0.995] transition-transform">
                 <Card className="px-5 py-4.5">
                   <div className="flex items-start justify-between gap-3">
-                    <h2 className="font-display text-[19px] leading-snug font-medium text-ink">{s.project.name}</h2>
+                    <h2 className="font-display text-[19px] leading-snug font-medium text-ink"><Inline text={s.project.name} /></h2>
                     <span className="tabular mt-1 shrink-0 text-[13px] text-ink-3">
                       {s.open}/{s.tasks.length} abiertas
                     </span>
                   </div>
-                  {s.project.objective && <p className="mt-1.5 line-clamp-2 text-[14px] leading-[1.45] text-ink-2">{s.project.objective}</p>}
+                  {s.project.objective && <p className="mt-1.5 line-clamp-2 text-[14px] leading-[1.45] text-ink-2"><Inline text={s.project.objective} /></p>}
                   <div className="mt-3.5">
                     <StageCounts s={s} />
                   </div>

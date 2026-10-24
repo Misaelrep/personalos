@@ -27,6 +27,9 @@ npm test && npm run build && node scripts/check-scope.mjs p4a && node e2e/projec
 ## Reglas de las pantallas
 
 - Estado de una tarea (`ui/view.ts`): cerrada → espera aprobación → sin clasificar → bloqueada → por verificar → lista. Todo se deriva; nada se guarda.
+- Los literales se **muestran** con su Markdown en línea interpretado (`\|` → |, `*x*` → cursiva, `` `x` `` → código; nunca HTML). Lo guardado y la «Fila original» de la procedencia no cambian (`ui/inline.tsx`).
+- «Ejecutada» dice «No» solo si la clase que decidió la persona lo dice, y lo indica («clasificado como pendiente»). Un estado sin clasificar es «Sin dato», no «No».
+- El botón de confirmar va al final de la vista previa, no flota sobre ella.
 - Nada se inventa en pantalla: prioridad, responsable, candidatos y siguiente acción muestran «Sin asignar», «Ninguno decidido» o «Sin escribir».
 - Una condición sin comprobar se muestra «por verificar» con el texto del dossier; nunca cuenta como cumplida.
 - Importar: los estados nuevos empiezan como «sin decidir». Destino sugerido: el proyecto que ya usa el archivo o que ya tiene esos IDs, y se explica por qué. Si se elige «proyecto nuevo» con un nombre existente, se avisa; los IDs repetidos impiden importar.
@@ -34,15 +37,23 @@ npm test && npm run build && node scripts/check-scope.mjs p4a && node e2e/projec
 - Sin Web Locks: banda «Solo lectura»; se puede consultar, previsualizar y exportar, pero no confirmar.
 - Datos ilegibles: se avisa, no se importa nada encima y se puede exportar tal cual.
 
+## Claves en el navegador (por origen)
+
+| Quién | Claves |
+|---|---|
+| PROYECTOS (y el HUERTO importado con P3) | `elyum:projects:v1:data`, `elyum:projects:v1:prev:1…3` |
+| Prueba de Web Locks | `elyum:prueba-p4a:registro`, `elyum:prueba-p4a:elyum:projects:v1:data`, `…:prev:1…3` |
+
+Su botón de limpieza borra solo `elyum:prueba-p4a:*`. En la Preview, el origen es distinto del de producción: nada de aquí llega a producción.
+
 ## Pruebas
 
-- `p4a.test.ts`: 16 pruebas unitarias (estados, separación ejecutada/verificada/aprobada, candidatas, fuentes, reimportación v2, pestaña desactualizada, duplicado, prueba de Web Locks con y sin bloqueo, persistencia, borrado limitado a sus claves).
-- `e2e/projects/screens.mjs`: 33 comprobaciones en Chromium a 390 px, con capturas. **Chromium no es Safari:** no prueba el iPhone.
+- `p4a.test.ts`: 19 pruebas unitarias (estados, separación ejecutada/verificada/aprobada, candidatas, fuentes, reimportación v2, pestaña desactualizada, duplicado, prueba de Web Locks con y sin bloqueo, persistencia, borrado limitado a sus claves).
+- `e2e/projects/screens.mjs`: 36 comprobaciones en Chromium a 390 px, con capturas. **Chromium no es Safari:** no prueba el iPhone.
 
 ## Límites antes de P4b
 
 - Web Locks, persistencia e instalación en iPhone: **sin verificar** hasta la prueba física.
 - Safari y la app instalada tienen almacenamientos separados: los datos de uno no aparecen en el otro.
 - Sin edición: un conflicto solo puede aparecer si otra pestaña cambió datos (en las pruebas, con código).
-- Los títulos se muestran literales (`\|`, `*paso*`), como los guarda P3.
 - Con dos entradas, el build reparte el código común de la app en un chunk compartido. La app funciona igual, pero sus archivos cambian de nombre y de reparto.

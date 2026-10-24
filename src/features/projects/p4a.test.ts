@@ -6,6 +6,7 @@ import { applyImport, planImport, type ImportDecisions } from './import/plan'
 import { readDossierFile } from './import/readers'
 import { emptyProjectsData, ProjectsSession } from './store/session'
 import { createStore, DATA_KEY, type KeyValue, type Locks } from './store/store'
+import { inlineSegments, plainText } from './ui/inline'
 import { fieldText } from './ui/labels'
 import { clearCheck, DIAG_LOG_KEY, DIAG_PREFIX, reportText, runLocksCheck, type Env } from './ui/locksCheck'
 import { parseRoute } from './ui/ProjectsApp'
@@ -261,5 +262,29 @@ describe('P4a · navegación y textos', () => {
     expect(fieldText(undefined)).toBe('—')
     expect(fieldText({ literal: '20–35 min' })).toBe('20–35 min')
     expect(fieldText(['a', 'b'])).toBe('a · b')
+  })
+})
+
+describe('P4a · presentación de literales (sin tocar lo guardado)', () => {
+  it('shows escaped pipes and Markdown emphasis as text', () => {
+    expect(plainText('Anotar el riego \\| diario')).toBe('Anotar el riego | diario')
+    expect(inlineSegments('Comprobar la llave de *paso*')).toEqual([{ text: 'Comprobar la llave de ' }, { text: 'paso', em: true }])
+    expect(inlineSegments('**Sí, usuario**')).toEqual([{ text: 'Sí, usuario', strong: true }])
+    expect(inlineSegments('`manual_inventado.md`')).toEqual([{ text: 'manual_inventado.md', code: true }])
+  })
+
+  it('leaves alone what is not Markdown', () => {
+    expect(plainText('HUE-02 o semillas del vecino')).toBe('HUE-02 o semillas del vecino')
+    expect(plainText('archivo_de_riego_v2')).toBe('archivo_de_riego_v2')
+    expect(plainText('2 * 3 = 6')).toBe('2 * 3 = 6')
+    expect(plainText('un *solo asterisco')).toBe('un *solo asterisco')
+    expect(plainText('<b>no es HTML</b>')).toBe('<b>no es HTML</b>')
+  })
+
+  it('the stored literal and the original row keep the escape', async () => {
+    const { data } = await imported()
+    const t = data.tasks.find((x) => x.id === id('HUE-05'))!
+    expect(t.title).toBe('Anotar el riego \\| diario')
+    expect(t.origin?.raw).toContain('\\|')
   })
 })

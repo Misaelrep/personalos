@@ -285,3 +285,94 @@ html[data-motion='reducido'] .apa-canvas {
     opacity: 0;
   }
 }
+
+/* —— The frozen assets of ATARDECER in the scene (assets.ts) —— */
+
+.apa-asset {
+  position: absolute;
+  max-width: none;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* B, the finger: anchored to BEATS.contact (0.2 s), not to a texture. It comes in (0.5 s), rests on the glass, and goes back into it before the
+   deep glass is half in (out from 0.9 s, over 0.4 s: gone at 1.3 s — no ghost over the convergence); it moves no more than 5.2 px from where it is registered with A1. */
+.apa-b {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  animation:
+    apa-b-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both,
+    apa-b-out 0.4s ease-in 0.9s forwards;
+}
+
+@keyframes apa-b-in {
+  from {
+    opacity: 0;
+    transform: translate(-5px, 1.4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes apa-b-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translate(-5px, 1.4px);
+  }
+}
+
+/* FRASE → AHORA: the deep glass clears while it is still opaque — lighter and keeping its own blue, so it never passes through a grey —
+   and only then, already pale, dissolves into sunset-ahora (the same plates) underneath (beats.ts: STAGE_LEAVES; ends at the 7.25 s target). */
+.apa[data-leaving] .apa-stage {
+  animation:
+    apa-in 1ms linear forwards,
+    apa-a2-clear 0.55s cubic-bezier(0.45, 0, 0.55, 1) 0.05s forwards;
+}
+
+@keyframes apa-a2-clear {
+  to {
+    filter: brightness(2.3) saturate(1);
+  }
+}
+
+/* A1 → A2: A1 stays opaque underneath; as A2 comes in over it, the light glass is rendered icier (more of its own blue, a little
+   darker) — the asset is not touched — so the two never meet at a grey. A2's timing is the original one (0.7 s, over 0.9 s). */
+.apa .apa-a1 {
+  animation: apa-a1-ice 0.7s cubic-bezier(0.45, 0, 0.55, 1) 0.75s both;
+}
+
+@keyframes apa-a1-ice {
+  to {
+    filter: saturate(1.8) brightness(0.92);
+  }
+}
+
+/* With reduced motion the finger does not travel: it only fades in and out, at the same moments, where it is registered with A1. */
+html[data-motion='reducido'] .apa-b {
+  animation-name: apa-b-fade-in, apa-b-fade-out;
+}
+
+@keyframes apa-b-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes apa-b-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}

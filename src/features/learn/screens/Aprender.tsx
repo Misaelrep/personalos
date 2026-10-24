@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperti
 import { dateKey } from '../../../domain/time'
 import { nowMs } from '../../../state/clock'
 import { AparicionScene } from '../aparicion/AparicionScene'
+import { preloadState, preloadSunset, type Preload } from '../aparicion/assets'
 import { LearnLight, learnScreenVars, useLearnTheme } from '../atmosphere'
 import { LIVE_SECONDS } from '../atmosphere/atmosphere'
 import { crossingKeyframes } from '../atmosphere/crossing'
@@ -51,10 +52,22 @@ export function Aprender({ onImmersive }: AprenderProps) {
   // …except how the first entry begins: that is the atmosphere's at the moment it began, and an hour
   // that passes during it never swaps it for another (nor plays it again).
   const [ritualTheme] = useState<LearnTheme>(theme)
-  const aparicion = full && ritualTheme.ritual === 'aparicion' && ritualTheme.scene !== undefined
+  const wantsAparicion = full && ritualTheme.ritual === 'aparicion' && ritualTheme.scene !== undefined
+  // APARICIÓN's clock does not start until its glass is decoded (A1 must be painted before B comes in at 0.2 s). If the assets cannot be
+  // read in time, the first entry is the classic ritual — never the scene with a half-painted glass.
+  const [preload, setPreload] = useState<Preload>(() => (wantsAparicion ? preloadState() : 'ready'))
+  useEffect(() => {
+    if (!wantsAparicion || preload !== 'loading') return
+    let live = true
+    void preloadSunset().then((r) => live && setPreload(r))
+    return () => {
+      live = false
+    }
+  }, [wantsAparicion, preload])
+  const aparicion = wantsAparicion && preload !== 'failed'
   const timeline = full ? (aparicion ? APARICION_TIMELINE : FULL_TIMELINE) : BRIEF_TIMELINE
   const phrase = useMemo(() => phraseForDate(today, PHRASES, entry.memory.phrase), [today, entry])
-  const { stage, skipped, locked } = useRitual(timeline)
+  const { stage, skipped, locked } = useRitual(timeline, aparicion && preload === 'loading')
 
   // When the hour changes the polarity of the atmosphere (dusk → night, night → day), the ink does not glide
   // across the middle with the ground: it is stepped across it (see atmosphere/crossing.ts). Colors only.
@@ -102,6 +115,7 @@ export function Aprender({ onImmersive }: AprenderProps) {
       data-learn-theme={theme.id}
       data-stage={stage}
       data-entry={entry.kind}
+      data-preload={wantsAparicion ? preload : undefined}
       data-skipped={skipped || undefined}
       className="fixed inset-0 z-10 flex flex-col overflow-y-auto overscroll-contain px-6 pt-[calc(env(safe-area-inset-top)+28px)] pb-[calc(env(safe-area-inset-bottom)+104px)] lg:pr-14 lg:pb-16 lg:pl-[140px]"
       style={learnScreenVars(theme) as CSSProperties}
@@ -113,7 +127,7 @@ export function Aprender({ onImmersive }: AprenderProps) {
       <LearnLight theme={theme} covered={aparicion && !skipped && !reached(stage, 'defrag')} />
       {/* APARICIÓN: behind the words, gone before the question. A tap takes it away with everything else. */}
       <AnimatePresence>
-        {aparicion && !skipped && !reached(stage, 'field') && ritualTheme.scene && <AparicionScene key="aparicion" scene={ritualTheme.scene} stage={stage} />}
+        {aparicion && preload === 'ready' && !skipped && !reached(stage, 'field') && ritualTheme.scene && <AparicionScene key="aparicion" scene={ritualTheme.scene} stage={stage} />}
       </AnimatePresence>
       <header className="mx-auto w-full max-w-[560px]">
         <Reveal shown={ready} skipped={skipped} locked={locked}>

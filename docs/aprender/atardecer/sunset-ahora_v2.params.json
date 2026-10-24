@@ -1,0 +1,11 @@
+{
+ "desat": 0.55,
+ "pearl": "#EEF2F8",
+ "lift": 0.45,
+ "sx": 1.6,
+ "sy": 7,
+ "syWet": 12,
+ "wetFrom": 665,
+ "presence": 0.2,
+ "c1": 0.06
+}

@@ -24,7 +24,8 @@ type Tone = FragmentTone
  * into a sprite once and then only moved, so a frame is a few gradient fills and image draws — no layout, no filters — and it stops by itself when
  * the last fragment is gone. With `still` it draws one frame.
  */
-export function SceneCanvas({ scene, still }: { scene: SceneColors; still: boolean }) {
+/** onClock: the instant (performance.now) the scene's clock starts — the contact, the wave and the fragments count from it (BEATS). */
+export function SceneCanvas({ scene, still, onClock }: { scene: SceneColors; still: boolean; onClock?: (t0: number) => void }) {
   const ref = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
@@ -311,6 +312,7 @@ export function SceneCanvas({ scene, still }: { scene: SceneColors; still: boole
         return
       }
       const t0 = performance.now()
+      onClock?.(t0)
       const tick = (now: number) => {
         const t = (now - t0) / 1000
         // The wordmark exists from its stage on: aim at its real dots as soon as they can be measured.

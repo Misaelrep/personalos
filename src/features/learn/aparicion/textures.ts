@@ -2,7 +2,7 @@ import type { SceneColors } from '../atmosphere/themes'
 import type { RGB } from './color'
 import type { Point, View } from './fragments'
 import { fbm2, noise2, smoothstep } from './noise'
-import { SLABS, bendPx, edgeLight, edgesOf, endsOf } from './optics'
+import { SLABS, bendPx, edgeLight, edgesOf } from './optics'
 import { makePixels, paletteOf, wetFrom, wordsBand, wordsFrom, type Pixels, type TextureJob } from './pixels'
 
 /**
@@ -220,7 +220,7 @@ export function paintWet(canvas: HTMLCanvasElement, scene: SceneColors, view: Vi
     ctx.stroke()
   }
   // Dust of light, caught along the edges of the plates.
-  const edges = edgesOf(view.w)
+  const edges = edgesOf(view.w, view)
   for (let i = 0; i < 150 * area; i++) {
     const x = r() * view.w
     const y = r() * view.h
@@ -239,202 +239,31 @@ export function paintWet(canvas: HTMLCanvasElement, scene: SceneColors, view: Vi
  * the broken threads of the wet. Drawn once; the page scales its whole presence with the ritual's intensity (beats.ts: INTENSITY).
  */
 export function paintGlass(canvas: HTMLCanvasElement, scene: SceneColors, view: View): void {
-  const dpr = Math.min(1, window.devicePixelRatio || 1)
+  // The plates' matter, leaks, halos and reflections come from the assets (A1/A2/C1/C2); the code keeps only
+  // the sharp thread of light, 1 px, on each physical edge (edgesOf), hushed behind the words as before.
+  const dpr = Math.min(2, window.devicePixelRatio || 1)
   canvas.width = Math.round(view.w * dpr)
   canvas.height = Math.round(view.h * dpr)
   const ctx = canvas.getContext('2d')
   if (!ctx) return
   ctx.scale(dpr, dpr)
   const c = paletteOf(scene)
-  const wf = wetFrom(view)
   const { w, h } = view
   const SEG = 6
   const quiet = (y: number, x: number) => 1 - 0.88 * hush(view, x / w, y / h)
-
-  // The body of every plate: clear glass holds a little more light than the air beside it, most at the top.
-  SLABS.forEach((slab) => {
-    const x0 = Math.round(slab.u * w)
-    const x1 = Math.round((slab.u + slab.w) * w)
-    const g = ctx.createLinearGradient(0, 0, 0, h)
-    g.addColorStop(slab.v0, rgb(c.white, 0))
-    g.addColorStop(Math.min(1, slab.v0 + 0.06), rgb(c.white, 0.14))
-    g.addColorStop(Math.max(0.1, slab.v1 - 0.4), rgb(c.white, 0.07))
-    g.addColorStop(Math.max(0.2, slab.v1 - 0.06), rgb(c.white, 0.05))
-    g.addColorStop(slab.v1, rgb(c.white, 0))
-    ctx.fillStyle = g
-    ctx.fillRect(x0, 0, x1 - x0, h)
-  })
-
-  SLABS.forEach((slab, i) => {
-    const x0 = Math.round(slab.u * w)
-    const x1 = Math.round((slab.u + slab.w) * w)
+  for (const e of edgesOf(w, view)) {
+    const x = Math.round(e.x)
+    const out = e.side === 0 ? -1 : 1
     for (let y = 0; y < h; y += SEG) {
       const v = (y + SEG / 2) / h
-      const ends = endsOf(slab, v)
-      if (ends <= 0.02) continue
-      for (const side of [0, 1] as const) {
-        const x = side === 0 ? x0 : x1
-        const k = edgeLight(i, side, v) * ends * quiet(y, x)
-        if (k < 0.04) continue
-        const out = side === 0 ? -1 : 1
-        // The spill: light that leaves the edge, a little inside the plate and less outside it.
-        const inner = ctx.createLinearGradient(x, 0, x - out * 12, 0)
-        inner.addColorStop(0, rgb(c.white, 0.2 * k))
-        inner.addColorStop(1, rgb(c.white, 0))
-        ctx.fillStyle = inner
-        ctx.fillRect(Math.min(x, x - out * 12), y, 12, SEG)
-        const outer = ctx.createLinearGradient(x, 0, x + out * 6, 0)
-        outer.addColorStop(0, rgb(c.ice, 0.14 * k))
-        outer.addColorStop(1, rgb(c.ice, 0))
-        ctx.fillStyle = outer
-        ctx.fillRect(Math.min(x, x + out * 6), y, 6, SEG)
-        // Dispersion: the colors the edge parts the light into, as a band — cool and violet outside, a warm magenta inside.
-        const band = ctx.createLinearGradient(x, 0, x + out * 9, 0)
-        band.addColorStop(0, rgb(c.cyan, 0.3 * k))
-        band.addColorStop(0.45, rgb(c.violet, 0.16 * k))
-        band.addColorStop(1, rgb(c.violet, 0))
-        ctx.fillStyle = band
-        ctx.fillRect(Math.min(x, x + out * 9), y, 9, SEG)
-        const warm = ctx.createLinearGradient(x, 0, x - out * 6, 0)
-        warm.addColorStop(0, rgb(c.ember, 0.3 * k))
-        warm.addColorStop(0.5, rgb(c.magenta, 0.12 * k))
-        warm.addColorStop(1, rgb(c.magenta, 0))
-        ctx.fillStyle = warm
-        ctx.fillRect(Math.min(x, x - out * 6), y, 6, SEG)
-        // The thread itself: white, with its fringe.
-        ctx.fillStyle = rgb(c.cyan, 0.5 * k)
-        ctx.fillRect(x + out * 1, y, 1, SEG)
-        ctx.fillStyle = rgb(c.vermilion, 0.45 * k)
-        ctx.fillRect(x - out * 1, y, 1, SEG)
-        ctx.fillStyle = rgb(c.white, 0.92 * k)
-        ctx.fillRect(side === 0 ? x : x - 1, y, 1, SEG)
-      }
-    }
-  })
-
-  // Inside the wider plates, a streak or two: where the glass is thick the light runs through it.
-  SLABS.forEach((slab, i) => {
-    if (slab.w < 0.1) return
-    for (const s of [0.2, 0.78]) {
-      const x = Math.round((slab.u + slab.w * s) * w)
-      for (let y = 0; y < h; y += SEG) {
-        const v = (y + SEG / 2) / h
-        const k = smoothstep(0.25, 0.7, edgeLight(i + 7, s < 0.5 ? 0 : 1, v)) * endsOf(slab, v) * quiet(y, x)
-        if (k < 0.02) continue
-        ctx.fillStyle = rgb(c.white, 0.3 * k)
-        ctx.fillRect(x, y, 1, SEG)
-      }
-    }
-  })
-
-  // The red and orange: the light that leaks along the warm plate, in from its edges — white-hot at the edge itself, ember, vermilion, and a long coral tail.
-  SLABS.forEach((slab, i) => {
-    if (!slab.warm) return
-    for (const side of [0, 1] as const) {
-      const x = Math.round((slab.u + (side === 1 ? slab.w : 0)) * w)
-      const inward = side === 0 ? 1 : -1
-      for (let y = 0; y < h; y += SEG) {
-        const v = (y + SEG / 2) / h
-        const lobes = Math.max(smoothstep(0, 0.1, v) * (1 - smoothstep(wordsFrom(view) - 0.12, wordsFrom(view) - 0.02, v)), smoothstep(wf - 0.1, wf + 0.02, v) * (1 - smoothstep(0.9, 0.99, v)))
-        const k = edgeLight(i, side, v) ** 1.5 * endsOf(slab, v) * lobes * (1 - 0.7 * hush(view, x / w, y / h))
-        if (k < 0.05) continue
-        const reach = 38 * (0.5 + 0.5 * k)
-        const g = ctx.createLinearGradient(x, 0, x + inward * reach, 0)
-        g.addColorStop(0, rgb(c.hot, 0.7 * k))
-        g.addColorStop(0.08, rgb(c.ember, 0.44 * k))
-        g.addColorStop(0.3, rgb(c.vermilion, 0.22 * k))
-        g.addColorStop(0.7, rgb(c.coral, 0.06 * k))
-        g.addColorStop(1, rgb(c.coral, 0))
-        ctx.fillStyle = g
-        ctx.fillRect(Math.min(x, x + inward * reach), y, reach, SEG)
-      }
-    }
-  })
-
-  // Fans: where an edge splits the light, the spectrum opens from the corner of a plate — thin, fading, never a circle.
-  const fan = (px: number, py: number, from: number, to: number, length: number, alpha: number) => {
-    const colors = [c.cyan, c.sky, c.violet, c.magenta, c.vermilion, c.ember]
-    const n = 11
-    for (let k = 0; k < n; k++) {
-      const t = k / (n - 1)
-      const a = ((from + (to - from) * t) * Math.PI) / 180
-      const len = length * (0.7 + 0.3 * Math.sin(k * 2.1))
-      const col = colors[Math.min(colors.length - 1, Math.floor(t * colors.length))]
-      const g = ctx.createLinearGradient(px, py, px + Math.cos(a) * len, py + Math.sin(a) * len)
-      g.addColorStop(0, rgb(col, alpha))
-      g.addColorStop(1, rgb(col, 0))
-      ctx.strokeStyle = g
-      ctx.lineWidth = 1
-      ctx.beginPath()
-      ctx.moveTo(px, py)
-      ctx.lineTo(px + Math.cos(a) * len, py + Math.sin(a) * len)
-      ctx.stroke()
-    }
-  }
-  fan(SLABS[1].u * w, 0.9 * h, -64, -38, 0.24 * h, 0.3)
-  fan((SLABS[3].u + SLABS[3].w) * w, 0.96 * h, -122, -98, 0.16 * h, 0.26)
-  fan(SLABS[5].u * w, 0.74 * h, -150, -122, 0.12 * h, 0.26)
-
-  // Glints along the edges: slivers of light, each with a ghost of color on either side.
-  const glint = (x: number, y: number, size: number, alpha: number) => {
-    const len = size * 2.6
-    for (const [dx, col, a] of [[-2, c.vermilion, 0.5], [2, c.cyan, 0.5], [0, c.white, 1]] as const) {
-      const g = ctx.createLinearGradient(0, y - len, 0, y + len)
-      g.addColorStop(0, rgb(col, 0))
-      g.addColorStop(0.5, rgb(col, alpha * a))
-      g.addColorStop(1, rgb(col, 0))
-      ctx.fillStyle = g
-      ctx.fillRect(Math.round(x + dx) - (dx === 0 ? 0 : 0), y - len, 1, len * 2)
-    }
-  }
-  const pick = scatter(77)
-  for (let n = 0; n < 15; n++) {
-    const slab = Math.floor(pick() * SLABS.length)
-    const side = pick() < 0.5 ? 0 : 1
-    const v = 0.04 + pick() * 0.92
-    const x = (SLABS[slab].u + (side === 1 ? SLABS[slab].w : 0)) * w
-    const y = v * h
-    const k = edgeLight(slab, side as 0 | 1, v) * endsOf(SLABS[slab], v) * quiet(y, x)
-    if (k < 0.45) continue
-    glint(x, y, 4 + pick() * 8, 0.55 + 0.4 * k)
-  }
-
-  // Halos: where light gathers on an edge, a soft bloom — warm along the warm plate, cool elsewhere. Small, few, and never a body of their own.
-  const halo = (x: number, y: number, radius: number, col: RGB, alpha: number) => {
-    const g = ctx.createRadialGradient(x, y, 0, x, y, radius)
-    g.addColorStop(0, rgb(col, alpha))
-    g.addColorStop(0.4, rgb(col, alpha * 0.35))
-    g.addColorStop(1, rgb(col, 0))
-    ctx.fillStyle = g
-    ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2)
-  }
-  halo(SLABS[5].u * w, 0.2 * h, 0.07 * h, c.peach, 0.42)
-  halo((SLABS[5].u + SLABS[5].w) * w, 0.78 * h, 0.085 * h, c.ember, 0.34)
-  halo(SLABS[4].u * w, 0.78 * h, 0.05 * h, c.coral, 0.3)
-  halo((SLABS[1].u + SLABS[1].w) * w, 0.12 * h, 0.06 * h, c.ice, 0.5)
-  halo(SLABS[0].u * w + 8, 0.84 * h, 0.07 * h, c.cyan, 0.26)
-
-  // The wet, low on the screen: short broken threads of light lying along the mirrored edges.
-  const threads = scatter(913)
-  const edges = edgesOf(w)
-  for (let n = 0; n < 80 * (w / 390); n++) {
-    const e = edges[Math.floor(threads() * edges.length)]
-    const y = (wf + 0.02 + threads() * (0.98 - wf)) * h
-    const x = e.x + (threads() - 0.5) * 70
-    const len = 4 + threads() ** 2 * 30
-    const warm = SLABS[e.slab].warm
-    const k = edgeLight(e.slab, e.side, y / h * 0.7 + 0.15) * (0.4 + 0.6 * threads())
-    if (k < 0.2) continue
-    const g = ctx.createLinearGradient(x - len / 2, 0, x + len / 2, 0)
-    const col = warm ? c.hot : c.white
-    g.addColorStop(0, rgb(col, 0))
-    g.addColorStop(0.5, rgb(col, 0.7 * k))
-    g.addColorStop(1, rgb(col, 0))
-    ctx.fillStyle = g
-    ctx.fillRect(x - len / 2, y, len, 1)
-    if (warm && threads() < 0.5) {
-      ctx.fillStyle = rgb(c.ember, 0.35 * k)
-      ctx.fillRect(x - len / 3, y + 1, len / 1.5, 1)
+      const k = edgeLight(e.slab, e.side, v) * quiet(y, x)
+      if (k < 0.04) continue
+      ctx.fillStyle = rgb(c.cyan, 0.5 * k)
+      ctx.fillRect(x + out, y, 1, SEG)
+      ctx.fillStyle = rgb(c.vermilion, 0.45 * k)
+      ctx.fillRect(x - out, y, 1, SEG)
+      ctx.fillStyle = rgb(c.white, 0.92 * k)
+      ctx.fillRect(e.side === 0 ? x : x - 1, y, 1, SEG)
     }
   }
   canvas.dataset.ready = ''

@@ -32,8 +32,10 @@ export function flareAt(t: number, view: View): Glow {
 }
 
 /** The swell: a small expansion of light from the contact, as the glass takes it — a breath, not a burst; it is gone before the structure is stable. */
+// It hands over to the deep glass: gone by 1.45 s, so no white haze lies over the glass while it deepens.
+const BLOOM_SPAN = 0.83
 export function bloomAt(t: number, view: View): Glow {
-  const u = (t - 0.62) / 1.15
+  const u = (t - 0.62) / BLOOM_SPAN
   if (u <= 0 || u >= 1) return { alpha: 0, radius: 0 }
   const alpha = u < 0.38 ? 0.46 * easeOut(u / 0.38) : 0.46 * (1 - (u - 0.38) / 0.62)
   return { alpha, radius: 0.085 * vmin(view) * (0.5 + 2.8 * easeOut(u)) }

@@ -1,3 +1,4 @@
+import { assetFrame, contactPoint } from './geometry'
 import { clamp01, fbm2, noise2, smoothstep } from './noise'
 
 /**
@@ -25,13 +26,21 @@ export interface Slab {
   warm?: boolean
 }
 
+/**
+ * The plates in the A canvas (px, 880 wide), measured on A1 v4 (guides-v2, geometria-final_A1v4.json): A and F run to the canvas' edges,
+ * B starts where A ends and C where B ends — 6 plates, 8 physical edges (130, 267, 339, 484, 638.5, 681.5, 725, 768.5).
+ */
+export const PLATES_A: readonly [number, number][] = [[0, 130], [130, 267], [267, 339], [484, 638.5], [681.5, 725], [768.5, 880]]
+
+// The same plates as fractions of the trim (780 wide at x 50). They run the full height; k is derived from the design jump
+// (A 20 · B 28 · C 28 · D 28 · E 25 · F 23 px): k = sign · jump / (0.03 · (0.6 + 0.4·w/0.1) · 780).
 export const SLABS: readonly Slab[] = [
-  { u: 0, w: 0.085, v0: 0, v1: 1, k: 0.9, ca: 0.5 },
-  { u: 0.15, w: 0.125, v0: 0, v1: 0.9, k: -1.1, ca: 0.6 },
-  { u: 0.335, w: 0.04, v0: 0.04, v1: 0.8, k: 1.6, ca: 0.85 },
-  { u: 0.555, w: 0.2, v0: 0, v1: 1, k: 0.85, ca: 0.55 },
-  { u: 0.81, w: 0.055, v0: 0.06, v1: 0.92, k: -1.3, ca: 0.8 },
-  { u: 0.9, w: 0.1, v0: 0, v1: 1, k: 1, ca: 0.6, warm: true },
+  { u: 0, w: 0.1026, v0: 0, v1: 1, k: 0.846, ca: 0.5 },
+  { u: 0.1026, w: 0.1756, v0: 0, v1: 1, k: -0.919, ca: 0.6 },
+  { u: 0.2782, w: 0.0923, v0: 0, v1: 1, k: 1.235, ca: 0.85 },
+  { u: 0.5564, w: 0.1981, v0: 0, v1: 1, k: 0.859, ca: 0.55 },
+  { u: 0.8096, w: 0.0558, v0: 0, v1: 1, k: -1.298, ca: 0.8 },
+  { u: 0.9212, w: 0.0788, v0: 0, v1: 1, k: 1.074, ca: 0.6, warm: true },
 ]
 
 export interface Bend {
@@ -52,10 +61,29 @@ const NONE: Bend = { du: 0, dv: 0, ca: 0, weight: 0, slab: -1, s: 0 }
 /** The fading of a plate's two ends. */
 export const endsOf = (slab: Slab, v: number): number => smoothstep(slab.v0, slab.v0 + 0.05, v) * (1 - smoothstep(slab.v1 - 0.07, slab.v1, v))
 
+/**
+ * The plates on this screen, as fractions of the view — through the same frame the assets are drawn in (geometry.ts: assetFrame),
+ * so the glass the code bends and the glass the assets show are one.
+ */
+const cache = new Map<string, readonly Slab[]>()
+export function slabsIn(view: { w: number; h: number }): readonly Slab[] {
+  const key = `${view.w}x${view.h}`
+  const hit = cache.get(key)
+  if (hit) return hit
+  const f = assetFrame(view, contactPoint(view))
+  const out = SLABS.map((slab, i) => {
+    const [a, b] = PLATES_A[i]
+    const x0 = Math.max(0, (f.x + a * f.s) / view.w), x1 = Math.min(1, (f.x + b * f.s) / view.w)
+    return { ...slab, u: x0, w: x1 - x0 }
+  })
+  cache.set(key, out)
+  return out
+}
+
 /** How the glass bends the point (u, v) — both 0..1. */
-export function bendAt(u: number, v: number): Bend {
-  for (let i = 0; i < SLABS.length; i++) {
-    const slab = SLABS[i]
+export function bendAt(u: number, v: number, slabs: readonly Slab[] = SLABS): Bend {
+  for (let i = 0; i < slabs.length; i++) {
+    const slab = slabs[i]
     if (u < slab.u || u >= slab.u + slab.w) continue
     const weight = endsOf(slab, v)
     if (weight <= 0) return NONE
@@ -73,7 +101,7 @@ export function bendAt(u: number, v: number): Bend {
 
 /** The same, for a point in px. Returns the shift in px. */
 export function bendPx(x: number, y: number, view: { w: number; h: number }): { dx: number; dy: number; ca: number; weight: number; slab: number } {
-  const b = bendAt(x / view.w, y / view.h)
+  const b = bendAt(x / view.w, y / view.h, slabsIn(view))
   return { dx: b.du * view.w, dy: b.dv * view.h, ca: b.ca * view.w, weight: b.weight, slab: b.slab }
 }
 
@@ -87,11 +115,16 @@ export function edgeLight(slab: number, side: 0 | 1, v: number): number {
 /**
  * Where the plates stand, in px, as left and right edges (the edges of the screen included): for the thread of light along them.
  */
-export function edgesOf(width: number): { x: number; slab: number; side: 0 | 1 }[] {
-  return SLABS.flatMap((s, slab) => [
+export function edgesOf(width: number, view?: { w: number; h: number }): { x: number; slab: number; side: 0 | 1 }[] {
+  // Only the physical edges — not the screen's, and a shared edge (A|B, B|C) once: one edge, one event, one thread.
+  // The tolerance is a thousandth of the width: half a pixel on a phone, and still right when the width is 1 (fractions).
+  const slabs = view ? slabsIn(view) : SLABS
+  const eps = width * 1e-3
+  const all = slabs.flatMap((s, slab) => [
     { x: s.u * width, slab, side: 0 as const },
     { x: (s.u + s.w) * width, slab, side: 1 as const },
   ])
+  return all.filter((e, i) => e.x > eps && e.x < width - eps && !all.slice(0, i).some((f) => Math.abs(f.x - e.x) < eps))
 }
 
 /**

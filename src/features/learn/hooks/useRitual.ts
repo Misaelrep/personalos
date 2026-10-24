@@ -9,8 +9,17 @@ const AFTER_RELEASE_MS = 60
 /** If the release never arrives (a scroll took the gesture), stop waiting here. */
 const MAX_HOLD_MS = 800
 
+/** When each stage of a timeline comes (ms from the start) — nothing while the ritual is held (APARICIÓN waits for its glass). */
+export function scheduleOf(timeline: Timeline, hold = false): [RitualStage, number][] {
+  if (hold) return []
+  return STAGE_ORDER.flatMap((s) => {
+    const at = timeline[s]
+    return at === undefined || at <= 0 ? [] : [[s, at * 1000] as [RitualStage, number]]
+  })
+}
+
 /**
- * Runs the ritual's timeline. Never a lock: a click, tap or key anywhere
+ * Runs the ritual's timeline — from the moment `hold` is false (APARICIÓN holds it until its glass is decoded). Never a lock: a click, tap or key anywhere
  * brings it to the functional state (`ready`) at once; the components then
  * settle in SKIP_MS (they read `skipped`).
  *
@@ -18,7 +27,7 @@ const MAX_HOLD_MS = 800
  * appears under a finger — a suggestion, the field — must not receive the
  * click of the very tap that only meant "move on".
  */
-export function useRitual(timeline: Timeline): { stage: RitualStage; skipped: boolean; locked: boolean; skip: () => void } {
+export function useRitual(timeline: Timeline, hold = false): { stage: RitualStage; skipped: boolean; locked: boolean; skip: () => void } {
   const [stage, setStage] = useState<RitualStage>('atmosphere')
   const [skipped, setSkipped] = useState(false)
   const [locked, setLocked] = useState(false)
@@ -28,15 +37,10 @@ export function useRitual(timeline: Timeline): { stage: RitualStage; skipped: bo
   stageRef.current = stage
 
   useEffect(() => {
-    const list: number[] = []
-    for (const s of STAGE_ORDER) {
-      const at = timeline[s]
-      if (at === undefined || at <= 0) continue
-      list.push(window.setTimeout(() => setStage(s), at * 1000))
-    }
+    const list = scheduleOf(timeline, hold).map(([s, ms]) => window.setTimeout(() => setStage(s), ms))
     timers.current = list
     return () => list.forEach((t) => window.clearTimeout(t))
-  }, [timeline])
+  }, [timeline, hold])
 
   // Never leave a listener or a timer behind.
   useEffect(() => () => release.current?.(), [])

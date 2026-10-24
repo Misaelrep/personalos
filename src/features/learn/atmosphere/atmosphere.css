@@ -374,3 +374,10 @@
 .learn-light[data-ambient='off'] .learn-haze {
   animation: none;
 }
+
+/* AHORA's light glass — sunset-ahora (master v2), A1 lightened and baked at its final presence (20 %); painted at opacity 1 over the atmosphere. */
+.learn-ahora {
+  position: absolute;
+  max-width: none;
+  pointer-events: none;
+}

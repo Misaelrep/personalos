@@ -28,11 +28,21 @@ export const BEATS = {
 export const FRAGMENTS_END = 1.75
 
 /**
- * The ritual's stage stays until the question is about to come: once the phrase has begun to dissolve (6.0 s)
- * it starts to leave, 0.3 s later — slowly, over 0.7 s, into the light of AHORA, which has the same glow, the same
- * water, the same flares — and is gone at 7.0 s, the moment the question starts to appear on the light glass.
+ * FRASE → AHORA: the same glass clears, AHORA begins to emerge, and the matter finishes disappearing — never "scene ends, cut, a new page".
+ * Once the phrase has begun to dissolve (6.0 s) the deep glass first clears while still opaque (6.05–6.6 s, aparicion.css: .apa[data-leaving]),
+ * then dissolves over sunset-ahora (the same plates) from 0.45 s after the defragmentation, over 0.8 s, ending at the 7.25 s target.
+ * The question (7.0 s) begins to appear while a residue of the scene is still there (≈21 % at 7.0 s, ≈4 % at 7.14 s): approved, not a defect.
  */
-export const STAGE_LEAVES = { after: 0.3, duration: 0.7 } as const
+export const STAGE_LEAVES = { after: 0.45, duration: 0.8 } as const
+
+/** When the scene's exit is timed to end (s): the approved overlap with the question ends here. */
+export const SCENE_END_TARGET = 7.25
+
+/**
+ * On screen the end lands on a painted frame, so it may be observed up to one frame (60 Hz) after the target — measured at 7.256 s
+ * in Chromium at 390 and 320 px. Accepted as tolerance; the animation is not shortened for it.
+ */
+export const SCENE_END_FRAME_TOLERANCE = 1 / 60
 
 /** The phrase is read on a calmer surface: the optical layers lose some of their presence (INTENSITY: from APRENDER's to the phrase's level) between these two moments (s). */
 export const CALM = { from: 2.3, over: 1.4 } as const

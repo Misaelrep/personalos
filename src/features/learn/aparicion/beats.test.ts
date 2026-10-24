@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { APARICION_TIMELINE, BRIEF_TIMELINE, FULL_TIMELINE, STAGE_ORDER, introVisible, reached, stageAt } from '../domain/ritual'
-import { BEATS, CALM, FRAGMENTS_END, INTENSITY, INTENSITY_KEYS, STAGE_LEAVES, intensityAt } from './beats'
+import { BEATS, CALM, FRAGMENTS_END, INTENSITY, INTENSITY_KEYS, SCENE_END_FRAME_TOLERANCE, SCENE_END_TARGET, STAGE_LEAVES, intensityAt } from './beats'
 
 describe('APARICIÓN keeps the ritual’s rhythm', () => {
   it('the beats come in the order given: surface, contact, wave, reorganization, convergence, stable', () => {
@@ -27,10 +27,16 @@ describe('APARICIÓN keeps the ritual’s rhythm', () => {
     expect(FRAGMENTS_END).toBeLessThan(APARICION_TIMELINE.phrase!)
   })
 
-  it('the sky is gone exactly when the question begins: after the phrase starts to dissolve, never later than the prompt', () => {
+  it('the scene leaves after the phrase starts to dissolve and its exit is timed to end at the 7.25 s target — the question may begin over its residue', () => {
     const start = APARICION_TIMELINE.defrag! + STAGE_LEAVES.after
+    const end = start + STAGE_LEAVES.duration
     expect(start).toBeGreaterThan(APARICION_TIMELINE.defrag!)
-    expect(start + STAGE_LEAVES.duration).toBeLessThanOrEqual(APARICION_TIMELINE.prompt! + 1e-9)
+    expect(SCENE_END_TARGET).toBe(7.25)
+    expect(end).toBeCloseTo(SCENE_END_TARGET, 9)
+    expect(SCENE_END_FRAME_TOLERANCE).toBeCloseTo(1 / 60, 9)
+    // Approved overlap: the question starts while the scene is already leaving, and before it is gone (not a cut, not a wait).
+    expect(APARICION_TIMELINE.prompt!).toBeGreaterThan(start)
+    expect(APARICION_TIMELINE.prompt!).toBeLessThan(end)
   })
 
   it('the surface calms for the phrase — from the moment it appears, and not entirely — and leaves slowly, not as a cut', () => {

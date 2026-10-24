@@ -1,16 +1,16 @@
 import { m } from 'framer-motion'
-import { useLayoutEffect, useMemo, useRef, type CSSProperties } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef, type CSSProperties } from 'react'
 import { useViewport } from '../../../hooks/useViewport'
 import { useMotion } from '../../../motion/MotionLevel'
 import { sceneVars, type SceneColors } from '../atmosphere/themes'
 import { SKIP_MS, reached, type RitualStage } from '../domain/ritual'
 import './aparicion.css'
+import { SUNSET_ASSETS as ASSET } from './assets'
 import { CALM, INTENSITY, INTENSITY_KEYS, STAGE_LEAVES } from './beats'
-import { contactPoint } from './geometry'
-import { SLABS } from './optics'
+import { B_ON_A, assetFrame, contactPoint } from './geometry'
+import { slabsIn } from './optics'
 import { SceneCanvas } from './SceneCanvas'
-import { type TextureJob } from './pixels'
-import { paintGlass, paintMatrix, paintPixels, paintWet, requestTextures } from './textures'
+import { paintGlass, paintMatrix, paintWet } from './textures'
 
 interface AparicionSceneProps {
   scene: SceneColors
@@ -31,6 +31,7 @@ const GLINTS = [
 
 const style = (vars: Record<string, string>) => vars as CSSProperties
 
+
 /** The ritual's length the curve of intensity is spread over (s): the last of its keys. */
 const CURVE_END = INTENSITY_KEYS[INTENSITY_KEYS.length - 1][0]
 
@@ -47,16 +48,27 @@ export function AparicionScene({ scene, stage }: AparicionSceneProps) {
   const still = level === 'reducido'
   const size = useMemo(() => ({ w: view.width, h: view.height }), [view.width, view.height])
   const contact = useMemo(() => contactPoint(size), [size])
+  const frame = useMemo(() => assetFrame(size, contact), [size, contact])
+  const slabs = useMemo(() => slabsIn(size), [size])
+  const box = (w: number, h: number, ox = 0, oy = 0): CSSProperties => ({ left: frame.x + ox * frame.s, top: frame.y + oy * frame.s, width: w * frame.s, height: h * frame.s })
   const leaving = reached(stage, 'defrag')
   // The light stage (glass, finger, information) is spent by 1.8 s; only the deep glass stays through the phrase.
   const lightStage = !reached(stage, 'phrase')
-  const haze = useRef<HTMLCanvasElement>(null)
-  const hand = useRef<HTMLCanvasElement>(null)
   const matrix = useRef<HTMLCanvasElement>(null)
-  const depth = useRef<HTMLCanvasElement>(null)
   const wet = useRef<HTMLCanvasElement>(null)
   const glass = useRef<HTMLCanvasElement>(null)
   const optics = useRef<HTMLDivElement>(null)
+  const root = useRef<HTMLDivElement>(null)
+
+  // One clock for the whole scene: the CSS beats (B at BEATS.contact, A1's ice and A2 from BEATS.reorganize, the light stage leaving) and the
+  // curve of intensity start from the instant the canvas starts counting the contact, the wave and the fragments — not from whenever the first
+  // frame happens to be painted (a slow first frame used to put B and A2 ~0.3 s behind the contact).
+  const anchor = useCallback((t0: number) => {
+    const el = root.current
+    if (!el || !el.getAnimations) return
+    for (const a of el.getAnimations({ subtree: true })) a.startTime = t0
+    el.dataset.clock = String(t0)
+  }, [])
 
   // The information inside the glass, the wet of the surface and the thread of light along the plates are drawn before the first frame (a few milliseconds)…
   useLayoutEffect(() => {
@@ -64,19 +76,7 @@ export function AparicionScene({ scene, stage }: AparicionSceneProps) {
     if (wet.current) paintWet(wet.current, scene, size)
     if (glass.current) paintGlass(glass.current, scene, size)
   }, [scene, size, contact, lightStage])
-  // …and the finger, the light glass and the deep glass are made by a worker, off the thread that draws the frames, and come in as
-  // they arrive: until each is there, the plain gradient under it shows.
-  useLayoutEffect(() => {
-    const jobs: TextureJob[] = [
-      { kind: 'hand', scene, view: size, contact },
-      { kind: 'glass', scene, view: size, contact },
-      { kind: 'depth', scene, view: size, contact },
-    ]
-    return requestTextures(jobs, (index, px) => {
-      const canvas = [hand.current, haze.current, depth.current][index]
-      if (canvas) paintPixels(canvas, px)
-    })
-  }, [scene, size, contact])
+  // The finger, the light glass and the deep glass are the frozen assets (assets.ts), decoded before the scene is mounted: nothing to wait for here.
 
   // How much of the optical surface is there, over the ritual: the curve of beats.ts, as one fade of its layers.
   useLayoutEffect(() => {
@@ -91,9 +91,11 @@ export function AparicionScene({ scene, stage }: AparicionSceneProps) {
 
   return (
     <m.div
+      ref={root}
       aria-hidden
       data-apa=""
       className="apa"
+      data-leaving={leaving || undefined}
       style={style({ ...sceneVars(scene), '--apa-calm-from': `${CALM.from}s`, '--apa-calm-over': `${CALM.over}s`, '--apa-veil': String(1 - INTENSITY.frase / INTENSITY.aprender) })}
       initial={{ opacity: 1 }}
       animate={{ opacity: leaving ? 0 : 1 }}
@@ -102,30 +104,34 @@ export function AparicionScene({ scene, stage }: AparicionSceneProps) {
     >
       {lightStage && (
         <div className="apa-light">
-          <canvas ref={haze} className="apa-haze" />
+          <img alt="" src={ASSET.a1} className="apa-asset apa-a1" style={box(880, 1904)} />
           <div className="apa-frost" />
-          <canvas ref={hand} className="apa-hand" />
+          <div className="apa-b">
+            <img alt="" src={ASSET.b} className="apa-asset" style={box(1024, 768, B_ON_A.x, B_ON_A.y)} />
+          </div>
           <canvas ref={matrix} className="apa-matrix" style={style({ transformOrigin: `${contact.x}px ${contact.y}px` })} />
         </div>
       )}
 
       <div className="apa-stage">
-        <canvas ref={depth} className="apa-depth" />
+        <img alt="" src={ASSET.a2} className="apa-asset apa-a2" style={box(880, 1904)} />
       </div>
 
       {/* The same plates, edges and leaks of light above both states of the glass: the surface does not change, its state does. */}
       <div ref={optics} className="apa-optics">
+        <img alt="" src={ASSET.c1} className="apa-asset apa-c1" style={box(880, 1904)} />
+        <img alt="" src={ASSET.c2} className="apa-asset apa-c2" style={box(880, 1904)} />
         <canvas ref={glass} className="apa-glass" />
         {GLINTS.map((g) => (
           <div
             key={`${g.slab}-${g.side}-${g.y}`}
             className="apa-glint"
-            style={style({ '--x': `${(SLABS[g.slab].u + (g.side === 1 ? SLABS[g.slab].w : 0)) * 100}%`, '--y': `${g.y}%`, '--s': `${g.s}px`, '--d': g.d })}
+            style={style({ '--x': `${(slabs[g.slab].u + (g.side === 1 ? slabs[g.slab].w : 0)) * 100}%`, '--y': `${g.y}%`, '--s': `${g.s}px`, '--d': g.d })}
           />
         ))}
       </div>
 
-      <SceneCanvas scene={scene} still={still} />
+      <SceneCanvas scene={scene} still={still} onClock={anchor} />
       <div className="apa-shared">
         <canvas ref={wet} className="apa-wet" />
         <div className="apa-veil" />

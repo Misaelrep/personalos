@@ -19,7 +19,7 @@ export default defineConfig({
       // Every static file is already in the precache glob.
       includeManifestIcons: false,
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        globPatterns: ['**/*.{js,css,html,svg,png,webp,woff2}'],
         // Launch images are read by iOS when the app is added, never by the page.
         globIgnores: ['splash/**'],
         navigateFallback: 'index.html',

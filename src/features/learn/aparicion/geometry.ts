@@ -49,3 +49,18 @@ export function expectedWordmarkRect(view: View): Rect {
   const height = 7 * pitch
   return { left: contentCenter(view) - width / 2, top: view.h * 0.42 - height / 2, width, height }
 }
+
+/**
+ * Where the assets of ATARDECER stand on this screen. The A canvas is 880×1904 with a trim of 780×1688 at (50,108);
+ * it covers the trim and puts its contact (566,572) on the live contact point, as long as the bleed allows (then it is clamped).
+ * B (1024×768) is registered with A: x_A = x_B − 314, y_A = y_B + 452. C (440×952) is A at half size.
+ */
+/** B (1024×768) on the A canvas: x_A = x_B − 314, y_A = y_B + 452. */
+export const B_ON_A = { x: -314, y: 452 } as const
+
+export function assetFrame(view: View, contact: Point): { s: number; x: number; y: number } {
+  const s = Math.max(view.w / 780, view.h / 1688)
+  const x = Math.min(0, Math.max(view.w - 880 * s, contact.x - 566 * s))
+  const y = Math.min(0, Math.max(view.h - 1904 * s, contact.y - 572 * s))
+  return { s, x, y }
+}

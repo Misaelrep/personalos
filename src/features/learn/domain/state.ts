@@ -42,6 +42,14 @@ export function commitIntention(state: LearnState, route: LearnRoute, text: stri
   return { ...state, draft: '', intention: { text: text.trim().slice(0, MAX_INTENTION_LENGTH), route, savedAt: now } }
 }
 
+/**
+ * The intention has been handed on — to DESARROLLAR (Phase B1), which keeps the words as its objective's `rawIntent`:
+ * nothing remains here, and nothing is lost.
+ */
+export function clearIntention(state: LearnState): LearnState {
+  return { draft: state.draft }
+}
+
 /** Start over: the previous words come back into the composer, nothing is lost. */
 export function restartIntention(state: LearnState): LearnState {
   return { draft: state.intention?.text ?? state.draft }

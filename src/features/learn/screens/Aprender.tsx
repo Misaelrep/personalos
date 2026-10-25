@@ -16,6 +16,7 @@ import { PHRASES } from '../data/phrases'
 import { decideLearnEntry, readLearnOverride } from '../domain/entryPolicy'
 import { phraseForDate, type Phrase } from '../domain/phrase'
 import { APARICION_TIMELINE, BRIEF_TIMELINE, FULL_TIMELINE, SKIP_MS, introVisible, reached } from '../domain/ritual'
+import { useCapability } from '../hooks/useCapability'
 import { useLearn } from '../hooks/useLearn'
 import { useRitual } from '../hooks/useRitual'
 import { learnStore } from '../storage/learnStore'
@@ -83,6 +84,7 @@ export function Aprender({ onImmersive }: AprenderProps) {
     return () => crossing.cancel()
   }, [theme])
   const learn = useLearn()
+  const capability = useCapability()
   const [view, setView] = useState<LearnView>('ahora')
 
   // The day's phrase is recorded when the ritual starts; the date, only once the person has got through it.
@@ -147,6 +149,8 @@ export function Aprender({ onImmersive }: AprenderProps) {
               onDraft={learn.changeDraft}
               onCommit={learn.commit}
               onRestart={learn.restart}
+              onClear={learn.clear}
+              cap={capability}
             />
           ) : view === 'mapa' ? (
             <MapaScreen key="mapa" />

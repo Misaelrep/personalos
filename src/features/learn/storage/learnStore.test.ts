@@ -19,13 +19,13 @@ const CORE_KEYS = {
 }
 
 describe('APRENDER storage: its own, versioned namespace', () => {
-  it('uses exactly elyum:learn:v1:state and elyum:learn:v1:entry', () => {
+  it('uses exactly elyum:learn:v1:state, elyum:learn:v1:entry and (Phase B1) elyum:learn:v1:capability', () => {
     expect(LEARN_STORAGE_VERSION).toBe(1)
-    expect(learnKeys(false)).toEqual({ state: 'elyum:learn:v1:state', entry: 'elyum:learn:v1:entry' })
+    expect(learnKeys(false)).toEqual({ state: 'elyum:learn:v1:state', entry: 'elyum:learn:v1:entry', capability: 'elyum:learn:v1:capability' })
   })
 
   it('a simulated session has its own namespace', () => {
-    expect(learnKeys(true)).toEqual({ state: 'elyum:learn:v1:sim:state', entry: 'elyum:learn:v1:sim:entry' })
+    expect(learnKeys(true)).toEqual({ state: 'elyum:learn:v1:sim:state', entry: 'elyum:learn:v1:sim:entry', capability: 'elyum:learn:v1:sim:capability' })
   })
 
   it('stores a versioned envelope', () => {

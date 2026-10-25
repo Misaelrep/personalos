@@ -1,9 +1,10 @@
 /**
  * APRENDER — domain objects prepared for later phases.
  *
- * TYPES ONLY, and deliberately minimal: Phase A gives each object an identity
+ * TYPES ONLY, and deliberately minimal: Phase A gave each object an identity
  * (and `kind` to Knowledge, which the spec already fixes) and nothing else —
- * no relations, no behavior. A later phase adds exactly what it needs, here.
+ * no relations, no behavior. A later phase adds exactly what it needs: Phase B1
+ * filled in the capability objects (see ./capability).
  */
 
 /** Anything the learning system keeps. */
@@ -11,10 +12,9 @@ export interface Entity {
   id: string
 }
 
-/* Capability */
-export interface LearningGoal extends Entity {}
-export interface Skill extends Entity {}
-export interface Evidence extends Entity {}
+/* Capability — modelled in Phase B1 (./capability/model.ts). The learning goal IS the capability objective. */
+export type { CapabilityObjective as LearningGoal, Skill, Evidence, Attempt } from './capability/model'
+/** A session closes one gap: Phase B2, still undefined. */
 export interface LearningSession extends Entity {}
 
 /* Understanding */

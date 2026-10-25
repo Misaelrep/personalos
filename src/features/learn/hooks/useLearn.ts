@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { nowMs } from '../../../state/clock'
-import { commitIntention, restartIntention, setDraft, type LearnState } from '../domain/state'
+import { clearIntention, commitIntention, restartIntention, setDraft, type LearnState } from '../domain/state'
 import type { LearnRoute } from '../domain/types'
 import { learnStore } from '../storage/learnStore'
 
@@ -13,6 +13,7 @@ export function useLearn() {
   const changeDraft = useCallback((text: string) => setState((s) => setDraft(s, text)), [])
   const commit = useCallback((route: LearnRoute, text: string) => setState((s) => commitIntention(s, route, text, nowMs())), [])
   const restart = useCallback(() => setState((s) => restartIntention(s)), [])
+  const clear = useCallback(() => setState((s) => clearIntention(s)), [])
 
-  return { state, changeDraft, commit, restart }
+  return { state, changeDraft, commit, restart, clear }
 }

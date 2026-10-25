@@ -16,6 +16,9 @@ const ALLOWED = {
   p4a: ['src/features/projects/', 'e2e/projects/', 'proyectos.html', 'vite.config.ts', ...SHARED],
   // P4b · Operaciones y revisión semanal, en la misma página de prueba. Sin navegación (P4c) ni cambios de config.
   p4b: ['src/features/projects/', 'e2e/projects/', ...SHARED],
+  // P4c · Integración en el menú de ELYUM (sin merge): PROYECTOS aceptado (P1–P4b) + navegación. Sin P2-R1 ni P2-E.
+  // NavRail.tsx: solo la distribución de la barra inferior (autorizado el 25/10).
+  p4c: ['src/features/projects/', 'e2e/projects/', 'proyectos.html', 'vite.config.ts', 'src/App.tsx', 'src/layout/sections.ts', 'src/layout/NavRail.tsx', ...SHARED],
 }
 // Never, in any package of PROYECTOS.
 const FORBIDDEN = ['src/features/learn/', 'src/data/routine/', 'src/state/', 'src/domain/', 'src/features/focus/', 'src/features/week/', 'src/features/today/', 'src/features/dayscape/', 'src/features/entry/']

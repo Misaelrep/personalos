@@ -61,7 +61,11 @@ export function BottomNav({ hidden, active, onNavigate }: NavProps) {
       className="bottom-nav lg:hidden"
       aria-hidden={hidden}
     >
-      <ul className="flex items-center gap-2" style={{ pointerEvents: hidden ? 'none' : 'auto' }}>
+      {/* The sections share the width between the safe areas with even gaps: every label whole, no horizontal scroll. */}
+      <ul
+        className="flex w-full max-w-[420px] items-center justify-evenly"
+        style={{ pointerEvents: hidden ? 'none' : 'auto', paddingLeft: 'max(env(safe-area-inset-left), 12px)', paddingRight: 'max(env(safe-area-inset-right), 12px)' }}
+      >
         {SECTIONS.filter((s) => s.available).map((s) => {
           const current = s.id === active
           return (
@@ -71,7 +75,7 @@ export function BottomNav({ hidden, active, onNavigate }: NavProps) {
                 aria-current={current ? 'page' : undefined}
                 tabIndex={hidden ? -1 : 0}
                 onClick={() => onNavigate(s.id)}
-                className={`flex min-h-11 flex-col items-center justify-center gap-2 px-5 pt-2 pb-1.5 text-[10px] font-medium tracking-[0.24em] uppercase ${
+                className={`flex min-h-11 min-w-11 flex-col items-center justify-center gap-2 px-2 pt-2 pb-1.5 text-[10px] font-medium tracking-[0.24em] whitespace-nowrap uppercase max-[359px]:tracking-[0.12em] ${
                   current ? 'text-ink' : 'text-ink-3'
                 }`}
               >

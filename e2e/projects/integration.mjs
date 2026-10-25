@@ -46,9 +46,6 @@ try {
   await page.waitForTimeout(2500)
   const labels = (await nav.innerText()).split('\n').map((s) => s.trim()).filter(Boolean)
   check('bottom navigation lists Hoy · Semana · Proyectos · Aprender', JSON.stringify(labels) === JSON.stringify(['HOY', 'SEMANA', 'PROYECTOS', 'APRENDER']), labels.join(' · '))
-  const boxes = await nav.locator('button').evaluateAll((els) => els.map((e) => { const r = e.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.right)] }))
-  const fits = boxes.every(([l, r]) => l >= 0 && r <= 390)
-  note('bottom navigation fits 390 px', fits ? 'sí' : `no: ${JSON.stringify(boxes)} (ajuste de NavRail.tsx pendiente de aprobación)`)
   await page.screenshot({ path: join(SHOTS, '21-p4c-hoy.png') })
 
   await tab('Proyectos').click()
@@ -77,6 +74,33 @@ try {
   await tab('Hoy').click()
   await page.waitForTimeout(800)
   check('Hoy still opens; PROYECTOS leaves', (await page.locator('[data-testid="projects-section"]').count()) === 0)
+
+  // The bottom bar at every common phone width: whole labels, inside the screen and its safe margins,
+  // targets of at least 44×44, no horizontal scroll.
+  for (const width of [320, 360, 375, 390, 393, 402, 414, 430, 440]) {
+    const c = await browser.newContext({ ...IPHONE, viewport: { width, height: 844 } })
+    const p = await c.newPage()
+    await p.goto(`${BASE}?entry=none&section=proyectos`)
+    await p.waitForSelector('[data-testid="projects-section"]')
+    await p.waitForTimeout(600)
+    const m = await p.evaluate(() => {
+      const nav = document.querySelector('nav.bottom-nav')
+      const buttons = [...nav.querySelectorAll('button')]
+      return {
+        labels: buttons.map((b) => b.textContent.trim()),
+        boxes: buttons.map((b) => { const r = b.getBoundingClientRect(); return { l: r.left, r: r.right, w: r.width, h: r.height, clipped: b.scrollWidth > b.clientWidth + 0.5 } }),
+        scroll: document.documentElement.scrollWidth,
+        navScroll: nav.scrollWidth - nav.clientWidth,
+      }
+    })
+    const inside = m.boxes.every((b) => b.l >= 12 - 0.5 && b.r <= width - 12 + 0.5)
+    const whole = m.boxes.every((b) => !b.clipped)
+    const targets = m.boxes.every((b) => b.w >= 44 && b.h >= 44)
+    const minW = Math.round(Math.min(...m.boxes.map((b) => b.w)))
+    check(`${width} px: four labels whole, inside the 12 px margins, targets ≥ 44 px, no horizontal scroll`, m.labels.length === 4 && inside && whole && targets && m.scroll <= width && m.navScroll <= 0, `botón más estrecho ${minW} px`)
+    await p.screenshot({ path: join(SHOTS, `24-barra-${width}.png`), clip: { x: 0, y: 844 - 110, width, height: 110 } })
+    await c.close()
+  }
 
   const page2 = await context.newPage()
   await page2.goto(`${BASE}?entry=none&section=proyectos`)

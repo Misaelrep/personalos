@@ -48,7 +48,8 @@ export interface KeyValue {
 
 /** The part of `navigator.locks` this module needs. */
 export interface Locks {
-  request<T>(name: string, options: { mode: 'exclusive'; signal?: AbortSignal }, callback: () => Promise<T>): Promise<T>
+  /** With `ifAvailable`, the callback gets `null` at once when another holder has the lock (P2-R1). */
+  request<T>(name: string, options: { mode: 'exclusive'; signal?: AbortSignal; ifAvailable?: boolean }, callback: (lock?: unknown) => Promise<T>): Promise<T>
 }
 
 export type Loaded =
@@ -77,11 +78,20 @@ export interface StoreOptions {
   writer: string
 }
 
+/**
+ * P2-R1 · Something to write inside the same lock, after every check passed
+ * and before the data key is touched. If it throws, nothing else is written.
+ * Gets the stored text it is about to replace.
+ */
+export interface SaveOptions {
+  beforeWrite?: (currentRaw: string | null) => void
+}
+
 export interface ProjectsStore {
   readonly mode: 'escritura' | 'solo-lectura'
   readonly readOnlyReason?: string
   load(): Promise<Loaded>
-  save(data: ProjectsData, expectedGeneration: number): Promise<SaveResult>
+  save(data: ProjectsData, expectedGeneration: number, options?: SaveOptions): Promise<SaveResult>
   previous(): Promise<{ slot: 1 | 2 | 3; loaded: Loaded }[]>
   /** Save a previous version as the newest one (the current one becomes prev:1). */
   recover(slot: 1 | 2 | 3, expectedGeneration: number): Promise<SaveResult>
@@ -120,7 +130,12 @@ const isQuota = (e: unknown) =>
 export function createStore(o: StoreOptions): ProjectsStore {
   const mode = o.locks ? 'escritura' : 'solo-lectura'
 
-  async function writeLocked(data: ProjectsData, expected: number): Promise<SaveResult> {
+  const failedWrite = (e: unknown): SaveResult =>
+    isQuota(e)
+      ? { ok: false, reason: 'sin-espacio', message: 'No hay espacio en el almacenamiento del navegador. No se ha guardado; exporta y libera espacio.' }
+      : { ok: false, reason: 'error-de-escritura', message: `El navegador rechazó la escritura: ${e instanceof Error ? e.message : String(e)}` }
+
+  async function writeLocked(data: ProjectsData, expected: number, options?: SaveOptions): Promise<SaveResult> {
     const raw = o.storage.getItem(DATA_KEY)
     const current = await readEnvelope(raw)
     if (current.kind === 'ilegible' || current.kind === 'version-futura')
@@ -137,6 +152,11 @@ export function createStore(o: StoreOptions): ProjectsStore {
     const next = JSON.stringify(envelope)
 
     try {
+      options?.beforeWrite?.(raw)
+    } catch (e) {
+      return failedWrite(e)
+    }
+    try {
       if (raw !== null) {
         const p1 = o.storage.getItem(PREV_KEYS[0])
         const p2 = o.storage.getItem(PREV_KEYS[1])
@@ -147,9 +167,7 @@ export function createStore(o: StoreOptions): ProjectsStore {
       o.storage.setItem(DATA_KEY, next)
     } catch (e) {
       // `setItem` replaces a value whole or not at all: the data key still holds `raw`.
-      return isQuota(e)
-        ? { ok: false, reason: 'sin-espacio', message: 'No hay espacio en el almacenamiento del navegador. No se ha guardado; exporta y libera espacio.' }
-        : { ok: false, reason: 'error-de-escritura', message: `El navegador rechazó la escritura: ${e instanceof Error ? e.message : String(e)}` }
+      return failedWrite(e)
     }
     if (o.storage.getItem(DATA_KEY) !== next) {
       try {
@@ -167,14 +185,14 @@ export function createStore(o: StoreOptions): ProjectsStore {
     mode,
     ...(mode === 'solo-lectura' ? { readOnlyReason: 'Este navegador no ofrece Web Locks: PROYECTOS se abre en solo lectura para no arriesgar escrituras simultáneas.' } : {}),
     load: () => readEnvelope(o.storage.getItem(DATA_KEY)),
-    async save(data, expected) {
+    async save(data, expected, options) {
       if (!o.locks) return { ok: false, reason: 'solo-lectura', message: store.readOnlyReason! }
       const ctrl = new AbortController()
       const timer = setTimeout(() => ctrl.abort(), LOCK_TIMEOUT_MS)
       try {
         return await o.locks.request(LOCK_NAME, { mode: 'exclusive', signal: ctrl.signal }, async () => {
           clearTimeout(timer)
-          return writeLocked(data, expected)
+          return writeLocked(data, expected, options)
         })
       } catch (e) {
         if (ctrl.signal.aborted) return { ok: false, reason: 'bloqueo-no-disponible', message: 'Otra pestaña retiene el almacén. No se ha guardado; inténtalo de nuevo.' }

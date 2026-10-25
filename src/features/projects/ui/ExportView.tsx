@@ -4,13 +4,14 @@ import { Label } from '../../../components/ui/Label'
 import { sha256Hex } from '../import/sha256'
 import { exportProjects, verifyExport, type ExportFile, type Verification } from '../store/export'
 import { DATA_KEY } from '../store/store'
+import { saveJsonFile, stampedName } from './files'
 import { dateTime, shortHash } from './labels'
 import { Banner, Card, Field, Mono, Section, Title, TopBar } from './parts'
 
 /**
  * P4a · EXPORTAR: a copy of exactly what is stored, checked right after it is
- * made, and a way to check a copy saved earlier. There is no restore from a
- * file here: that needs its own authorization.
+ * made, and a way to check a copy saved earlier. Recovering from a copy is
+ * on its own screen (P2-R1, #/recuperar).
  */
 
 const now = () => new Date().toISOString()
@@ -47,32 +48,14 @@ export function ExportView() {
       const at = now()
       const { text, file } = await exportProjects(window.localStorage, at)
       const check = await verifyExport(text)
-      setMade({ text, file, check, name: `elyum-proyectos-${at.slice(0, 19).replace(/[:T]/g, '-')}.json` })
+      setMade({ text, file, check, name: stampedName('elyum-proyectos', at) })
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
   }
 
   async function save() {
-    if (!made) return
-    const blob = new Blob([made.text], { type: 'application/json' })
-    const file = new File([blob], made.name, { type: 'application/json' })
-    const nav = navigator as Navigator & { canShare?: (d: { files: File[] }) => boolean }
-    // iPhone: the share sheet saves to Files / iCloud. Elsewhere, a download.
-    if (nav.canShare?.({ files: [file] })) {
-      try {
-        await nav.share({ files: [file], title: made.name })
-        return
-      } catch (e) {
-        if (e instanceof Error && e.name === 'AbortError') return
-      }
-    }
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = made.name
-    a.click()
-    setTimeout(() => URL.revokeObjectURL(url), 10_000)
+    if (made) await saveJsonFile(made.name, made.text)
   }
 
   async function checkFile(f: File) {
@@ -152,7 +135,13 @@ export function ExportView() {
               {checked.check.ok && <p className="text-[13px] text-ink-3">{checked.current ? 'Coincide con lo que hay guardado ahora.' : 'Es de otro momento: lo guardado ahora es distinto.'}</p>}
             </div>
           )}
-          <p className="text-[12.5px] leading-[1.5] text-ink-4">Verificar no cambia nada. Restaurar desde un archivo no está disponible: necesita una autorización y pruebas propias.</p>
+          <p className="text-[12.5px] leading-[1.5] text-ink-4">
+            Verificar no cambia nada. Para recuperar datos desde una copia, usa{' '}
+            <a href="#/recuperar" className="text-electric" data-testid="go-restore-from-export">
+              Recuperar
+            </a>{' '}
+            (por ahora, en un almacén de prueba separado).
+          </p>
         </Card>
       </Section>
     </>

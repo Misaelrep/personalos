@@ -16,6 +16,8 @@ const ALLOWED = {
   p4a: ['src/features/projects/', 'e2e/projects/', 'proyectos.html', 'vite.config.ts', ...SHARED],
   // P4b · Operaciones y revisión semanal, en la misma página de prueba. Sin navegación (P4c) ni cambios de config.
   p4b: ['src/features/projects/', 'e2e/projects/', ...SHARED],
+  // P2-R1 · Recuperación de PROYECTOS desde una copia exportada, solo en su módulo y la página de prueba. Sin P2-R global ni navegación.
+  p2r1: ['src/features/projects/', 'e2e/projects/', ...SHARED],
 }
 // Never, in any package of PROYECTOS.
 const FORBIDDEN = ['src/features/learn/', 'src/data/routine/', 'src/state/', 'src/domain/', 'src/features/focus/', 'src/features/week/', 'src/features/today/', 'src/features/dayscape/', 'src/features/entry/']

@@ -5,7 +5,7 @@ Este documento conserva en el repositorio lo necesario para no reconstruir nada 
 - **Huellas SHA-256:** [`SHA256SUMS.txt`](SHA256SUMS.txt).
 - **Masters binarios:** se conservan fuera del repositorio, en el paquete de recuperación (Parte 1, Parte 2, `guides-v2`, `a2-candidatos`). Sus huellas están en ese mismo archivo.
 
-**Estado:** preintegración cerrada e integración real en `feature/aprender-atardecer-cierre`, desde `c069e2e`. Pendiente: Preview y prueba en un iPhone real antes de cualquier merge a `main`.
+**Estado:** **cerrado y en `main`** (merge `8420da7` de `feature/aprender-atardecer-ondas`, tras la QA física en iPhone del Preview de `0218cf8`). Las decisiones de este documento están congeladas: no se reabren salvo regresión demostrable (ver `../ESTADO.md`).
 
 ## Masters y runtime
 
@@ -97,7 +97,7 @@ Todas las codificaciones del runtime se han reproducido byte a byte desde su mas
 
 ## Variante ONDAS continuas (rama `feature/aprender-atardecer-ondas`)
 
-Aprobada como candidata para sustituir a `f817394`, pendiente solo de la QA física en iPhone. No toca assets, geometría, k, B ni la salida FRASE → AHORA. `feature/aprender-atardecer-cierre` sigue en `f817394` como checkpoint.
+**Definitiva**: aprobada en la QA física en iPhone y en `main` (sustituye a `f817394`). No toca assets, geometría, k, B ni la salida FRASE → AHORA. `feature/aprender-atardecer-cierre` sigue en `f817394` como checkpoint.
 
 | | Valor |
 |---|---|
@@ -110,7 +110,7 @@ Aprobada como candidata para sustituir a `f817394`, pendiente solo de la QA fís
 | Ritual | `APARICION_PROPAGATION = 3 s`: todo lo posterior al contacto, 3 s más tarde, sin acortar nada. Frase 5,3 s · desfragmentación 9,0 s · pregunta 10,0 s · fin de escena 10,25 s (observado: 10,252 s a 390 y 10,250 s a 320) |
 | Movimiento reducido | Sin frentes: contacto → cambio óptico suave (A1 hacia su hielo, 1,1–3,7 s) → los fragmentos se funden desde 3,6 s → A2 y APRENDER |
 
-## Color de APRENDER: P3 PRISMA AZUL (candidato definitivo, sujeto a la QA física)
+## Color de APRENDER: P3 PRISMA AZUL (definitivo, aprobado en la QA física)
 
 Elegido entre CONTROL, P1, P2 y P3 con el tablero de comparación. Solo cambia el tratamiento cromático: DotWord, geometría, puntos, tamaño, espaciado, posición y timing no cambian.
 

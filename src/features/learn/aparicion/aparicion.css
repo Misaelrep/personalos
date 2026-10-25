@@ -1,0 +1,385 @@
+/* ---------------------------------------------------------------------- */
+/* APARICIÓN                                                                */
+/*                                                                          */
+/* An optical atmosphere, built from the colors the theme gives (--apa-*):  */
+/* plates of glass and what they do to the light behind them. No image and  */
+/* no landscape — a surface:                                                */
+/*   · the light glass, where the finger arrives and the information is;    */
+/*   · the same glass gone deep, where the words of APRENDER are read.      */
+/* The plates, the thread of light along them, the leaks of red and orange  */
+/* and the wet below are shared by both (.apa-optics, one canvas): only how */
+/* much of them there is changes (beats.ts: INTENSITY).                     */
+/* Nothing here is ever behind or over functional text: the scene leaves     */
+/* before the question arrives.                                              */
+/* ---------------------------------------------------------------------- */
+
+.apa {
+  position: fixed;
+  inset: 0;
+  /* Same level as LearnLight (-1) and after it in the document: over the atmosphere's light, under the screen's content. */
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  --apa-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* —— the light glass: the finger and the information, until the deep glass has come in over them —— */
+
+.apa-light {
+  position: absolute;
+  inset: 0;
+  /* The deep glass comes in over it (3.7–4.6 s, after the propagation) and, once it has covered it, it is not drawn at all. */
+  animation: apa-gone 1ms linear 4.65s forwards;
+  /* Until the glass's light is painted (textures.ts), the same colors in a plain gradient. */
+  background: linear-gradient(110deg, color-mix(in srgb, var(--apa-haze) 78%, var(--apa-mist)), var(--apa-haze) 40%, color-mix(in srgb, var(--apa-steel) 52%, var(--apa-haze)));
+}
+
+@keyframes apa-gone {
+  to {
+    visibility: hidden;
+  }
+}
+
+@keyframes apa-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* The glass, painted as light (textures.ts) — until it is, a plain gradient of the same colors. The painted textures come in as they are finished. */
+.apa-haze,
+.apa-depth,
+.apa-hand {
+  opacity: 0;
+  transition: opacity 0.25s ease-out;
+}
+
+.apa-haze[data-ready],
+.apa-depth[data-ready] {
+  opacity: 1;
+}
+
+.apa-haze,
+.apa-depth {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* The finger, shaded in the screen's own space so the plates can bend it: it comes in from behind the glass, rests, and goes back into it as the structure forms. */
+.apa-hand {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transition: none;
+}
+
+.apa-hand[data-ready] {
+  animation:
+    apa-hand-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both,
+    apa-hand-out 0.6s ease-in 0.75s forwards;
+}
+
+@keyframes apa-hand-in {
+  from {
+    opacity: 0;
+    transform: translate(-22px, 6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes apa-hand-out {
+  to {
+    opacity: 0;
+    transform: translate(-26px, 8px);
+  }
+}
+
+/* A film of frost in front of the finger: it is behind the glass, not on it. */
+.apa-frost {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--apa-mist) 12%, transparent),
+    color-mix(in srgb, var(--apa-ice) 4%, transparent) 55%,
+    color-mix(in srgb, var(--apa-ice) 14%, transparent)
+  );
+}
+
+/* Information inside the surface: it is drawn once, stays while the fronts cross it and, as the structure forms (3.3 s), is drawn inward toward the contact. */
+.apa-matrix {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  animation: apa-matrix 4.6s ease-in-out both;
+}
+
+@keyframes apa-matrix {
+  0%,
+  72% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.93);
+  }
+}
+
+.apa-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* —— the deep glass: where the structure holds —— */
+
+.apa-stage {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  animation: apa-in 0.9s ease-in-out 3.7s forwards;
+  /* Until the deep glass is painted (textures.ts), the same colors in a plain gradient. */
+  background: linear-gradient(110deg, var(--apa-night), var(--apa-deep) 55%, color-mix(in srgb, var(--apa-teal) 55%, var(--apa-deep)));
+}
+
+/* —— the optical layers, shared by both states —— */
+
+/* Their presence over the ritual is a curve (beats.ts: INTENSITY), set by the scene as one fade. */
+.apa-optics {
+  position: absolute;
+  inset: 0;
+}
+
+.apa-glass {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* A glint where a plate's edge catches the light: a sliver along the edge, with a ghost of color on each side. */
+.apa-glint {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  width: 1px;
+  height: calc(var(--s) * 3.4);
+  margin: calc(var(--s) * -1.7) 0 0 0;
+  background: linear-gradient(180deg, transparent, var(--apa-white) 38% 62%, transparent);
+  animation: apa-twinkle 4s ease-in-out var(--d) infinite;
+}
+
+.apa-glint::before,
+.apa-glint::after {
+  content: '';
+  position: absolute;
+  top: 12%;
+  bottom: 12%;
+  width: 1px;
+}
+
+.apa-glint::before {
+  left: -2px;
+  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--apa-vermilion) 85%, transparent) 50%, transparent);
+}
+
+.apa-glint::after {
+  left: 2px;
+  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--apa-cyan) 85%, transparent) 50%, transparent);
+}
+
+@keyframes apa-twinkle {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* What the glass and the deep glass share above all of it: a film of the night's own color that gathers as the phrase is read (beats.ts: CALM) — the surface calms, it does not change. */
+.apa-shared {
+  position: absolute;
+  inset: 0;
+}
+
+.apa-wet {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  /* The drops on the glass are a lens on pale glass; on the deep glass their bright points would be stars: they step back as it comes in. */
+  animation: apa-wet-down 0.9s ease-in-out 3.7s forwards;
+}
+
+@keyframes apa-wet-down {
+  to {
+    opacity: 0.3;
+  }
+}
+
+.apa-veil {
+  position: absolute;
+  inset: 0;
+  background: var(--apa-night);
+  opacity: 0;
+  animation: apa-veil var(--apa-calm-over) ease-in-out var(--apa-calm-from) forwards;
+}
+
+@keyframes apa-veil {
+  to {
+    opacity: var(--apa-veil);
+  }
+}
+
+/* The corners go dark: depth, and the glass's own edge. */
+.apa-shared::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 120% 100% at 50% 46%, transparent 55%, color-mix(in srgb, var(--apa-night) 38%, transparent) 100%);
+}
+
+.apa-grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.045;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+/* With reduced motion the scene is a still composition: no wave, no drift, only the fades. */
+html[data-motion='reducido'] .apa-hand[data-ready] {
+  animation: none;
+  opacity: 1;
+}
+
+html[data-motion='reducido'] .apa-matrix {
+  animation: none;
+}
+
+html[data-motion='reducido'] .apa-glint {
+  animation: none;
+  opacity: 0.7;
+}
+
+/* With reduced motion the pieces of type are drawn once, at rest, over the glass — no front, nothing travels — and leave with it as the structure
+   converges (from 3.6 s) and the deep glass covers it; APRENDER comes in where they were. */
+html[data-motion='reducido'] .apa-canvas {
+  animation: apa-fade-out 0.9s ease-in-out 3.6s forwards;
+}
+
+/* …and instead of the fronts, the glass changes softly where it is: after the touch the light glass goes slowly to its ice, over the time the
+   fronts would take, with no movement at all. */
+html[data-motion='reducido'] .apa .apa-a1 {
+  animation: apa-a1-ice 2.6s ease-in-out 1.1s both;
+}
+
+@keyframes apa-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+/* —— The frozen assets of ATARDECER in the scene (assets.ts) —— */
+
+.apa-asset {
+  position: absolute;
+  max-width: none;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* B, the finger: anchored to BEATS.contact (0.2 s), not to a texture. It comes in (0.5 s), rests on the glass, and goes back into it before the
+   deep glass is half in (out from 0.9 s, over 0.4 s: gone at 1.3 s — no ghost over the convergence); it moves no more than 5.2 px from where it is registered with A1. */
+.apa-b {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  animation:
+    apa-b-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both,
+    apa-b-out 0.4s ease-in 0.9s forwards;
+}
+
+@keyframes apa-b-in {
+  from {
+    opacity: 0;
+    transform: translate(-5px, 1.4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes apa-b-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translate(-5px, 1.4px);
+  }
+}
+
+/* FRASE → AHORA: the deep glass clears while it is still opaque — lighter and keeping its own blue, so it never passes through a grey —
+   and only then, already pale, dissolves into sunset-ahora (the same plates) underneath (beats.ts: STAGE_LEAVES; ends at the 7.25 s target). */
+.apa[data-leaving] .apa-stage {
+  animation:
+    apa-in 1ms linear forwards,
+    apa-a2-clear 0.55s cubic-bezier(0.45, 0, 0.55, 1) 0.05s forwards;
+}
+
+@keyframes apa-a2-clear {
+  to {
+    filter: brightness(2.3) saturate(1);
+  }
+}
+
+/* A1 → A2: A1 stays opaque underneath; as A2 comes in over it, the light glass is rendered icier (more of its own blue, a little
+   darker) — the asset is not touched — so the two never meet at a grey. A2's timing is the original one moved by the propagation (3.7 s, over 0.9 s). */
+.apa .apa-a1 {
+  animation: apa-a1-ice 0.7s cubic-bezier(0.45, 0, 0.55, 1) 3.75s both;
+}
+
+@keyframes apa-a1-ice {
+  to {
+    filter: saturate(1.8) brightness(0.92);
+  }
+}
+
+/* With reduced motion the finger does not travel: it only fades in and out, at the same moments, where it is registered with A1. */
+html[data-motion='reducido'] .apa-b {
+  animation-name: apa-b-fade-in, apa-b-fade-out;
+}
+
+@keyframes apa-b-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes apa-b-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}

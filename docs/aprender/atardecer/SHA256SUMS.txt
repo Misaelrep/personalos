@@ -1,0 +1,32 @@
+# ELYUM · APRENDER · ATARDECER — SHA-256 de los assets (sha256sum -c funciona sobre public/learn/sunset/ para la sección RUNTIME)
+
+# RUNTIME — lo que sirve la app (public/learn/sunset/)
+7cfb9bb060eddf92601a84731809ca0e6b62f1e0129ab7b64b791dcb7ded0737  sunset-surface-light@2x.webp
+ce039e5c8174adb199b62fec926d7eaf7f3f752e8fe1b33195d81144f7b53436  sunset-surface-deep@2x.webp
+b220468915d3b1f86948912381619d66044e6aec8b091eb56320c7e333b046d4  sunset-touch@2x.webp
+838a650ff47bf14940b1d6937a7c0eceb412fb7291623325d7b3d6bb97ffcf67  sunset-prism-edge.webp
+cb265791d73ea603b616fbc72694a2595292ab1b5cc6062d24185560376efd76  sunset-prism-ghost.webp
+e0669889a845b57249a852c031d21f6f22cccc8e34e620975d89712d0dafce69  sunset-ahora.webp
+
+# MASTERS CONGELADOS — fuera del repositorio (paquete de recuperación externo)
+# 43da5a1e858c0e0eab2ba706a934f23bcbd913c6c192a784f6483ecc15e59984  A1_v4_master.png
+# 433dc9e175037dcc436a0e0fcc0cd178b0dbb53c4dc9feb776ddab3004b6dd97  A2_master_A2-A.png
+# f198394ebbacdb37b0191eee9ac44ece9fc55742f423b7256b3113b306ec0d2e  B0_v3_master.png
+# b0df0e3231db8bccc99f2157e3c28c88b623cfb76d6f033a8e631f177fef0b0e  B_final_R2_master.png
+# 86c8c0b7914d58712747419bbd532f5b633b09251287e3414e4ddf0af0e0c6b9  C1v2_master.png
+# ab2a7ee19853d8f71b402994d3b67f950baa50830b01f3a74dfd85df5c611ef0  C1v2_fuente_luz_sobre_negro_880.png
+# b66468a87502c492e7c41ba77299376471776b5b24a6a7704b69a45c226548a5  C2v2_master.png
+# 7175db9af13e18e3f6f496ba0f21cc16164dd44fd859b85127bf89e2d39b412e  C2v2_fuente_luz_sobre_negro_880.png
+# a6110481d1c6e13da65462f7cf1787a99a4293cb52399d9a9dee672c0a4fc035  sunset-ahora_v2.png
+# 00ff6d5f1f921ce4de73d0d7d64470a7358b1667d5edd1d35ff3f9c58c9ffd36  sunset-ahora_v1.png   (histórico, no se usa)
+# 16df4ec5c05a5db0bcc385f57719a22c2e23c718a04945f6c9dce21f5733d674  sunset-ahora_v1.webp  (histórico, no se usa)
+
+# FUENTES DE VERDAD Y PAQUETES DE RECUPERACIÓN (externos)
+# 10f04db5146fdaac9ccd2aec2abcb9d9b161b49ad11230701706c9f26059ce81  guides-v2/geometria-final_A1v4.json
+# 62ea6d3d3066fbe1afcda2dc1edc950dc0306025662f1f16cdef49b7a5585c44  guides-v2.zip
+# 4127325db9ba6f5db95af9fb162bdb97eed0418dea7e9272b2ea61d4fd9a19fe  ELYUM_ATARDECER_PARTE_1_MASTERS_CONTROLES.zip
+# bd2463df9519ff303658c28850032e10b6542f7b1b09a13868b003e8a1fa7565  ELYUM_ATARDECER_PARTE_2_C2_PREINTEGRACION.zip
+# ef71bb7995b31a31b19451134774248e5de280dcaa41d0be45127f498c32a545  a2-candidatos.zip
+# ddd0a4f14c765ebf73889943b78630346f66fda60efd10fe9db4612c39eca49a  ritual-preintegracion-final.zip
+# 60d3a7e5785227283fe1c01fafce070d735a976f44155ada54df7814c8d413dd  cambios-scratch.patch
+# 191319ccb5325351e4183df0972c123a8ce276938d98f301b416d42ed3d0de8a  make-ahora.cjs (copia en esta carpeta)

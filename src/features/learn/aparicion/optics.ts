@@ -1,0 +1,170 @@
+import { assetFrame, contactPoint } from './geometry'
+import { clamp01, fbm2, noise2, smoothstep } from './noise'
+
+/**
+ * The optics of the surface: a few tall plates of glass standing in front of everything the scene holds.
+ * They are the scene's signature — not a landscape, a surface: what lies behind a plate is bent (displaced, magnified
+ * or reduced), split into its colors where the plate is thick, and repeated in small zones; its edges hold a thread of light.
+ * Everything that draws — the soft textures, the information inside the glass, the pieces of type, the hand — asks the same
+ * function where the glass bends it, so the refraction is one thing seen through all of them.
+ *
+ * Pure numbers, deterministic; positions are fractions of the view, so a plate keeps its place on every screen.
+ */
+
+export interface Slab {
+  /** Left edge and width, as fractions of the view's width. */
+  u: number
+  w: number
+  /** Where the plate begins and ends, as fractions of the height (its ends are soft: it fades into the glass behind). */
+  v0: number
+  v1: number
+  /** How strongly it bends what lies behind it: signed — positive magnifies toward its middle, negative reduces. */
+  k: number
+  /** How strongly it splits the colors (0..1). */
+  ca: number
+  /** The red and orange of the scene live here: the light that leaks along this plate's edges. */
+  warm?: boolean
+}
+
+/**
+ * The plates in the A canvas (px, 880 wide), measured on A1 v4 (guides-v2, geometria-final_A1v4.json): A and F run to the canvas' edges,
+ * B starts where A ends and C where B ends — 6 plates, 8 physical edges (130, 267, 339, 484, 638.5, 681.5, 725, 768.5).
+ */
+export const PLATES_A: readonly [number, number][] = [[0, 130], [130, 267], [267, 339], [484, 638.5], [681.5, 725], [768.5, 880]]
+
+// The same plates as fractions of the trim (780 wide at x 50). They run the full height; k is derived from the design jump
+// (A 20 · B 28 · C 28 · D 28 · E 25 · F 23 px): k = sign · jump / (0.03 · (0.6 + 0.4·w/0.1) · 780).
+export const SLABS: readonly Slab[] = [
+  { u: 0, w: 0.1026, v0: 0, v1: 1, k: 0.846, ca: 0.5 },
+  { u: 0.1026, w: 0.1756, v0: 0, v1: 1, k: -0.919, ca: 0.6 },
+  { u: 0.2782, w: 0.0923, v0: 0, v1: 1, k: 1.235, ca: 0.85 },
+  { u: 0.5564, w: 0.1981, v0: 0, v1: 1, k: 0.859, ca: 0.55 },
+  { u: 0.8096, w: 0.0558, v0: 0, v1: 1, k: -1.298, ca: 0.8 },
+  { u: 0.9212, w: 0.0788, v0: 0, v1: 1, k: 1.074, ca: 0.6, warm: true },
+]
+
+export interface Bend {
+  /** How far what is behind is shifted, as fractions of the width and height of the view: sample the world at (u + du, v + dv). */
+  du: number
+  dv: number
+  /** The split of the colors, as a fraction of the width: the red is sampled at u + du + ca, the blue at u + du − ca. */
+  ca: number
+  /** How much of the plate it is (0 outside, 1 inside; the ends fade). */
+  weight: number
+  /** Which plate (−1 outside), and where across it (0 at its left edge, 1 at its right). */
+  slab: number
+  s: number
+}
+
+const NONE: Bend = { du: 0, dv: 0, ca: 0, weight: 0, slab: -1, s: 0 }
+
+/** The fading of a plate's two ends. */
+export const endsOf = (slab: Slab, v: number): number => smoothstep(slab.v0, slab.v0 + 0.05, v) * (1 - smoothstep(slab.v1 - 0.07, slab.v1, v))
+
+/**
+ * The plates on this screen, as fractions of the view — through the same frame the assets are drawn in (geometry.ts: assetFrame),
+ * so the glass the code bends and the glass the assets show are one.
+ */
+const cache = new Map<string, readonly Slab[]>()
+export function slabsIn(view: { w: number; h: number }): readonly Slab[] {
+  const key = `${view.w}x${view.h}`
+  const hit = cache.get(key)
+  if (hit) return hit
+  const f = assetFrame(view, contactPoint(view))
+  const out = SLABS.map((slab, i) => {
+    const [a, b] = PLATES_A[i]
+    const x0 = Math.max(0, (f.x + a * f.s) / view.w), x1 = Math.min(1, (f.x + b * f.s) / view.w)
+    return { ...slab, u: x0, w: x1 - x0 }
+  })
+  cache.set(key, out)
+  return out
+}
+
+/** How the glass bends the point (u, v) — both 0..1. */
+export function bendAt(u: number, v: number, slabs: readonly Slab[] = SLABS): Bend {
+  for (let i = 0; i < slabs.length; i++) {
+    const slab = slabs[i]
+    if (u < slab.u || u >= slab.u + slab.w) continue
+    const weight = endsOf(slab, v)
+    if (weight <= 0) return NONE
+    const s = (u - slab.u) / slab.w
+    const across = 2 * s - 1
+    // A cylinder of glass: the shift grows from the middle of the plate to its edges, so across an edge the world jumps — by a hand's breadth or less, whatever the plate's width.
+    const du = slab.k * 0.03 * (0.6 + (0.4 * slab.w) / 0.1) * across * weight
+    // A small wander of the shift along the plate, so it is not machine-straight.
+    const dv = 0.006 * slab.k * Math.sin(v * 17 + i * 2.3) * weight
+    const ca = slab.ca * 0.012 * (0.3 + 0.7 * Math.abs(across)) * weight
+    return { du, dv, ca, weight, slab: i, s }
+  }
+  return NONE
+}
+
+/** The same, for a point in px. Returns the shift in px. */
+export function bendPx(x: number, y: number, view: { w: number; h: number }): { dx: number; dy: number; ca: number; weight: number; slab: number } {
+  const b = bendAt(x / view.w, y / view.h, slabsIn(view))
+  return { dx: b.du * view.w, dy: b.dv * view.h, ca: b.ca * view.w, weight: b.weight, slab: b.slab }
+}
+
+/** How bright the thread of light along a plate's edge is, at a height (0..1): strong in places, absent in others. */
+export function edgeLight(slab: number, side: 0 | 1, v: number): number {
+  const seed = slab * 2 + side
+  const n = 0.6 * noise2(v * 4.6 + seed * 3.1, seed * 1.7 + 0.5, 311 + seed) + 0.4 * noise2(v * 10.5 + seed * 1.3, seed * 2.9, 337 + seed)
+  return clamp01(0.06 + 1.1 * smoothstep(0.36, 0.64, n))
+}
+
+/**
+ * Where the plates stand, in px, as left and right edges (the edges of the screen included): for the thread of light along them.
+ */
+export function edgesOf(width: number, view?: { w: number; h: number }): { x: number; slab: number; side: 0 | 1 }[] {
+  // Only the physical edges — not the screen's, and a shared edge (A|B, B|C) once: one edge, one event, one thread.
+  // The tolerance is a thousandth of the width: half a pixel on a phone, and still right when the width is 1 (fractions).
+  const slabs = view ? slabsIn(view) : SLABS
+  const eps = width * 1e-3
+  const all = slabs.flatMap((s, slab) => [
+    { x: s.u * width, slab, side: 0 as const },
+    { x: (s.u + s.w) * width, slab, side: 1 as const },
+  ])
+  return all.filter((e, i) => e.x > eps && e.x < width - eps && !all.slice(0, i).some((f) => Math.abs(f.x - e.x) < eps))
+}
+
+/**
+ * The fronts of the glass's answer to a touch (light.ts) are not circles: each has a shape of its own — how far it reaches toward each
+ * angle, relative to its radius (±≈8 %). The shape is fixed for the front's whole life, so toward every direction it grows at a constant speed:
+ * it never wanders, stops or jumps.
+ */
+export function frontShape(angle: number, seed = 0): number {
+  const a = fbm2(Math.cos(angle) * 1.15 + 4 + seed, Math.sin(angle) * 1.15 + 4, 407 + seed, 3)
+  return 1 + 0.12 * (a - 0.5) + 0.025 * Math.sin(angle * 3 + seed)
+}
+
+/** How much of a front there is toward an angle (0..1): it is not a whole ring, parts of it are faint or not there. Fixed for its whole life too. */
+export function frontPresence(angle: number, seed = 0): number {
+  return smoothstep(0.18, 0.62, fbm2(Math.cos(angle) * 1.4 + 9 + seed, Math.sin(angle) * 1.4 + 9, 419 + seed, 3))
+}
+
+/**
+ * Behind a plate a front is seen a little to one side: shifted across the plate by an amount that follows the plate's k (px at 390 wide;
+ * the k are the approved ones, not changed) and is the same over the whole plate — so inside a plate the front still moves at its own constant
+ * speed, and at each of the 8 edges it shows a small, coherent step (3–9 px). Outside the plates (the air between them) it is not shifted.
+ */
+export const FRONT_STEP = 4
+
+export function frontShift(slab: number, view: { w: number; h: number }): number {
+  return slab < 0 ? 0 : FRONT_STEP * SLABS[slab].k * (Math.min(view.w, view.h) / 390)
+}
+
+/** The screen cut into vertical strips at the plates' edges: each plate, and the air between them (slab −1). They cover the whole width. */
+export function stripsIn(view: { w: number; h: number }): { x0: number; x1: number; slab: number }[] {
+  const out: { x0: number; x1: number; slab: number }[] = []
+  let x = 0
+  slabsIn(view).forEach((s, slab) => {
+    const x0 = s.u * view.w
+    const x1 = (s.u + s.w) * view.w
+    if (x1 - x0 < 0.5) return
+    if (x0 - x > 0.5) out.push({ x0: x, x1: x0, slab: -1 })
+    out.push({ x0, x1, slab })
+    x = x1
+  })
+  if (view.w - x > 0.5) out.push({ x0: x, x1: view.w, slab: -1 })
+  return out
+}

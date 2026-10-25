@@ -3,10 +3,11 @@ import { useEffect } from 'react'
 import { useMotion } from '../motion/MotionLevel'
 import { EASE } from '../motion/tokens'
 import { Particles, type ParticleMode } from './Particles'
-import { PRESETS, type AtmosphereKey } from './presets'
+import { PRESETS, type AtmosphereKey, type AtmospherePreset } from './presets'
 
 interface AtmosphereProps {
-  preset: AtmosphereKey
+  /** A named preset, or one a feature owns (APRENDER's own atmospheres). */
+  preset: AtmosphereKey | AtmospherePreset
   /** Halos open up while entering Focus. */
   expanded?: boolean
   particles: ParticleMode
@@ -34,7 +35,7 @@ export function Atmosphere({
   scene = 'today',
   gather = false,
 }: AtmosphereProps) {
-  const p = PRESETS[preset]
+  const p = typeof preset === 'string' ? PRESETS[preset] : preset
   const { ambient } = useMotion()
 
   useEffect(() => {

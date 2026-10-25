@@ -1,4 +1,5 @@
 import type { AtmospherePreset } from '../../../atmosphere/presets'
+import type { MarkTone } from '../domain/wordmark'
 import type { LearnThemeId } from './schedule'
 
 /**
@@ -8,7 +9,7 @@ import type { LearnThemeId } from './schedule'
  *   atmosphere  the ground, four halos, particles and accent of the shared Atmosphere
  *   ink         text and rules (tokens: they replace the core's inside APRENDER only)
  *   light       APRENDER's own light, painted over the ground (see LearnLight)
- *   mark        the dots of the wordmark
+ *   mark        the dots of the wordmark (one color, or a few tones spread over its lit dots)
  *   ritual      how the first entry of the day begins ('classic': the wordmark; 'aparicion': see ../aparicion)
  *   stage       only for a ritual that has a stage of its own: the ink of the words that live on it
  * Layout never depends on any of this. Which one is in force is `schedule.ts`.
@@ -58,7 +59,13 @@ export interface LearnTheme {
     /** The fine grain of the glass (the colour it darkens by, at the strength it is seen). */
     grain: string
   }
-  mark: { color: string; glow: string }
+  mark: {
+    /** The dots' color (the unlit ones, and the lit ones when there are no tones). */
+    color: string
+    glow: string
+    /** The lit dots, in a few tones and their shares (domain/wordmark.ts: dotTone); the first is the base and is `color`. */
+    tones?: readonly MarkTone[]
+  }
   /** The ink of the words on the ritual's own stage (a dark one, over this atmosphere's light ground). */
   stage?: { strong: string; medium: string; soft: string }
   /** The palette of the ritual's own scene (APARICIÓN): a few primitives; every gradient is mixed from them in CSS. */
@@ -163,7 +170,18 @@ const SUNSET: LearnTheme = {
     cloud: 'rgba(255,255,255,0.5)',
     grain: 'rgba(14,34,84,0.09)',
   },
-  mark: { color: '#FF7452', glow: 'rgba(255,96,56,0.85)' },
+  // P3 PRISMA AZUL: blue-tinged silver and pearl, with contained shifts of cyan and violet — light condensed inside the glass.
+  // It replaces the approved vermilion (#FF7452, glow rgba(255,96,56,0.85)), kept as the historic reference in docs/aprender/atardecer/PROCEDENCIA.md.
+  mark: {
+    color: '#CCD8E6',
+    glow: 'rgba(196,222,248,0.55)',
+    tones: [
+      ['#CCD8E6', 0.66],
+      ['#EAEDF4', 0.15],
+      ['#B6E6F0', 0.11],
+      ['#D6CCEC', 0.08],
+    ],
+  },
   stage: { strong: '#F6F9FF', medium: '#DCE6F6', soft: '#B4C3DA' },
   scene: {
     white: '#FFFFFF',

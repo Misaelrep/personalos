@@ -95,9 +95,9 @@ Todas las codificaciones del runtime se han reproducido byte a byte desde su mas
 - El worker de texturas procedurales (`textures.worker.ts`) y las texturas de vidrio, profundidad y mano de `pixels.ts` ya no se usan en runtime, porque las sustituyen los assets. Siguen en el bundle. Se retirarán en una limpieza aparte.
 - `layout.json`: aplazado mientras no haya necesidad real.
 
-## Variante ONDAS continuas (rama `feature/aprender-atardecer-ondas`, pendiente de decisión)
+## Variante ONDAS continuas (rama `feature/aprender-atardecer-ondas`)
 
-Sustituiría a `f817394` solo si se aprueba. No toca assets, geometría, k, B ni la salida FRASE → AHORA.
+Aprobada como candidata para sustituir a `f817394`, pendiente solo de la QA física en iPhone. No toca assets, geometría, k, B ni la salida FRASE → AHORA. `feature/aprender-atardecer-cierre` sigue en `f817394` como checkpoint.
 
 | | Valor |
 |---|---|
@@ -109,3 +109,20 @@ Sustituiría a `f817394` solo si se aprueba. No toca assets, geometría, k, B ni
 | Convergencia | Desde 3,3 s, de dentro afuera; estable a 4,5 s; APRENDER formado a ≈4,8 s (wordmark 3,35 s + 0,95 s + 0,5 s). Fin de la propagación: 3,85 s |
 | Ritual | `APARICION_PROPAGATION = 3 s`: todo lo posterior al contacto, 3 s más tarde, sin acortar nada. Frase 5,3 s · desfragmentación 9,0 s · pregunta 10,0 s · fin de escena 10,25 s (observado: 10,252 s a 390 y 10,250 s a 320) |
 | Movimiento reducido | Sin frentes: contacto → cambio óptico suave (A1 hacia su hielo, 1,1–3,7 s) → los fragmentos se funden desde 3,6 s → A2 y APRENDER |
+
+## Color de APRENDER: P3 PRISMA AZUL (candidato definitivo, sujeto a la QA física)
+
+Elegido entre CONTROL, P1, P2 y P3 con el tablero de comparación. Solo cambia el tratamiento cromático: DotWord, geometría, puntos, tamaño, espaciado, posición y timing no cambian.
+
+| | Valor |
+|---|---|
+| Intención | Plata azulada / perla, con microvariaciones contenidas de cian y violeta: luz condensada dentro del vidrio. Ni neón ni blanco puro |
+| Base (`mark.color`) | `#CCD8E6`; los puntos apagados usan este color |
+| Halo (`mark.glow`) | `rgba(196,222,248,0.55)`, 14 px |
+| Tonos de los puntos encendidos (`mark.tones`) | `#CCD8E6` 66 % · `#EAEDF4` perla 15 % · `#B6E6F0` cian 11 % · `#D6CCEC` violeta 8 % |
+| Reparto | `domain/wordmark.ts: dotTone`, determinista por posición del punto: el mismo punto, siempre el mismo tono |
+| Contraste punto / fondo (WCAG, mínimo) | A2 sola: 9,64 (390) y 9,16 (320). Con la frase: 10,49 (390) y 10,56 (320) |
+
+En el DotWord en movimiento (el ritual clásico, sin APARICIÓN), los puntos toman el color base y el halo: DotWord no cambia.
+
+**Referencia histórica, la versión aprobada anterior (`f817394`):** naranja `#FF7452`, halo `rgba(255,96,56,0.85)`, un solo color. Su contraste mínimo era 4,96–5,85:1.

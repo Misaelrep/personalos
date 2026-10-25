@@ -19,3 +19,17 @@ export const WORDMARK_COLS = WORDMARK.length * GLYPH_COLS + (WORDMARK.length - 1
 export function wordmarkPitch(viewportWidth: number): number {
   return Math.min(MAX_PITCH, (viewportWidth - SIDE_PAD * 2) / WORDMARK_COLS)
 }
+
+/** A tone of the wordmark's dots and its share of them (0..1). */
+export type MarkTone = readonly [color: string, share: number]
+
+/**
+ * The tone of the dot at `index` (its place among all the wordmark's dots, lit or not), when the dots are not all one color:
+ * deterministic and evenly spread — the same dot always takes the same tone, on every screen and every entry.
+ */
+export function dotTone(index: number, tones: readonly MarkTone[]): string {
+  const h = Math.abs(Math.sin(index * 12.9898 + 78.233) * 43758.5453) % 1
+  let at = 0
+  for (const [color, share] of tones) if (h < (at += share)) return color
+  return tones[0][0]
+}

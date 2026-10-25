@@ -181,8 +181,27 @@ describe('text is readable in every atmosphere (WCAG)', () => {
     expect(contrast(parse(soft), night)).toBeGreaterThanOrEqual(4.5)
   })
 
-  it('the wordmark’s dots (vermilion on the dark sky) are bright enough to read as a word: ≥ 4.5:1 on the sky’s deepest tone', () => {
-    expect(contrast(parse(sunset.mark.color), parse(sunset.scene!.night))).toBeGreaterThanOrEqual(4.5)
+  it('the wordmark’s dots are P3 PRISMA AZUL, exactly as chosen: blue-tinged silver and pearl, with contained cyan and violet (the vermilion #FF7452 is the historic reference, in PROCEDENCIA.md)', () => {
+    expect(sunset.mark.color).toBe('#CCD8E6')
+    expect(sunset.mark.glow).toBe('rgba(196,222,248,0.55)')
+    expect(sunset.mark.tones).toEqual([
+      ['#CCD8E6', 0.66],
+      ['#EAEDF4', 0.15],
+      ['#B6E6F0', 0.11],
+      ['#D6CCEC', 0.08],
+    ])
+    const tones = sunset.mark.tones!
+    expect(tones[0][0]).toBe(sunset.mark.color)
+    expect(tones.reduce((s, [, share]) => s + share, 0)).toBeCloseTo(1, 9)
+  })
+
+  it('every tone of the dots reads strongly on the sky (≥ 9:1 on its deepest tone), and none is neon or pure white: little chroma, below white', () => {
+    for (const [tone] of sunset.mark.tones!) {
+      const c = parse(tone)
+      expect(contrast(c, parse(sunset.scene!.night)), tone).toBeGreaterThanOrEqual(9)
+      expect(Math.max(c[0], c[1], c[2]) - Math.min(c[0], c[1], c[2]), tone).toBeLessThanOrEqual(60)
+      expect(Math.max(c[0], c[1], c[2]), tone).toBeLessThan(0xf8)
+    }
   })
 
   it('the ink keeps its order: each step is quieter than the one before it', () => {

@@ -77,7 +77,12 @@ function ModePill({ writable, reason }: { writable: boolean; reason?: string }) 
   )
 }
 
-export function ProjectsApp() {
+/**
+ * `embedded` (P4c): inside ELYUM as a section. No page background (the app's
+ * atmosphere is behind), no «prueba» label or build stamp, room for the
+ * bottom navigation. Same screens, same store.
+ */
+export function ProjectsApp({ embedded = false }: { embedded?: boolean }) {
   const p = useProjects()
   const route = useRoute()
   const s = p.state
@@ -136,6 +141,35 @@ export function ProjectsApp() {
       </>
     )
 
+  const inner = (
+    <>
+      <div className="flex items-center justify-between gap-3 pt-1 pb-1">
+        <span className="text-[11px] tracking-[0.08em] text-ink-4 uppercase">{embedded ? 'Proyectos' : 'Prueba · datos sintéticos'}</span>
+        {s?.status === 'listo' && <ModePill writable={s.writable} reason={s.readOnlyReason} />}
+      </div>
+      {s?.status === 'listo' && !s.writable && route.kind !== 'prueba' && (
+        <div className="mt-2">
+          <Banner tone="warn">Solo lectura en este navegador: {s.readOnlyReason ?? 'no ofrece Web Locks'}. Puedes consultar y exportar; no se guarda nada.</Banner>
+        </div>
+      )}
+      {p.notice && (
+        <div className="mt-2" onClick={p.clearNotice}>
+          <Banner tone="info">{p.notice}</Banner>
+        </div>
+      )}
+      {body}
+    </>
+  )
+
+  if (embedded)
+    return (
+      <WriteProvider p={p}>
+        <main className="relative z-10 mx-auto w-full max-w-[560px] px-4 pt-[calc(env(safe-area-inset-top)+16px)] pb-[calc(7rem+env(safe-area-inset-bottom))] lg:pt-12" data-testid="projects-section">
+          {inner}
+        </main>
+      </WriteProvider>
+    )
+
   return (
     <WriteProvider p={p}>
     <div className="relative min-h-dvh">
@@ -144,21 +178,7 @@ export function ProjectsApp() {
         <div className="absolute top-[40vh] -left-[35vmax] size-[70vmax] rounded-full bg-[radial-gradient(closest-side,rgba(234,242,255,0.95),transparent)]" />
       </div>
       <div className="mx-auto w-full max-w-[560px] px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(2.5rem,env(safe-area-inset-bottom))]">
-        <div className="flex items-center justify-between gap-3 pt-1 pb-1">
-          <span className="text-[11px] tracking-[0.08em] text-ink-4 uppercase">Prueba · datos sintéticos</span>
-          {s?.status === 'listo' && <ModePill writable={s.writable} reason={s.readOnlyReason} />}
-        </div>
-        {s?.status === 'listo' && !s.writable && route.kind !== 'prueba' && (
-          <div className="mt-2">
-            <Banner tone="warn">Solo lectura en este navegador: {s.readOnlyReason ?? 'no ofrece Web Locks'}. Puedes consultar y exportar; no se guarda nada.</Banner>
-          </div>
-        )}
-        {p.notice && (
-          <div className="mt-2" onClick={p.clearNotice}>
-            <Banner tone="info">{p.notice}</Banner>
-          </div>
-        )}
-        {body}
+        {inner}
         <p className="mt-12 text-center font-mono text-[10.5px] text-ink-4" data-testid="build">
           P4a · {new URL(import.meta.url).pathname.split('/').pop()}
         </p>

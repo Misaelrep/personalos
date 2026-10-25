@@ -18,6 +18,8 @@ const ALLOWED = {
   p4b: ['src/features/projects/', 'e2e/projects/', ...SHARED],
   // P2-R1 · Recuperación de PROYECTOS desde una copia exportada, solo en su módulo y la página de prueba. Sin P2-R global ni navegación.
   p2r1: ['src/features/projects/', 'e2e/projects/', ...SHARED],
+  // P4c · Integración en el menú de ELYUM (preparación, sin merge): PROYECTOS completo + las dos piezas de navegación.
+  p4c: ['src/features/projects/', 'e2e/projects/', 'proyectos.html', 'vite.config.ts', 'src/App.tsx', 'src/layout/sections.ts', ...SHARED],
 }
 // Never, in any package of PROYECTOS.
 const FORBIDDEN = ['src/features/learn/', 'src/data/routine/', 'src/state/', 'src/domain/', 'src/features/focus/', 'src/features/week/', 'src/features/today/', 'src/features/dayscape/', 'src/features/entry/']

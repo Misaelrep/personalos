@@ -10,6 +10,7 @@ import { FocusView } from './features/focus/FocusView'
 import { useFocusFlow } from './features/focus/useFocusFlow'
 import { useLearnAtmosphere } from './features/learn/atmosphere'
 import { Aprender } from './features/learn/screens/Aprender'
+import { ProjectsApp } from './features/projects/ui/ProjectsApp'
 import { TodayView, type TodayAppear } from './features/today/TodayView'
 import { Semana } from './features/week/Semana'
 import { BottomNav, NavRail } from './layout/NavRail'
@@ -37,11 +38,11 @@ export function App() {
     if (phase !== 'today') setAppear('fade')
   }, [phase])
 
-  // SEMANA and APRENDER open straight onto their screen (never a second daily entry).
-  // `?section=semana` / `?section=aprender` for review.
+  // SEMANA, PROYECTOS and APRENDER open straight onto their screen (never a second daily entry).
+  // `?section=semana` / `?section=proyectos` / `?section=aprender` for review.
   const [section, setSection] = useState<SectionId>(() => {
     const requested = new URLSearchParams(window.location.search).get('section')
-    return entry.kind === 'none' && (requested === 'semana' || requested === 'aprender') ? requested : 'hoy'
+    return entry.kind === 'none' && (requested === 'semana' || requested === 'proyectos' || requested === 'aprender') ? requested : 'hoy'
   })
   // A day opening from SEMANA takes the whole stage; today's DAYSCAPE lands on HOY like the entry does.
   const [immersive, setImmersive] = useState(false)
@@ -53,10 +54,11 @@ export function App() {
 
   const focusBlock = view.timeline.find((b) => b.id === (state.focus?.blockId ?? flow.closedBlockId))
   const inWeek = section === 'semana' && !entry.active && phase === 'today'
+  const inProjects = section === 'proyectos' && !entry.active && phase === 'today'
   const inLearn = section === 'aprender' && !entry.active && phase === 'today'
   const learnAtmosphere = useLearnAtmosphere(inLearn)
-  const activeSection: SectionId = inWeek ? 'semana' : inLearn ? 'aprender' : 'hoy'
-  const showToday = (!entry.active || handoff) && (phase === 'today' || phase === 'entering') && (!inWeek || weekHandoff) && !inLearn
+  const activeSection: SectionId = inWeek ? 'semana' : inProjects ? 'proyectos' : inLearn ? 'aprender' : 'hoy'
+  const showToday = (!entry.active || handoff) && (phase === 'today' || phase === 'entering') && (!inWeek || weekHandoff) && !inProjects && !inLearn
   const navHidden = entry.active || immersive || !(phase === 'today' || (phase === 'entering' && step < 2))
   // The entry's floating points become the DAY FIELD's first nodes; they return once HOY is back.
   const particles = entry.active
@@ -114,6 +116,8 @@ export function App() {
           />
         )}
       </AnimatePresence>
+
+      {inProjects && <ProjectsApp embedded />}
 
       <AnimatePresence>{inLearn && <Aprender key="aprender" onImmersive={setImmersive} />}</AnimatePresence>
 

@@ -252,6 +252,21 @@ try {
   await page.getByTestId('sandbox-clear').click()
   await page.waitForFunction(() => document.querySelector('[data-testid="sandbox-state"]')?.textContent?.includes('Vacío'))
   check('clearing the test store removes only its keys', (await notSandbox(page)) === mainBefore && (await getKey(page, SB_DATA)) === null)
+  // ── 11a · P2-R1.1: a copy from before the reset (same projects, other ids) ──
+  await sandboxAction(page, 'sandbox-fill')
+  await pick(page, 'copia-prueba.json', sandboxCopy)
+  await page.waitForSelector('[data-testid="restore-plan"]')
+  const twinRows = page.locator('[data-testid="restore-unit"][data-state="solo-en-copia"]')
+  check(
+    'copy from before the reset: warned, the six shown as existing under another id, none selectable alone',
+    (await page.getByTestId('restore-warning').count()) === 1 &&
+      (await twinRows.count()) === 6 &&
+      (await page.locator('[data-testid="restore-unit"][data-state="solo-en-copia"][data-selectable="true"]').count()) === 0 &&
+      (await twinRows.first().innerText()).includes('Existe con otro identificador'),
+  )
+  await shot(page, '21-recuperar-copia-anterior-al-reinicio.png')
+  await page.getByTestId('sandbox-clear').click()
+  await page.waitForFunction(() => document.querySelector('[data-testid="sandbox-state"]')?.textContent?.includes('Vacío'))
   await pick(page, 'elyum-proyectos.json', mainCopy)
   await page.waitForSelector('[data-testid="restore-plan"]')
   r = await recover(page, [], true)

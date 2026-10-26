@@ -1,3 +1,4 @@
+import { normalizeProjectName } from '../domain/operations'
 import { validateProjectsData, type Issue } from '../domain/schema'
 import type { DossierReference, DossierSource, HistoryEntry, ImportRecord, Milestone, Project, ProjectsData, RoutineLink, Task, Vocabulary } from '../domain/types'
 import { sha256Hex } from '../import/sha256'
@@ -136,6 +137,12 @@ export interface RestoreUnit {
   why: string[]
   /** Local changes made after the copy was exported: choosing the unit drops them (they stay in the journal). */
   localNewer: number
+  /**
+   * P2-R1.1: the same project on the other side under another internal id
+   * (same name, same dossier or shared task ids) — a copy from before the
+   * store was reset, or from another store. Never recovered on its own.
+   */
+  twin?: string
 }
 
 export interface RestorePlan {
@@ -146,6 +153,8 @@ export interface RestorePlan {
   units: RestoreUnit[]
   /** Cycle or other differences only a full replacement changes. */
   globalChanges: string[]
+  /** P2-R1.1: what the person should know before choosing anything. */
+  warnings: string[]
 }
 
 const n = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`
@@ -244,7 +253,35 @@ export function planRestore(local: ProjectsData, baseGeneration: number, backup:
     localNewer: localChangesAfter(local, new Set(local.weeks.map((w) => w.weekStart)), since),
   })
 
-  const plan: RestorePlan = { backup, baseGeneration, local, units, globalChanges: [] }
+  // P2-R1.1 · The same project under another id on each side: shown as such, never recovered alone.
+  const localOnly = local.projects.filter((p) => !copy.projects.some((c) => c.id === p.id))
+  const copyOnly = copy.projects.filter((c) => !local.projects.some((p) => p.id === c.id))
+  const taskIds = (d: ProjectsData, id: string) => new Set(d.tasks.filter((t) => t.projectId === id).map((t) => t.id))
+  let twins = 0
+  for (const c of copyOnly) {
+    const cTasks = taskIds(copy, c.id)
+    const twin = localOnly.find(
+      (p) =>
+        normalizeProjectName(p.name) === normalizeProjectName(c.name) ||
+        (p.dossier === c.dossier && !c.dossier.startsWith('elyum:')) ||
+        [...taskIds(local, p.id)].some((t) => cTasks.has(t)),
+    )
+    if (!twin) continue
+    twins++
+    const cu = units.find((u) => u.key === `proyecto:${c.id}`)!
+    const lu = units.find((u) => u.key === `proyecto:${twin.id}`)!
+    cu.twin = twin.name
+    lu.twin = c.name
+    cu.changes = [`Aquí existe «${twin.name}» con otro identificador interno: recuperarlo suelto lo duplicaría.`]
+    lu.changes = [`En la copia está como «${c.name}» con otro identificador. Aquí se conserva tal cual.`]
+  }
+  const warnings =
+    twins > 0
+      ? [
+          `${twins === 1 ? 'Un proyecto existe' : `${twins} proyectos existen`} aquí y en la copia con otro identificador interno. La copia parece de antes de reiniciar el almacén o de otro almacén. Esos proyectos no se recuperan sueltos: puedes sustituir todo por la copia o no recuperar.`,
+        ]
+      : []
+  const plan: RestorePlan = { backup, baseGeneration, local, units, globalChanges: [], warnings }
   if (!same(local.cycle, copy.cycle)) plan.globalChanges.push(`Ciclo: la copia es del ${copy.cycle.start} al ${copy.cycle.end}; aquí, del ${local.cycle.start} al ${local.cycle.end}.`)
   const atlas = diffById(local.atlas, copy.atlas)
   if (atlas.added.length + atlas.removed.length + atlas.changed.length) plan.globalChanges.push(`ATLAS: ${atlas.added.length} recuperadas, ${atlas.removed.length} quitadas, ${atlas.changed.length} cambiadas.`)
@@ -301,6 +338,7 @@ export function buildRestore(plan: RestorePlan, sel: Selection, at: string): Bui
       const u = plan.units.find((x) => x.key === key)
       if (!u) return { ok: false, problems: [`Unidad desconocida: ${key}`] }
       if (u.state === 'igual' || u.state === 'solo-local') return { ok: false, problems: [`«${u.label}»: no hay nada que recuperar.`] }
+      if (u.twin) return { ok: false, problems: [`«${u.label}» ya existe aquí como «${u.twin}» con otro identificador: recuperarlo suelto lo duplicaría. Sustituye todo o no lo recuperes.`] }
       if (u.kind === 'semanas') {
         next.weeks = clone(copy.weeks)
         continue

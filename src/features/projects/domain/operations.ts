@@ -47,7 +47,8 @@ export function createProject(data: ProjectsData, input: { name: string; objecti
   }
 }
 
-const normalize = (s: string) =>
+/** A project name with accents, case, punctuation and the «Dossier operativo» prefix ignored. */
+export const normalizeProjectName = (s: string) =>
   s
     .normalize('NFD')
     .replace(/\p{M}/gu, '')
@@ -62,11 +63,11 @@ const normalize = (s: string) =>
  * A hint for the person — never a silent merge.
  */
 export function similarProjects(data: ProjectsData, name: string): Project[] {
-  const n = normalize(name)
+  const n = normalizeProjectName(name)
   if (!n) return []
   const words = new Set(n.split(' ').filter((w) => w.length > 2))
   return data.projects.filter((p) => {
-    const m = normalize(p.name)
+    const m = normalizeProjectName(p.name)
     if (!m) return false
     if (m === n) return true
     if ((m.length >= 4 && n.includes(m)) || (n.length >= 4 && m.includes(n))) return true

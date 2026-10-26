@@ -97,7 +97,7 @@ function UnitRow({ u, checked, disabled, onToggle }: { u: RestoreUnit; checked: 
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <p className="text-[15px] text-ink">{u.label}</p>
-          <Chip tone={u.state === 'distinta' || u.state === 'solo-en-copia' ? 'warn' : 'muted'}>{STATE_LABEL[u.state]}</Chip>
+          <Chip tone={u.state === 'distinta' || u.state === 'solo-en-copia' ? 'warn' : 'muted'}>{u.twin ? 'Existe con otro identificador' : STATE_LABEL[u.state]}</Chip>
         </div>
         <ul className="mt-1 flex flex-col gap-0.5 text-[13px] leading-[1.45] text-ink-3">
           {u.changes.slice(0, 6).map((c, i) => (
@@ -108,7 +108,7 @@ function UnitRow({ u, checked, disabled, onToggle }: { u: RestoreUnit; checked: 
         {u.localNewer > 0 && u.selectable && (
           <p className="mt-1 text-[12.5px] text-[#b5531a]">Aquí hay {n(u.localNewer, 'cambio posterior', 'cambios posteriores')} a la copia: recuperarla los deshace (quedan en el diario de esta recuperación).</p>
         )}
-        {!u.selectable && u.state !== 'igual' && u.state !== 'solo-local' && <p className="mt-1 text-[12.5px] text-[#b5531a]">No se puede recuperar sola: {u.why.join(' ')}</p>}
+        {!u.selectable && !u.twin && u.state !== 'igual' && u.state !== 'solo-local' && <p className="mt-1 text-[12.5px] text-[#b5531a]">No se puede recuperar sola: {u.why.join(' ')}</p>}
       </div>
     </label>
   )
@@ -337,6 +337,11 @@ export function RestoreView() {
       {plan && (
         <Section label="2 · Qué cambiaría">
           <div className="flex flex-col gap-3" data-testid="restore-plan">
+            {plan.warnings.map((w, i) => (
+              <Banner key={i} tone="warn">
+                <span data-testid="restore-warning">{w}</span>
+              </Banner>
+            ))}
             <p className="text-[13px] leading-[1.5] text-ink-3">Por defecto no se recupera nada: lo de aquí se conserva. Marca lo que quieras traer de la copia.</p>
             <Card className="overflow-hidden">
               {plan.units.map((u) => (

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { setNextAction } from './domain/ops'
+import { createProject } from './domain/operations'
 import { validateProjectsData } from './domain/schema'
 import type { ProjectsData } from './domain/types'
 import { sha256Hex } from './import/sha256'
@@ -458,5 +459,52 @@ describe('P2-R1 · almacén de prueba separado', () => {
     const { file } = await exportProjects(storage, now(), 'prueba-p2r1')
     expect(file.origin).toBe('prueba-p2r1')
     expect((await backupOf(JSON.stringify(file))).file.origin).toBe('prueba-p2r1')
+  })
+})
+
+describe('P2-R1.1 · copia de antes de reiniciar el almacén', () => {
+  /** A copy exported, the store cleared and filled again: same projects, new internal ids. */
+  async function resetScenario(extraInCopy?: string) {
+    const storage = new MemoryStorage()
+    const locks = memoryLocks()
+    let first = await syntheticSix(now, random)
+    if (extraInCopy) first = createProject(first, { name: extraInCopy }, { now: now(), random }).data
+    await seeded(storage, locks, first)
+    const text = await exported(storage)
+    storage.map.clear()
+    await seeded(storage, locks, await syntheticSix(now, random))
+    const l = await loaded(storage)
+    return { storage, locks, text, l, plan: planRestore(l.data, l.generation, await backupOf(text)) }
+  }
+
+  it('shows each project once per side as the same project under another id, none recoverable alone, with a warning', async () => {
+    const { plan } = await resetScenario()
+    const fromCopy = plan.units.filter((u) => u.kind === 'proyecto' && u.state === 'solo-en-copia')
+    expect(fromCopy).toHaveLength(6)
+    expect(fromCopy.every((u) => u.twin === u.label && !u.selectable)).toBe(true)
+    expect(plan.units.filter((u) => u.state === 'solo-local').every((u) => u.twin)).toBe(true)
+    expect(plan.warnings.join(' ')).toMatch(/6 proyectos existen aquí y en la copia con otro identificador/)
+    // Even if a page tried, recovering one alone is refused…
+    const cocina = fromCopy.find((u) => u.label === 'Cocina de prueba')!
+    expect(buildRestore(plan, { mode: 'seleccion', units: [cocina.key] }, now())).toMatchObject({ ok: false })
+    // …and «todo» stays possible.
+    expect(buildRestore(plan, { mode: 'todo' }, now()).ok).toBe(true)
+  })
+
+  it('a project that only the copy has, with its own name, stays recoverable', async () => {
+    const { plan } = await resetScenario('Observatorio de prueba')
+    const obs = plan.units.find((u) => u.label === 'Observatorio de prueba')!
+    expect(obs).toMatchObject({ state: 'solo-en-copia', selectable: true })
+    expect(obs.twin).toBeUndefined()
+    const r = buildRestore(plan, { mode: 'seleccion', units: [obs.key] }, now())
+    expect(r.ok && r.data.projects.filter((p) => p.name === 'Observatorio de prueba')).toHaveLength(1)
+  })
+
+  it('an ordinary copy of the same store has no twins and no warning', async () => {
+    const { storage, text } = await scenario()
+    const l = await loaded(storage)
+    const plan = planRestore(l.data, l.generation, await backupOf(text))
+    expect(plan.warnings).toEqual([])
+    expect(plan.units.some((u) => u.twin)).toBe(false)
   })
 })

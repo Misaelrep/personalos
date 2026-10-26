@@ -12,10 +12,14 @@ import type { TemplateFields } from './validate'
 export const AUTONOMY_LABEL: Record<Autonomy, string> = { GUIDED: 'Guiado', SUPPORTED: 'Apoyado', AUTONOMOUS: 'Autónomo' }
 /** How the help reads inside a sentence ("…con guía"). */
 export const AUTONOMY_PHRASE: Record<Autonomy, string> = { GUIDED: 'con guía', SUPPORTED: 'con apoyo puntual', AUTONOMOUS: 'de forma autónoma' }
+/**
+ * Autonomy is how much help the person needs for the reasoning or the execution that IS the skill — not whether anything else is
+ * used: tools, software, materials, the people needed to evaluate it and whatever the context allows can all be there.
+ */
 export const AUTONOMY_HINT: Record<Autonomy, string> = {
-  GUIDED: 'Alguien o algo te lleva paso a paso.',
-  SUPPORTED: 'Lo haces tú; consultas ayuda en algún momento.',
-  AUTONOMOUS: 'Sin ayuda de nadie ni de nada.',
+  GUIDED: 'Alguien o algo te lleva paso a paso en lo que forma la habilidad.',
+  SUPPORTED: 'Lo resuelves tú, con ayuda puntual en alguna parte.',
+  AUTONOMOUS: 'Lo resuelves tú. Puedes usar las herramientas, materiales y personas que la tarea requiere.',
 }
 export const VERDICT_LABEL: Record<CriterionVerdict, string> = { MET: 'Sí', PARTIAL: 'En parte', NOT_MET: 'No' }
 export const CONTEXT_LABEL: Record<ContextRelation, string> = { SAME: 'El mismo', VARIED: 'Uno variado', NOVEL: 'Uno nuevo' }
@@ -51,7 +55,9 @@ export function gapStatement(reason: GapReason, dimension: Dimension, skill: Ski
     case 'NO_DIRECT_ATTEMPT':
       return 'Solo hay un registro hecho después: falta un intento directo de esta habilidad.'
     case 'CONTRADICTION':
-      return `Hay evidencia contradictoria sobre la ${DIMENSION_LABEL[dimension]}: necesitamos una prueba que la resuelva.`
+      return dimension === 'EXECUTION'
+        ? 'Tus intentos no muestran todavía un resultado consistente bajo esta definición.'
+        : `En ${DIMENSION_LABEL[dimension]}, tus intentos no muestran todavía un resultado consistente bajo esta definición.`
     case 'CRITERION_NOT_MET':
       return `El resultado aún no cumple el criterio: «${skill.criterion.trim()}».`
     case 'AUTONOMY_BELOW_TARGET':
@@ -83,11 +89,16 @@ export function nextTestStatement(kind: NextTestKind, skill: Skill, t: { targetC
         : `Prueba a ${act} en un contexto parecido pero distinto del original, con el mismo criterio.`
     case 'REPEAT':
       return `Repítelo en otra ocasión: ${act} para producir ${res}.`
-    case 'RESOLVE':
+    case 'COMPARE':
       return against
-        ? `Reproduce las condiciones del intento que no salió (${CONTEXT_PHRASE[against.contextRelation]}, ${AUTONOMY_PHRASE[against.assistance]}): ${act} para producir ${res}.`
-        : `Reproduce las condiciones en las que los resultados no coinciden: ${act} para producir ${res}.`
+        ? `Haz otra prueba comparable (${CONTEXT_PHRASE[against.contextRelation]}, ${AUTONOMY_PHRASE[against.assistance]}) y registra qué ocurre: ${act} para producir ${res}.`
+        : `Haz otra prueba comparable y registra qué ocurre: ${act} para producir ${res}.`
   }
+}
+
+/** What a test can and cannot do, when it needs saying. A comparable test adds information; it never erases the earlier attempts. */
+export function nextTestRationale(kind: NextTestKind): string | undefined {
+  return kind === 'COMPARE' ? 'Una nueva prueba puede mostrar si el resultado vuelve a aparecer. No elimina los intentos anteriores.' : undefined
 }
 
 /** LO QUE SABEMOS — only what the evidence says. */
@@ -120,8 +131,8 @@ export function whatWeDontKnow(skill: Skill, dims: SkillDimensions): string[] {
   if (dims.CONSISTENCY.status === 'UNKNOWN') out.push('Si el resultado se repite en otra ocasión.')
   out.push(
     dims.COMPREHENSION.note === 'EXPLANATION_UNVERIFIED'
-      ? 'Si lo comprendes: tu explicación está guardada, pero todavía no hay forma de verificarla.'
-      : 'Si lo comprendes: todavía no hay forma de comprobarlo.',
+      ? 'Si lo comprendes: tu explicación está guardada, pero APRENDER todavía no evalúa la comprensión.'
+      : 'Si lo comprendes: APRENDER todavía no evalúa la comprensión.',
   )
   return out
 }
@@ -134,7 +145,7 @@ export const ISSUE_TEXT: Record<import('./validate').Issue, string> = {
   RESULT_SAME_AS_ACTION: 'El resultado es lo que queda cuando terminas, no la acción repetida.',
   MISSING_CONTEXT: 'Falta el contexto: dónde, con qué o para quién.',
   MISSING_CRITERION: 'Falta el criterio: cómo sabrías que salió bien.',
-  TOO_FEW_SKILLS: 'Hacen falta al menos 3 habilidades.',
+  TOO_FEW_SKILLS: 'Hace falta al menos una habilidad para empezar.',
   TOO_MANY_SKILLS: 'Como máximo, 7 habilidades.',
   DUPLICATE_SKILL: 'Esa habilidad ya está en la lista.',
   INVALID_SKILL: 'Alguna habilidad está incompleta.',
@@ -146,6 +157,8 @@ export function errorText(error: import('./commands').CapabilityError): string {
       return ISSUE_TEXT[error.issues[0]]
     case 'ACTIVE_LIMIT':
       return 'Ya hay 3 capacidades activas. Pausa una para activar esta.'
+    case 'PENDING_EVALUATION':
+      return 'Esta habilidad tiene un intento pendiente de evaluar: continúa esa evaluación primero.'
     case 'SUPERSEDED':
       return 'Esa es una versión anterior: se conserva tal como estaba.'
     case 'BAD_DATE':

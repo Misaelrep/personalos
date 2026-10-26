@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { confirmAttempt as confirmAttemptFn, saveAttemptRecord, startAttempt } from '../domain/capability/commands'
+import { confirmAttempt as confirmAttemptFn, markPerformed, pendingEvaluations, saveAttemptRecord, startAttempt } from '../domain/capability/commands'
 import { activeObjective, attempt, must, T0 } from '../domain/capability/fixtures'
 import { EMPTY_STATE, commitIntention, setDraft } from '../domain/state'
 import { CAPABILITY_SCHEMA, EMPTY_STORED } from './capabilityCodec'
@@ -141,14 +141,14 @@ describe('DESARROLLAR persistence (elyum:learn:v1:capability)', () => {
 })
 
 describe('B1.1 · storage: schema 2, and schema 1 read with explicit defaults', () => {
-  it('writes schema 2; a retrospective record round-trips with its unknown moment (null) and its approximate day', () => {
+  it('writes the current schema (3); a retrospective record round-trips with its unknown moment (null) and its approximate day', () => {
     const storage = new FakeStorage()
     let data = must(startAttempt(activeObjective(), { id: 'r1', skillId: 's1', testStatement: 't', contextDescription: 'c', capture: 'RETROSPECTIVE', now: T0 }))
     data = must(saveAttemptRecord(data, 'r1', { outcomeDescription: 'antes', criterionVerdict: 'MET', assistance: 'GUIDED', contextRelation: 'SAME', occurredOn: '2026-09-01' }))
     const { confirmAttempt } = { confirmAttempt: (d: typeof data) => must(confirmAttemptFn(d, 'r1', 'er1', T0 + 3600_000)) }
     data = confirmAttempt(data)
     fresh(storage).saveCapability({ data, flow: {} })
-    expect(JSON.parse(storage.data[key.capability]).data.schema).toBe(2)
+    expect(JSON.parse(storage.data[key.capability]).data.schema).toBe(3)
     const back = fresh(storage).loadCapability()
     expect(back.status).toBe('ok')
     expect(back.stored.data).toEqual(data)
@@ -186,5 +186,50 @@ describe('B1.1 · storage: schema 2, and schema 1 read with explicit defaults', 
     const r = fresh(storage).loadCapability()
     expect(r.dropped).toBe(2)
     expect(r.stored.data.evidence).toEqual(good.evidence)
+  })
+})
+
+describe('B1.2 · storage: schema 3 — an attempt done and pending evaluation', () => {
+  const pending = () => {
+    let data = must(startAttempt(activeObjective(), { id: 'p1', skillId: 's1', testStatement: 't', contextDescription: 'c', capture: 'LIVE', now: T0 }))
+    data = must(saveAttemptRecord(data, 'p1', { outcomeDescription: 'Hice la landing; la evalúo mañana' }))
+    return must(markPerformed(data, 'p1', T0 + 1800_000))
+  }
+
+  it('a pending attempt survives a reload exactly: done, not evaluated, no evidence', () => {
+    const storage = new FakeStorage()
+    const data = pending()
+    fresh(storage).saveCapability({ data, flow: { objectiveId: 'o1', step: 'record', skillId: 's1' } })
+    const back = fresh(storage).loadCapability()
+    expect(back).toEqual({ status: 'ok', stored: { data, flow: { objectiveId: 'o1', step: 'record', skillId: 's1' } }, dropped: 0 })
+    expect(pendingEvaluations(back.stored.data).map((a) => a.id)).toEqual(['p1'])
+    expect(back.stored.data.attempts[0]).toMatchObject({ performedAt: T0 + 1800_000, objectiveRevision: 1 })
+    expect(back.stored.data.attempts[0].criterionVerdict).toBeUndefined()
+    expect(back.stored.data.evidence).toEqual([])
+  })
+
+  it('schema 2 data (B1.1) is still read as is: its open attempt is RUNNING, nothing is pending, nothing is dropped', () => {
+    const storage = new FakeStorage()
+    const base = attempt(activeObjective(), 's1', T0, 'MET')
+    const running = { id: 'a9', objectiveId: 'o1', skillId: 's2', testStatement: 't', contextDescription: 'c', capture: 'LIVE', startedAt: T0 + 10, outcomeDescription: '' }
+    storage.data[key.capability] = JSON.stringify({ v: 1, data: { schema: 2, ...base, attempts: [...base.attempts, running], flow: {} } })
+    const r = fresh(storage).loadCapability()
+    expect(r.status).toBe('ok')
+    expect(r.dropped).toBe(0)
+    expect(r.stored.data.evidence).toEqual(base.evidence)
+    expect(pendingEvaluations(r.stored.data)).toEqual([])
+    expect(r.stored.data.attempts.find((a) => a.id === 'a9')?.performedAt).toBeUndefined()
+  })
+
+  it('refuses a performed moment on a retrospective attempt; keeps one open attempt per skill (the latest)', () => {
+    const storage = new FakeStorage()
+    const data = pending()
+    const p1 = data.attempts[0]
+    const retro = { ...p1, id: 'p2', capture: 'RETROSPECTIVE' }
+    const older = { ...p1, id: 'p0', startedAt: T0 - 10 }
+    storage.data[key.capability] = JSON.stringify({ v: 1, data: { schema: 3, ...data, attempts: [older, p1, retro], flow: {} } })
+    const r = fresh(storage).loadCapability()
+    expect(r.stored.data.attempts.map((a) => a.id)).toEqual(['p1'])
+    expect(r.dropped).toBe(2)
   })
 })

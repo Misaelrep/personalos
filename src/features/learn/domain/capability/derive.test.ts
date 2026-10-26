@@ -56,8 +56,8 @@ describe('execution', () => {
     expect(ex.contradicting).toHaveLength(1)
     const p = picture(d)
     expect(p.current).toMatchObject({ reason: 'CONTRADICTION', dimension: 'EXECUTION' })
-    expect(p.next).toMatchObject({ kind: 'RESOLVE', targetContext: 'SAME', maxAssistance: 'AUTONOMOUS' })
-    expect(p.next!.statement).toMatch(/^Reproduce las condiciones del intento que no salió \(en el mismo contexto, de forma autónoma\)/)
+    expect(p.next).toMatchObject({ kind: 'COMPARE', targetContext: 'SAME', maxAssistance: 'AUTONOMOUS' })
+    expect(p.next!.statement).toMatch(/^Haz otra prueba comparable \(en el mismo contexto, de forma autónoma\) y registra qué ocurre/)
   })
 
   it('a contradiction does not stop counting because later attempts went well (B1.1: no recency window)', () => {
@@ -156,7 +156,7 @@ describe('comprehension: no false semantic evaluation', () => {
     const d = attempt(activeObjective(), 's1', T0, 'MET', 'AUTONOMOUS', 'SAME', { explanation: 'La arquitectura separa la ingesta del procesamiento porque… '.repeat(10) })
     expect(d.evidence[0].explanation).toBeTruthy()
     expect(dims(d).COMPREHENSION).toMatchObject({ status: 'UNKNOWN', note: 'EXPLANATION_UNVERIFIED' })
-    expect(whatWeDontKnow(skill(d), dims(d)).at(-1)).toMatch(/explicación está guardada, pero todavía no hay forma de verificarla/)
+    expect(whatWeDontKnow(skill(d), dims(d)).at(-1)).toMatch(/explicación está guardada, pero APRENDER todavía no evalúa la comprensión/)
     expect(picture(d).gaps.some((g) => g.dimension === 'COMPREHENSION')).toBe(false)
   })
 })

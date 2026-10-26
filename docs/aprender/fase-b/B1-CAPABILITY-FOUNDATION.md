@@ -79,13 +79,13 @@ Cambiar la definición no reescribe la historia.
   - la plantilla completa (cada parte con ≥ 3 caracteres);
   - una acción observable;
   - un resultado distinto de la acción;
-  - entre 3 y 7 habilidades válidas, sin duplicados;
+  - entre 1 y 7 habilidades válidas, sin duplicados (B1.2: una basta para empezar; «3 a 7» solo aparece como orientación, nunca como requisito ni como progreso);
   - que haya menos de 3 objetivos `ACTIVE`. Los `DRAFT`, `PAUSED` y `ARCHIVED` no cuentan.
 - **Acción no observable.** Tras quitar «quiero / poder / ser capaz de…», una acción que empieza por *aprender, estudiar, saber, entender, comprender, conocer, dominar* o *repasar* no es observable. Es una lista cerrada y conservadora.
 - **Duplicados.** Una habilidad está duplicada cuando acción, resultado, contexto, criterio y autonomía coinciden, normalizados (sin mayúsculas, acentos ni puntuación).
 - **Estados de un objetivo.** No existe `COMPLETED` y nadie puede marcar el logro a mano. `ACTIVE → PAUSED` y `* → ARCHIVED`. No se pausa con un intento en curso.
-- **Definiciones.** Con evidencia, cambiar una definición crea una revisión (ver arriba). Un objetivo `ACTIVE` no puede bajar de 3 habilidades.
-- **Intentos.** Solo sobre objetivos `ACTIVE`, y uno a la vez. Un intento en curso se puede descartar y no deja nada; uno registrado no se puede descartar.
+- **Definiciones.** Con evidencia, cambiar una definición crea una revisión (ver arriba). Un objetivo `ACTIVE` no puede bajar de 1 habilidad. Una habilidad con un intento abierto (en curso o pendiente de evaluar) no se revisa ni se quita.
+- **Intentos.** Solo sobre objetivos `ACTIVE`; uno en curso a la vez, y como mucho uno abierto por habilidad. Un intento en curso o pendiente de evaluar se puede descartar y no deja nada; uno registrado no se puede descartar.
 - **Registro.** Para confirmar hacen falta qué ocurrió, el veredicto, la ayuda y la relación de contexto. Confirmar crea una evidencia, sea cual sea el veredicto.
 
 ## Fuerza de la evidencia (`strength.ts`), derivada (B1.1)
@@ -167,9 +167,52 @@ Cada prueba registra `skillId`, `gapId`, `statement`, `reason`, `targetDimension
 | C | Cumplido con más ayuda que el objetivo | `LESS_HELP` | `SAME` | un paso menos de ayuda, sin pasar del objetivo |
 | D | Ejecución demostrada, transferencia desconocida | `TRANSFER` | `VARIED` (`NOVEL` si ya funcionó uno variado) | la autonomía objetivo |
 | E | Un éxito, sin consistencia demostrable en B1 | `REPEAT`: «Repítelo en otra ocasión» | `SAME` | la ayuda del éxito. Sin hora mínima inventada: qué es una ocasión lo define B2 |
-| F | Evidencia contradictoria | `RESOLVE`, reproduce el contexto y la ayuda del último intento que fue en contra | el de ese intento | la de ese intento |
+| F | Evidencia contradictoria (`MIXED`) | `COMPARE` (B1.2): «Haz otra prueba comparable y registra qué ocurre». Razón: «Una nueva prueba puede mostrar si el resultado vuelve a aparecer. No elimina los intentos anteriores.» No promete resolver nada | el del último intento que fue en contra | la de ese intento |
 
 Si no hay ningún hueco abierto en ejecución, autonomía, transferencia y consistencia, no hay próxima prueba en B1. La pantalla lo dice tal cual.
+
+## B1.2 — Reducción de fricción
+
+Simplifica el camino hasta la primera evidencia sin cambiar la metodología ni el rigor del modelo.
+
+**Camino mínimo**
+
+> Quiero poder hacer X → DESARROLLAR → Hazlo observable → Primera habilidad → Probar esta habilidad → Intento → ¿ya puede evaluarse?
+> - Sí → evidencia → resultado.
+> - No → «Guardar y evaluar después» → pendiente → «Continuar evaluación» más tarde.
+
+**Descomposición progresiva**
+- Basta una habilidad válida; el máximo sigue siendo 7. No hay «1/3» ni porcentajes.
+- Con una sola habilidad: «Probar esta habilidad» (primaria) y «Añadir otra habilidad» (secundaria). Con varias: «Elegir cuál probar».
+- Añadir una habilidad no revisa el objetivo, no toca la evidencia ni las revisiones de las otras.
+
+**Formulario de habilidad**
+- Se escriben acción, resultado y criterio.
+- Contexto y autonomía objetivo se heredan del objetivo y se muestran en una línea («Contexto: …», «Autonomía: …»), con «Ajustar» para cambiarlos. Nada se rellena sin mostrarse.
+
+**Entrada.** Si hay `rawIntent`, DESARROLLAR abre en «Hazlo observable» y el texto se edita allí. La pantalla «¿Qué quieres poder hacer?» solo aparece sin texto (`entryStep`).
+
+**TERMINADO ≠ EVALUADO.** Un intento `LIVE` tiene tres estados persistidos:
+
+| Estado | Campos | Evidencia | Dimensiones |
+|---|---|---|---|
+| en curso (antes de terminar) | sin `performedAt`, sin `completedAt` | no | no cambian |
+| realizado, pendiente de evaluar | `performedAt`, sin `completedAt`, sin veredicto | no | no cambian; no abre hueco |
+| registrado | `completedAt` | exactamente una | se derivan |
+
+- `markPerformed` exige qué se hizo y descarta un veredicto elegido antes («pendiente» significa «sin evaluar»). Solo `LIVE`.
+- Al evaluar, la evidencia toma `occurredAt = performedAt` (cuando se hizo) y `recordedAt` = cuando se evaluó.
+- El intento guarda `objectiveRevision` al empezar: la evidencia queda ligada a la definición bajo la que se hizo, aunque se evalúe después de una revisión.
+- Un pendiente no bloquea otras habilidades ni pausar; impide empezar otro intento en la misma habilidad (`PENDING_EVALUATION`) y revisarla o quitarla.
+- AHORA y la lista de habilidades dicen «Pendiente de evaluar»; al volver, la acción principal es «Continuar evaluación».
+
+**Contradicción.** `MIXED` se mantiene: sin recencia, sin decaimiento, sin resolución automática. El hueco dice «Tus intentos no muestran todavía un resultado consistente bajo esta definición.»
+
+**Registro.** La explicación y el enlace siguen ahí, tras «+ Añadir detalle o referencia».
+
+**Lenguaje**
+- Autonomía: «autónomo» no es «sin nada ni nadie». Herramientas, materiales y las personas que la tarea requiere están permitidas. El reducer no cambia.
+- Comprensión: «APRENDER todavía no evalúa la comprensión». Sigue `UNKNOWN`.
 
 ## Intentos retrospectivos (B1.1)
 
@@ -184,26 +227,27 @@ Si no hay ningún hueco abierto en ejecución, autonomía, transferencia y consi
 
 - **Ubicación.** Un tercer slot del mismo espacio de nombres versionado: `elyum:learn:v1:capability`, y `elyum:learn:v1:sim:capability` en simulación.
 - **Compatibilidad con la Fase A.** `state` y `entry` no cambian en nada. Una instalación de la Fase A lee el slot nuevo como vacío y no necesita migración.
-- **Formato.** El sobre de siempre, `{ v: 1, data: { schema: 2, objectives, skills, attempts, evidence, flow } }`, escrito entero en un solo `setItem`.
+- **Formato.** El sobre de siempre, `{ v: 1, data: { schema: 3, objectives, skills, attempts, evidence, flow } }`, escrito entero en un solo `setItem`.
 - **Schema 1 → 2 (B1.1).** Schema 1 (B1, nunca publicado) se lee con valores por defecto explícitos y se escribe como 2 en el siguiente guardado:
   - todo es la revisión 1 de sí mismo;
   - toda evidencia se produjo bajo la revisión 1 del objetivo;
   - el momento inventado de un registro retrospectivo se descarta (pasa a `null`).
+- **Schema 2 → 3 (B1.2).** Añade dos campos opcionales al intento: `performedAt` (solo `LIVE`) y `objectiveRevision`. Los datos de schema 2 se leen tal cual: sus intentos abiertos están en curso y ninguno queda pendiente.
 - **Lectura:**
   - ilegible → copia única a `…capability:backup` y la sesión empieza vacía;
   - versión o schema más nuevos → no se leen ni se sobrescriben;
-  - schema 1 o 2 → cada registro se valida por separado y el inválido se aparta. En schema 2 se aparta, por ejemplo, un retrospectivo con momento exacto o un directo sin él.
+  - schema 1, 2 o 3 → cada registro se valida por separado y el inválido se aparta. Se aparta, por ejemplo, un retrospectivo con momento exacto, un directo sin él, o un `performedAt` en un retrospectivo. Si hubiera varios intentos abiertos en una habilidad, se conserva el último.
 - **Intención heredada.** Una intención `develop` guardada antes de B1 se entrega, una sola vez, a un borrador con su texto.
 
 ## Interfaz
 
 En AHORA, elegir DESARROLLAR (por su sugerencia o por el `TEMPORARY_ROUTING_FALLBACK`) abre el flujo:
 
-> ¿Qué quieres poder hacer? → Hazlo observable → ¿De qué habilidades depende? → ¿Cuál quieres comprobar primero? → Antes de estudiar, prueba → Cuando termines, cuéntalo → Lo que sabemos / Lo que todavía no sabemos / Hueco actual / Próxima prueba
+> (¿Qué quieres poder hacer?, solo sin texto) → Hazlo observable → Primera habilidad → Probar esta habilidad → Antes de estudiar, prueba → Cuando termines, cuéntalo (Registrar · Guardar y evaluar después) → Lo que sabemos / Lo que todavía no sabemos / Hueco actual / Próxima prueba
 
 - **ORIENTARME y EXPLORAR** mantienen el comportamiento de la Fase A.
 - **Sin progreso visible:** no hay porcentajes, barras, radar ni puntuaciones.
-- **Al volver:** las capacidades empezadas aparecen bajo el campo, con su estado en palabras.
+- **Al volver:** las capacidades empezadas aparecen bajo el campo, con su estado en palabras y «Pendiente de evaluar» si tienen un intento por evaluar.
 
 ## Fuera de B1
 

@@ -75,12 +75,12 @@ describe('activation: limits and skills', () => {
     expect(activateObjective(full, 'o2', T0)).toEqual({ ok: false, error: { code: 'ACTIVE_LIMIT' } })
   })
 
-  it('fewer than 3 or more than 7 skills: explicitly refused', () => {
+  it('no skill, or more than 7: explicitly refused (B1.2: one valid skill is enough to start)', () => {
     let d = must(createObjective(EMPTY_CAPABILITY, { id: 'o1', rawIntent: 'x', now: T0 }))
     d = must(updateObjective(d, 'o1', OBJECTIVE, T0))
+    expect(activateObjective(d, 'o1', T0)).toEqual({ ok: false, error: { code: 'INVALID', issues: ['TOO_FEW_SKILLS'] } })
     d = must(addSkill(d, { ...SKILLS[0], id: 's1', objectiveId: 'o1', now: T0 }))
     d = must(addSkill(d, { ...SKILLS[1], id: 's2', objectiveId: 'o1', now: T0 }))
-    expect(activateObjective(d, 'o1', T0)).toEqual({ ok: false, error: { code: 'INVALID', issues: ['TOO_FEW_SKILLS'] } })
     for (let i = 3; i <= 7; i++) d = must(addSkill(d, { ...SKILLS[0], action: `Hacer la parte ${i}`, id: `s${i}`, objectiveId: 'o1', now: T0 }))
     expect(addSkill(d, { ...SKILLS[0], action: 'Hacer la parte 8', id: 's8', objectiveId: 'o1', now: T0 })).toEqual({ ok: false, error: { code: 'INVALID', issues: ['TOO_MANY_SKILLS'] } })
     expect(activateObjective(d, 'o1', T0).ok).toBe(true)
@@ -94,8 +94,10 @@ describe('activation: limits and skills', () => {
     expect(updateSkill(d, 's2', SKILLS[0], T0)).toEqual({ ok: false, error: { code: 'INVALID', issues: ['DUPLICATE_SKILL'] } })
   })
 
-  it('an ACTIVE objective cannot drop below 3 skills', () => {
-    expect(archiveSkill(activeObjective(), 's1', T0)).toEqual({ ok: false, error: { code: 'INVALID', issues: ['TOO_FEW_SKILLS'] } })
+  it('an ACTIVE objective cannot drop below one skill (B1.2)', () => {
+    let d = must(archiveSkill(activeObjective(), 's1', T0))
+    d = must(archiveSkill(d, 's2', T0))
+    expect(archiveSkill(d, 's3', T0)).toEqual({ ok: false, error: { code: 'INVALID', issues: ['TOO_FEW_SKILLS'] } })
   })
 
   it('the decomposition is edited in place until there is evidence; after, a change is a new revision, never an edit (B1.1)', () => {

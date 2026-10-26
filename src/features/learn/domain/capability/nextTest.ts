@@ -1,7 +1,7 @@
 import { AUTONOMY_LEVELS, autonomyRank, type Autonomy, type ContextRelation, type Dimension, type Evidence, type Skill } from './model'
 import { bestAssistanceMet, skillDimensions } from './dimensions'
 import { skillGaps, type Gap, type GapReason } from './gaps'
-import { nextTestStatement } from './language'
+import { nextTestRationale, nextTestStatement } from './language'
 
 /**
  * NEXT TEST — the attempt that would reduce the relevant uncertainty most: the one that closes the CURRENT gap (gaps.ts).
@@ -13,10 +13,12 @@ import { nextTestStatement } from './language'
  *   C  met, but with more help    → the same, with one step less help (never beyond the target)
  *   D  execution demonstrated, transfer unknown → the same in a VARIED context (a NOVEL one once a varied one has worked)
  *   E  a single success           → the same again "en otra ocasión" (no minimum time is made up: what an occasion is, B2 defines)
- *   F  contradictory evidence     → reproduce the conditions of the attempt that went against the rest
+ *   F  contradictory evidence     → another COMPARABLE test (the conditions of the latest attempt that went against the rest).
+ *                                   It ADDS information — whether the result appears again. It promises nothing about the
+ *                                   contradiction: no rule in B1 turns that history into a non-contradictory one, and none is implied.
  */
 
-export type NextTestKind = 'BASE' | 'FOCUS_CRITERION' | 'LESS_HELP' | 'TRANSFER' | 'REPEAT' | 'RESOLVE'
+export type NextTestKind = 'BASE' | 'FOCUS_CRITERION' | 'LESS_HELP' | 'TRANSFER' | 'REPEAT' | 'COMPARE'
 
 export interface NextTest {
   skillId: string
@@ -24,8 +26,10 @@ export interface NextTest {
   kind: NextTestKind
   /** What to do, in words (language.ts). */
   statement: string
-  /** Why this test: the reason of the gap it closes. */
+  /** Why this test: the reason of the gap it answers. */
   reason: GapReason
+  /** What the test can and cannot do, when that needs saying (a COMPARE test does not erase earlier attempts). */
+  rationale?: string
   targetDimension: Dimension
   /** Where to try it: the skill's own context, a varied one, or a new one. */
   targetContext: ContextRelation
@@ -70,17 +74,18 @@ function plan(skill: Skill, gap: Gap, evidence: readonly Evidence[]): Plan {
       return { ...base, kind: 'REPEAT', targetContext: 'SAME', maxAssistance: prev?.assistance ?? skill.targetAutonomy }
     }
     case 'CONTRADICTION': {
-      // The conditions to reproduce are those of the latest attempt that went against the rest.
+      // Comparable: the conditions of the latest attempt that went against the rest.
       const against = last(mine.filter((e) => gap.evidenceRefs.includes(e.id) && e.criterionVerdict !== 'MET')) ?? last(mine)
-      return { ...base, kind: 'RESOLVE', targetContext: against?.contextRelation ?? 'SAME', maxAssistance: against?.assistance ?? skill.targetAutonomy, evidenceRefs: refs(mine.filter((e) => gap.evidenceRefs.includes(e.id))) }
+      return { ...base, kind: 'COMPARE', targetContext: against?.contextRelation ?? 'SAME', maxAssistance: against?.assistance ?? skill.targetAutonomy, evidenceRefs: refs(mine.filter((e) => gap.evidenceRefs.includes(e.id))) }
     }
   }
 }
 
 export function nextTestFor(skill: Skill, gap: Gap, evidence: readonly Evidence[]): NextTest {
   const p = plan(skill, gap, evidence)
-  const against = p.kind === 'RESOLVE' ? evidence.filter((e) => p.evidenceRefs.includes(e.id) && e.criterionVerdict !== 'MET').sort(byTime).at(-1) : undefined
-  return { ...p, reason: gap.reason, statement: nextTestStatement(p.kind, skill, p, against) }
+  const against = p.kind === 'COMPARE' ? evidence.filter((e) => p.evidenceRefs.includes(e.id) && e.criterionVerdict !== 'MET').sort(byTime).at(-1) : undefined
+  const rationale = nextTestRationale(p.kind)
+  return { ...p, reason: gap.reason, statement: nextTestStatement(p.kind, skill, p, against), ...(rationale ? { rationale } : {}) }
 }
 
 /** Everything DESARROLLAR derives for a skill: its dimensions, its gaps (the first is the current one) and the next test. */

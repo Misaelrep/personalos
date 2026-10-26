@@ -10,7 +10,10 @@ import {
   discardAttempt,
   effectiveEvidence,
   hasEvidence,
+  markPerformed,
+  newSkillDefaults,
   objectiveOf,
+  openAttemptFor,
   recordComplete,
   saveAttemptRecord,
   setObjectiveStatus,
@@ -37,7 +40,7 @@ import {
   whatWeDontKnow,
   whatWeKnow,
 } from '../../domain/capability/language'
-import { AUTONOMY_LEVELS, CONTEXT_RELATIONS, CRITERION_VERDICTS, MAX_SKILLS, type Autonomy, type CapabilityData, type CapabilityObjective, type ContextRelation, type CriterionVerdict, type Evidence, type ObjectiveDefinition, type Skill } from '../../domain/capability/model'
+import { AUTONOMY_LEVELS, CONTEXT_RELATIONS, CRITERION_VERDICTS, MAX_SKILLS, SUGGESTED_SKILLS, type Attempt, type Autonomy, type CapabilityData, type CapabilityObjective, type ContextRelation, type CriterionVerdict, type Evidence, type ObjectiveDefinition, type Skill } from '../../domain/capability/model'
 import { skillPicture } from '../../domain/capability/nextTest'
 import { activeSkillsOf, templateIssues, type TemplateFields } from '../../domain/capability/validate'
 import { newId, type CapabilityApi } from '../../hooks/useCapability'
@@ -51,7 +54,11 @@ import { Notice, Part, Step } from './Step'
  * DESARROLLAR — from "quiero poder hacer X" to the next useful test, as a structured conversation: one main decision per
  * screen, a way back from each, everything saved as it is written.
  *
- *   intent → observable → skills → pick → attempt → record → result (→ attempt …)
+ *   (intent →) observable → skills → (pick →) attempt → record → result (→ attempt …)
+ *
+ * With the person's words already written, it opens on «Hazlo observable» (the words stay editable there). One skill is enough
+ * to try; the rest of the map can be completed later. An attempt done but not yet judgeable is saved as pending evaluation —
+ * no evidence until it is evaluated.
  *
  * Nothing here is generated: the person writes the capability and its skills; the engine only checks them, records what
  * happened, and derives — from that record alone — what we know, what we do not know yet, the current gap and the next test.
@@ -194,30 +201,22 @@ function ObservableStep({ cap, objective, go }: StepProps) {
     <Step
       label={LABEL}
       title="Hazlo observable."
-      lead={
-        <>
-          <span className="text-ink-2">«{def.value.rawIntent}»</span> — ¿qué harías, y cómo se vería que salió bien?
-        </>
-      }
+      lead="¿Qué harías, y cómo se vería que salió bien?"
       actions={
-        <>
-          <Button
-            onClick={() => {
-              setTried(true)
-              if (issues.length) return
-              const refused = def.commit()
-              setError(refused)
-              if (!refused) go('skills')
-            }}
-          >
-            Continuar
-          </Button>
-          <Button variant="secondary" onClick={() => go('intent')}>
-            Volver
-          </Button>
-        </>
+        <Button
+          onClick={() => {
+            setTried(true)
+            if (issues.length) return
+            const refused = def.commit()
+            setError(refused)
+            if (!refused) go('skills')
+          }}
+        >
+          Continuar
+        </Button>
       }
     >
+      <Field label="Quiero poder…" value={def.value.rawIntent} placeholder="p. ej. hablar en inglés en el trabajo" onChange={(rawIntent) => def.change({ rawIntent })} />
       <TemplateFieldsEditor value={def.value} onChange={def.change} />
       <Sentence fields={def.value} />
       {def.versioned && <p className="text-[13px] text-ink-3">{REVISION_NOTE}</p>}
@@ -229,15 +228,51 @@ function ObservableStep({ cap, objective, go }: StepProps) {
 
 /* —— 3 · ¿De qué habilidades depende? —— */
 
-function SkillEditor({ initial, onSave, onCancel, onRemove, versioned = false }: { initial: TemplateFields; onSave: (f: TemplateFields) => Result; onCancel: () => void; onRemove?: () => Result; versioned?: boolean }) {
+/**
+ * A skill as it is written: action, result and criterion are the person's to write. Its context and target autonomy come from
+ * the objective — shown as they are, in one compact line, never filled in silently — and «Ajustar» opens them to change.
+ */
+function SkillFieldsEditor({ value, onChange }: { value: TemplateFields; onChange: (patch: Partial<TemplateFields>) => void }) {
+  const [adjusting, setAdjusting] = useState(false)
+  const unobservable = value.action.trim().length >= 3 && templateIssues(value).includes('NOT_OBSERVABLE')
+  return (
+    <div className="flex flex-col gap-6">
+      <Field label="Acción · qué harías" value={value.action} placeholder={PLACEHOLDER.action} problem={unobservable ? ISSUE_TEXT.NOT_OBSERVABLE : undefined} onChange={(action) => onChange({ action })} />
+      <Field label="Resultado · qué quedaría hecho" value={value.result} placeholder={PLACEHOLDER.result} onChange={(result) => onChange({ result })} />
+      <Field label="Criterio · cómo sabrías que salió bien" value={value.criterion} placeholder={PLACEHOLDER.criterion} onChange={(criterion) => onChange({ criterion })} />
+      {adjusting ? (
+        <>
+          <Field label="Contexto · dónde, con qué, para quién" value={value.context} placeholder={PLACEHOLDER.context} onChange={(context) => onChange({ context })} />
+          <Choice label="Autonomía objetivo · con cuánta ayuda" options={autonomyOptions} value={value.targetAutonomy} onChange={(targetAutonomy) => onChange({ targetAutonomy })} />
+        </>
+      ) : (
+        <div data-inherited className="flex flex-col gap-1 text-[14px] leading-snug text-ink-3">
+          <p>
+            Contexto: <span className="text-ink-2">{value.context || 'sin escribir'}</span>
+          </p>
+          <p>
+            Autonomía: <span className="text-ink-2">{AUTONOMY_LABEL[value.targetAutonomy].toLowerCase()}</span>
+          </p>
+          <div className="-ml-4">
+            <Button variant="quiet" onClick={() => setAdjusting(true)}>
+              Ajustar
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SkillEditor({ title, lead, initial, onSave, onCancel, onRemove, versioned = false }: { title: string; lead: string; initial: TemplateFields; onSave: (f: TemplateFields) => Result; onCancel: () => void; onRemove?: () => Result; versioned?: boolean }) {
   const [fields, setFields] = useState(initial)
   const [error, setError] = useState<string>()
   const attempt = (r: Result) => (r.ok ? undefined : setError(errorText(r.error)))
   return (
     <Step
       label={LABEL}
-      title={onRemove ? 'Esta habilidad.' : 'Una habilidad.'}
-      lead="Algo que se pueda ver hacer, con su propio criterio."
+      title={title}
+      lead={lead}
       actions={
         <>
           <Button onClick={() => attempt(onSave(fields))}>Guardar</Button>
@@ -252,7 +287,7 @@ function SkillEditor({ initial, onSave, onCancel, onRemove, versioned = false }:
         </>
       }
     >
-      <TemplateFieldsEditor value={fields} onChange={(patch) => setFields((f) => ({ ...f, ...patch }))} />
+      <SkillFieldsEditor value={fields} onChange={(patch) => setFields((f) => ({ ...f, ...patch }))} />
       <Sentence fields={fields} />
       {versioned && <p className="text-[13px] text-ink-3">{REVISION_NOTE}</p>}
       {error && <Notice>{error}</Notice>}
@@ -260,12 +295,17 @@ function SkillEditor({ initial, onSave, onCancel, onRemove, versioned = false }:
   )
 }
 
+const START_WITH_ONE = 'Puedes empezar con esta habilidad y completar el mapa después.'
+
 function SkillsStep({ cap, objective, go }: StepProps) {
   const skills = activeSkillsOf(cap.data, objective.id)
   const [editing, setEditing] = useState<Skill | 'new'>()
   const [error, setError] = useState<string>()
+  // No skill yet: the screen is the first skill itself.
+  const first = skills.length === 0
+  const current = editing ?? (first ? 'new' : undefined)
 
-  if (editing) {
+  if (current) {
     const close = (r: Result) => {
       if (r.ok) {
         setEditing(undefined)
@@ -273,37 +313,49 @@ function SkillsStep({ cap, objective, go }: StepProps) {
       }
       return r
     }
-    return editing === 'new' ? (
+    return current === 'new' ? (
       <SkillEditor
-        initial={{ action: '', result: '', context: objective.context, criterion: '', targetAutonomy: objective.targetAutonomy }}
-        onCancel={() => setEditing(undefined)}
+        title={first ? 'Primera habilidad.' : 'Otra habilidad.'}
+        lead={first ? `Algo que se pueda ver hacer, con su propio criterio. ${START_WITH_ONE}` : 'Algo que se pueda ver hacer, con su propio criterio.'}
+        initial={newSkillDefaults(objective)}
+        onCancel={() => (first ? go('observable') : setEditing(undefined))}
         onSave={(f) => close(cap.run((d, now) => addSkill(d, { ...f, id: newId('skill'), objectiveId: objective.id, now })))}
       />
     ) : (
       <SkillEditor
-        initial={editing}
-        versioned={skillHasEvidence(cap.data, editing.id)}
+        title="Esta habilidad."
+        lead="Algo que se pueda ver hacer, con su propio criterio."
+        initial={current}
+        versioned={skillHasEvidence(cap.data, current.id)}
         onCancel={() => setEditing(undefined)}
-        onSave={(f) => close(cap.run((d, now) => updateSkill(d, editing.id, f, now, newId('skill'))))}
-        onRemove={() => close(cap.run((d, now) => archiveSkill(d, editing.id, now)))}
+        onSave={(f) => close(cap.run((d, now) => updateSkill(d, current.id, f, now, newId('skill'))))}
+        onRemove={() => close(cap.run((d, now) => archiveSkill(d, current.id, now)))}
       />
     )
   }
 
-  const proceed = () => {
-    if (objective.status === 'ACTIVE') return go('pick')
-    const r = cap.run((d, now) => activateObjective(d, objective.id, now), { objectiveId: objective.id, step: 'pick' })
+  /** Activate if needed, then go: to that one skill's test, or to the choice among several. */
+  const proceed = (skillId?: string) => {
+    const flow = skillId ? { objectiveId: objective.id, step: 'attempt' as const, skillId } : { objectiveId: objective.id, step: 'pick' as const }
+    if (objective.status === 'ACTIVE') return cap.go(flow)
+    const r = cap.run((d, now) => activateObjective(d, objective.id, now), flow)
     setError(r.ok ? undefined : errorText(r.error))
   }
+  const only = skills.length === 1 ? skills[0] : undefined
 
   return (
     <Step
       label={LABEL}
-      title="¿De qué habilidades depende?"
-      lead="Entre 3 y 7. Cada una, algo que se pueda ver hacer. Si cambias una que ya tiene intentos, se crea una nueva versión y los anteriores se conservan."
+      title={only ? 'Tu primera habilidad.' : '¿De qué habilidades depende?'}
+      lead={only ? START_WITH_ONE : 'Cada una, algo que se pueda ver hacer. Si cambias una que ya tiene intentos, se crea una nueva versión y los anteriores se conservan.'}
       actions={
         <>
-          <Button onClick={proceed}>{objective.status === 'ACTIVE' ? 'Continuar' : 'Activar y empezar'}</Button>
+          <Button onClick={() => proceed(only?.id)}>{only ? 'Probar esta habilidad' : 'Elegir cuál probar'}</Button>
+          {skills.length < MAX_SKILLS && (
+            <Button variant="secondary" onClick={() => setEditing('new')}>
+              Añadir otra habilidad
+            </Button>
+          )}
           <Button variant="secondary" onClick={() => go('observable')}>
             Volver
           </Button>
@@ -321,13 +373,9 @@ function SkillsStep({ cap, objective, go }: StepProps) {
           </li>
         ))}
       </ol>
-      {skills.length < MAX_SKILLS && (
-        <div className="-ml-4">
-          <Button variant="quiet" onClick={() => setEditing('new')}>
-            + Añadir una habilidad
-          </Button>
-        </div>
-      )}
+      <p className="text-[13px] text-ink-4">
+        Como orientación, muchas capacidades se apoyan en {SUGGESTED_SKILLS.from} a {SUGGESTED_SKILLS.to} habilidades. No hace falta tenerlas todas para empezar.
+      </p>
       {error && <Notice>{error}</Notice>}
     </Step>
   )
@@ -335,8 +383,11 @@ function SkillsStep({ cap, objective, go }: StepProps) {
 
 /* —— 4 · ¿Cuál quieres comprobar? —— */
 
+const PENDING = 'Pendiente de evaluar'
+
 function skillLine(data: CapabilityData, skill: Skill): string {
-  if (attemptInProgress(data)?.skillId === skill.id) return 'Intento en curso.'
+  const open = openAttemptFor(data, skill.id)
+  if (open) return open.performedAt === undefined ? 'Intento en curso.' : `${PENDING}.`
   const ev = effectiveEvidence(data).filter((e) => e.skillId === skill.id)
   if (!ev.length) return skill.revision > 1 ? 'Sin intentos en esta versión.' : 'Sin intentos todavía.'
   return skillPicture(skill, ev).current?.statement ?? 'Sin hueco abierto que B1 pueda comprobar.'
@@ -347,7 +398,7 @@ function PickStep({ cap, objective, go }: StepProps) {
   const any = hasEvidence(cap.data, objective.id)
   const [error, setError] = useState<string>()
   const open = (s: Skill) => {
-    if (attemptInProgress(cap.data)?.skillId === s.id) return go('record', s.id)
+    if (openAttemptFor(cap.data, s.id)) return go('record', s.id)
     go(effectiveEvidence(cap.data).some((e) => e.skillId === s.id) ? 'result' : 'attempt', s.id)
   }
   return (
@@ -415,6 +466,7 @@ function AttemptStep({ cap, objective, go, skill }: StepProps & { skill?: Skill 
   const [context, setContext] = useState(skill && next?.targetContext === 'SAME' ? skill.context : '')
   const [error, setError] = useState<string>()
   if (!skill) return <PickStep cap={cap} objective={objective} go={go} />
+  if (openAttemptFor(cap.data, skill.id)) return <RecordStep cap={cap} objective={objective} go={go} skill={skill} />
   const inProgress = attemptInProgress(cap.data)
   if (!next || !current) return <ResultStep cap={cap} objective={objective} go={go} skill={skill} />
   const base = next.kind === 'BASE'
@@ -468,48 +520,82 @@ function AttemptStep({ cap, objective, go, skill }: StepProps & { skill?: Skill 
 
 function RecordStep({ cap, objective, go, skill }: StepProps & { skill?: Skill }) {
   const [error, setError] = useState<string>()
-  const attempt = attemptInProgress(cap.data)
-  if (!skill || !attempt || attempt.skillId !== skill.id) return skill ? <ResultStep cap={cap} objective={objective} go={go} skill={skill} /> : <PickStep cap={cap} objective={objective} go={go} />
+  const attempt = skill ? openAttemptFor(cap.data, skill.id) : undefined
+  if (!skill || !attempt) return skill ? <ResultStep cap={cap} objective={objective} go={go} skill={skill} /> : <PickStep cap={cap} objective={objective} go={go} />
   const save = (patch: Parameters<typeof saveAttemptRecord>[2]) => cap.run((d) => saveAttemptRecord(d, attempt.id, patch))
   const retro = attempt.capture === 'RETROSPECTIVE'
+  // Done, not yet judged: what was done is kept; the evaluation is what is left.
+  const pending = attempt.performedAt !== undefined
+  const report = (r: Result) => setError(r.ok ? undefined : errorText(r.error))
   return (
     <Step
-      label={retro ? 'Un intento anterior' : 'Intento en curso'}
-      title={retro ? '¿Qué pasó aquella vez?' : 'Cuando termines, cuéntalo.'}
-      lead={attempt.testStatement}
+      label={retro ? 'Un intento anterior' : pending ? PENDING : 'Intento en curso'}
+      title={retro ? '¿Qué pasó aquella vez?' : pending ? 'Continuar evaluación.' : 'Cuando termines, cuéntalo.'}
+      lead={
+        pending ? (
+          <>
+            {attempt.testStatement}
+            <span className="mt-1 block text-[13px] text-ink-4">Hecho el {when(attempt.performedAt!)}. Todavía sin evaluar: no cuenta como evidencia.</span>
+          </>
+        ) : (
+          attempt.testStatement
+        )
+      }
       actions={
         <>
           <Button
             disabled={!recordComplete(attempt)}
-            onClick={() => {
-              const r = cap.run((d, now) => confirmAttempt(d, attempt.id, newId('evidence'), now), { objectiveId: objective.id, step: 'result', skillId: skill.id })
-              setError(r.ok ? undefined : errorText(r.error))
-            }}
+            onClick={() => report(cap.run((d, now) => confirmAttempt(d, attempt.id, newId('evidence'), now), { objectiveId: objective.id, step: 'result', skillId: skill.id }))}
           >
             Registrar
           </Button>
-          <Button
-            variant="quiet"
-            onClick={() => {
-              const r = cap.run((d) => discardAttempt(d, attempt.id), { objectiveId: objective.id, step: 'attempt', skillId: skill.id })
-              setError(r.ok ? undefined : errorText(r.error))
-            }}
-          >
+          {!retro && !pending && (
+            <Button variant="secondary" disabled={!attempt.outcomeDescription.trim()} onClick={() => report(cap.run((d, now) => markPerformed(d, attempt.id, now), { objectiveId: objective.id, step: 'pick' }))}>
+              Guardar y evaluar después
+            </Button>
+          )}
+          {pending && (
+            <Button variant="secondary" onClick={() => go('pick')}>
+              Evaluar más tarde
+            </Button>
+          )}
+          <Button variant="quiet" onClick={() => report(cap.run((d) => discardAttempt(d, attempt.id), { objectiveId: objective.id, step: 'attempt', skillId: skill.id }))}>
             Descartar este intento
           </Button>
         </>
       }
     >
       {retro && <WhenField value={attempt.occurredOn ?? ''} onChange={(occurredOn) => save({ occurredOn })} />}
-      <Field label="¿Qué ocurrió?" value={attempt.outcomeDescription} placeholder="Lo que salió, tal cual: qué hiciste y qué quedó." onChange={(outcomeDescription) => save({ outcomeDescription })} />
+      <Field label={pending ? 'Lo que hiciste' : '¿Qué ocurrió?'} value={attempt.outcomeDescription} placeholder="Lo que salió, tal cual: qué hiciste y qué quedó." onChange={(outcomeDescription) => save({ outcomeDescription })} />
       <Choice<CriterionVerdict> label={`¿Cumplió el criterio? «${skill.criterion}»`} options={verdictOptions} value={attempt.criterionVerdict} onChange={(criterionVerdict) => save({ criterionVerdict })} />
       <Choice<Autonomy> label="¿Con cuánta ayuda?" options={autonomyOptions} value={attempt.assistance} onChange={(assistance) => save({ assistance })} />
       <Choice<ContextRelation> label="¿En qué contexto?" options={contextOptions} value={attempt.contextRelation} onChange={(contextRelation) => save({ contextRelation })} />
-      <Field label="Explícalo con tus palabras (opcional)" value={attempt.explanation} hint="Se guarda tal cual. Todavía no se evalúa." onChange={(explanation) => save({ explanation })} />
-      <Field label="Enlace al resultado (opcional)" value={attempt.reference} hint="Se guarda como referencia. No se verifica." onChange={(reference) => save({ reference })} />
-      <p className="text-[13px] text-ink-4">Un intento que no salió también es evidencia: se guarda igual.</p>
+      <Detail attempt={attempt} save={save} />
+      <p className="text-[13px] text-ink-4">
+        Un intento que no salió también es evidencia: se guarda igual.
+        {!retro && !pending && ' Si todavía no puedes saber si cumplió el criterio, guárdalo y evalúalo después: hasta entonces no cuenta como evidencia.'}
+      </p>
       {error && <Notice>{error}</Notice>}
     </Step>
+  )
+}
+
+/** The explanation and the link: optional, one tap away. Open from the start if either was already written. */
+function Detail({ attempt, save }: { attempt: Attempt; save: (patch: Parameters<typeof saveAttemptRecord>[2]) => Result }) {
+  const [open, setOpen] = useState(Boolean(attempt.explanation.trim() || attempt.reference.trim()))
+  if (!open)
+    return (
+      <div className="-ml-4">
+        <Button variant="quiet" onClick={() => setOpen(true)}>
+          + Añadir detalle o referencia
+        </Button>
+      </div>
+    )
+  return (
+    <>
+      <Field label="Explícalo con tus palabras (opcional)" value={attempt.explanation} hint="Se guarda tal cual. APRENDER todavía no evalúa la comprensión." onChange={(explanation) => save({ explanation })} />
+      <Field label="Enlace al resultado (opcional)" value={attempt.reference} hint="Se guarda como referencia. No se verifica." onChange={(reference) => save({ reference })} />
+    </>
   )
 }
 
@@ -619,6 +705,7 @@ function ResultStep({ cap, objective, go, skill }: StepProps & { skill?: Skill }
   if (!skill) return <PickStep cap={cap} objective={objective} go={go} />
   const ev = effectiveEvidence(cap.data).filter((e) => e.skillId === skill.id)
   const { dimensions, current, next } = skillPicture(skill, ev)
+  const pending = openAttemptFor(cap.data, skill.id)?.performedAt !== undefined
   const best = bestAssistanceMet(ev)
   const known = whatWeKnow(skill, dimensions, ev, best)
   const unknown = whatWeDontKnow(skill, dimensions)
@@ -637,13 +724,14 @@ function ResultStep({ cap, objective, go, skill }: StepProps & { skill?: Skill }
       title="Esto es lo que muestra."
       actions={
         <>
-          {next && <Button onClick={() => go('attempt', skill.id)}>Hacer esta prueba</Button>}
+          {pending ? <Button onClick={() => go('record', skill.id)}>Continuar evaluación</Button> : next && <Button onClick={() => go('attempt', skill.id)}>Hacer esta prueba</Button>}
           <Button variant="secondary" onClick={() => go('pick')}>
             Otra habilidad
           </Button>
         </>
       }
     >
+      {pending && <Notice>{PENDING}: un intento hecho todavía no cuenta. Lo que sigue no lo incluye.</Notice>}
       <Part title="Lo que sabemos">{known.length ? list(known) : <p className="text-[15px] text-ink-3">Todavía nada: no hay un intento directo.</p>}</Part>
       <Part title="Lo que todavía no sabemos">{list(unknown)}</Part>
       <Part title="Hueco actual">
@@ -651,9 +739,12 @@ function ResultStep({ cap, objective, go, skill }: StepProps & { skill?: Skill }
       </Part>
       <Part title="Próxima prueba">
         {next ? (
-          <TestCard statement={next.statement} criterion={next.successCriterion} maxAssistance={next.maxAssistance} targetContext={next.targetContext} />
+          <>
+            <TestCard statement={next.statement} criterion={next.successCriterion} maxAssistance={next.maxAssistance} targetContext={next.targetContext} />
+            {next.rationale && <p className="mt-3 text-[13.5px] leading-snug text-ink-3">{next.rationale}</p>}
+          </>
         ) : (
-          <p className="text-[15px] text-ink-3">Por ahora, ninguna que B1 pueda proponer: la comprensión todavía no se puede comprobar.</p>
+          <p className="text-[15px] text-ink-3">Por ahora, ninguna que B1 pueda proponer. APRENDER todavía no evalúa la comprensión.</p>
         )}
       </Part>
       <History cap={cap} skill={skill} />

@@ -13,6 +13,7 @@ import {
   type Evidence,
   type EvidenceCapture,
   type Skill,
+  MIN_SKILLS,
 } from './model'
 import { activationIssues, activeSkillsOf, skillKey, supersededSkillIds, templateIssues, type Issue, type TemplateFields } from './validate'
 
@@ -28,6 +29,7 @@ export type CapabilityError =
   | { code: 'SUPERSEDED' }
   | { code: 'NEEDS_REVISION_ID' }
   | { code: 'BAD_DATE' }
+  | { code: 'PENDING_EVALUATION' }
   | { code: 'NOT_ACTIVE' }
   | { code: 'ATTEMPT_IN_PROGRESS' }
   | { code: 'ATTEMPT_CLOSED' }
@@ -45,8 +47,12 @@ const clip = (s: string) => s.slice(0, MAX_FIELD_LENGTH)
 export const objectiveOf = (data: CapabilityData, id: string) => data.objectives.find((o) => o.id === id)
 export const skillOf = (data: CapabilityData, id: string) => data.skills.find((s) => s.id === id)
 export const attemptOf = (data: CapabilityData, id: string) => data.attempts.find((a) => a.id === id)
-/** The attempt that has been started and not yet recorded, if any (there is at most one). */
-export const attemptInProgress = (data: CapabilityData) => data.attempts.find((a) => a.completedAt === undefined)
+/** The RUNNING attempt — started, the action not done yet — if any: there is at most one at a time. */
+export const attemptInProgress = (data: CapabilityData) => data.attempts.find((a) => a.completedAt === undefined && a.performedAt === undefined)
+/** Attempts whose action is done and whose evaluation is still pending (no verdict, no evidence yet). */
+export const pendingEvaluations = (data: CapabilityData) => data.attempts.filter((a) => a.completedAt === undefined && a.performedAt !== undefined)
+/** The attempt of this skill that is not closed yet — running or pending evaluation — if any (at most one per skill). */
+export const openAttemptFor = (data: CapabilityData, skillId: string) => data.attempts.find((a) => a.skillId === skillId && a.completedAt === undefined)
 /** Whether any evidence was produced under this objective (any of its definitions). */
 export const hasEvidence = (data: CapabilityData, objectiveId: string) => data.evidence.some((e) => e.objectiveId === objectiveId)
 /** Whether this exact skill revision has evidence: then its definition can only change by a new revision. */
@@ -99,7 +105,7 @@ export function updateObjective(data: CapabilityData, id: string, patch: Partial
   return ok({ ...data, objectives: replace(data.objectives, { ...o, ...def, revision: o.revision + 1, previousRevisions: [...o.previousRevisions, frozen], updatedAt: now }) })
 }
 
-/** DRAFT or PAUSED → ACTIVE: the template complete, 3–7 valid skills with no duplicate, and room among the active ones. */
+/** DRAFT or PAUSED → ACTIVE: the template complete, 1–7 valid skills with no duplicate, and room among the active ones. */
 export function activateObjective(data: CapabilityData, id: string, now: number): Result {
   const o = objectiveOf(data, id)
   if (!o) return fail({ code: 'NOT_FOUND' })
@@ -123,6 +129,12 @@ export function setObjectiveStatus(data: CapabilityData, id: string, status: 'PA
 }
 
 /* —— skills: edited until they have evidence; revised after —— */
+
+/**
+ * A new skill starts from its objective: its context and its target autonomy are the objective's (shown as such, "Ajustar" to
+ * change them); action, result and criterion are the person's to write. Nothing else is filled in.
+ */
+export const newSkillDefaults = (o: Pick<CapabilityObjective, 'context' | 'targetAutonomy'>): TemplateFields => ({ action: '', result: '', context: o.context, criterion: '', targetAutonomy: o.targetAutonomy })
 
 export function addSkill(data: CapabilityData, input: TemplateFields & { id: string; objectiveId: string; now: number }): Result {
   const o = objectiveOf(data, input.objectiveId)
@@ -159,7 +171,8 @@ export function updateSkill(data: CapabilityData, id: string, patch: Partial<Tem
   if (activeSkillsOf(data, s.objectiveId).some((x) => x.id !== id && skillKey(x) === skillKey(next))) return fail({ code: 'INVALID', issues: ['DUPLICATE_SKILL'] })
   if (!skillHasEvidence(data, id)) return ok({ ...data, skills: replace(data.skills, next) })
   if (!newId) return fail({ code: 'NEEDS_REVISION_ID' })
-  if (attemptInProgress(data)?.skillId === id) return fail({ code: 'ATTEMPT_IN_PROGRESS' })
+  const open = openFailure(data, id)
+  if (open) return open
   const revision: Skill = { ...next, id: newId, lineageId: s.lineageId, revision: s.revision + 1, supersedesSkillId: s.id, createdAt: now, updatedAt: now }
   const o = objectiveOf(data, s.objectiveId)!
   return ok({
@@ -171,21 +184,32 @@ export function updateSkill(data: CapabilityData, id: string, patch: Partial<Tem
 
 /**
  * Take a skill out of the current decomposition. Its definition and its evidence are kept; only `archivedAt` is set. An ACTIVE
- * objective cannot drop below three — the count is never left in a state the activation rules would refuse.
+ * objective keeps at least one skill — the count is never left in a state the activation rules would refuse.
  */
 export function archiveSkill(data: CapabilityData, id: string, now: number): Result {
   const s = skillOf(data, id)
   if (!s || s.archivedAt !== undefined) return fail({ code: 'NOT_FOUND' })
   if (supersededSkillIds(data).has(id)) return fail({ code: 'SUPERSEDED' })
-  if (attemptInProgress(data)?.skillId === id) return fail({ code: 'ATTEMPT_IN_PROGRESS' })
+  const open = openFailure(data, id)
+  if (open) return open
   const o = objectiveOf(data, s.objectiveId)
-  if (o?.status === 'ACTIVE' && activeSkillsOf(data, o.id).length <= 3) return fail({ code: 'INVALID', issues: ['TOO_FEW_SKILLS'] })
+  if (o?.status === 'ACTIVE' && activeSkillsOf(data, o.id).length <= MIN_SKILLS) return fail({ code: 'INVALID', issues: ['TOO_FEW_SKILLS'] })
   return ok({ ...data, skills: replace(data.skills, { ...s, archivedAt: now, updatedAt: now }) })
+}
+
+/** A skill with an attempt still open — running, or done and waiting to be evaluated — is not revised or taken out under it. */
+function openFailure(data: CapabilityData, skillId: string): Result | undefined {
+  const a = openAttemptFor(data, skillId)
+  if (!a) return undefined
+  return fail({ code: a.performedAt === undefined ? 'ATTEMPT_IN_PROGRESS' : 'PENDING_EVALUATION' })
 }
 
 /* —— attempts —— */
 
-/** Begin an attempt (or open the record of one made before: RETROSPECTIVE). Only on an ACTIVE objective, and one at a time. */
+/**
+ * Begin an attempt (or open the record of one made before: RETROSPECTIVE). Only on an ACTIVE objective; one RUNNING attempt at a
+ * time; and not on a skill whose previous attempt is still waiting to be evaluated (that one is continued, not doubled).
+ */
 export function startAttempt(
   data: CapabilityData,
   input: { id: string; skillId: string; testStatement: string; contextDescription: string; gapId?: string; capture: EvidenceCapture; now: number },
@@ -195,6 +219,7 @@ export function startAttempt(
   if (supersededSkillIds(data).has(s.id)) return fail({ code: 'SUPERSEDED' })
   if (objectiveOf(data, s.objectiveId)?.status !== 'ACTIVE') return fail({ code: 'NOT_ACTIVE' })
   if (attemptInProgress(data)) return fail({ code: 'ATTEMPT_IN_PROGRESS' })
+  if (openAttemptFor(data, s.id)) return fail({ code: 'PENDING_EVALUATION' })
   const attempt: Attempt = {
     id: input.id,
     objectiveId: s.objectiveId,
@@ -204,6 +229,7 @@ export function startAttempt(
     ...(input.gapId ? { gapId: input.gapId } : {}),
     capture: input.capture,
     startedAt: input.now,
+    objectiveRevision: objectiveOf(data, s.objectiveId)?.revision ?? 1,
     outcomeDescription: '',
     explanation: '',
     reference: '',
@@ -241,7 +267,24 @@ export function saveAttemptRecord(data: CapabilityData, id: string, patch: Attem
   return ok({ ...data, attempts: replace(data.attempts, next) })
 }
 
-/** An attempt that was started and will not be recorded (nothing happened yet): it leaves no evidence. A recorded one cannot be discarded. */
+/**
+ * The action is done, but it cannot be judged against the criterion yet ("Guardar y evaluar después"): the attempt is kept as
+ * PERFORMED, with what was done and no verdict. No evidence is created and nothing is derived from it until it is evaluated.
+ */
+export function markPerformed(data: CapabilityData, id: string, now: number): Result {
+  const a = attemptOf(data, id)
+  if (!a) return fail({ code: 'NOT_FOUND' })
+  if (a.completedAt !== undefined) return fail({ code: 'ATTEMPT_CLOSED' })
+  if (a.performedAt !== undefined) return ok(data)
+  if (a.capture !== 'LIVE') return fail({ code: 'BAD_STATUS' })
+  if (!a.outcomeDescription.trim()) return fail({ code: 'INCOMPLETE_RECORD' })
+  // A verdict chosen before saving "for later" is not kept: pending means not evaluated.
+  const { criterionVerdict: _unjudged, ...rest } = a
+  void _unjudged
+  return ok({ ...data, attempts: replace(data.attempts, { ...rest, performedAt: now }) })
+}
+
+/** An attempt that will not be recorded — running, or done and never evaluated — leaves no evidence and can be discarded. A recorded one cannot. */
 export function discardAttempt(data: CapabilityData, id: string): Result {
   const a = attemptOf(data, id)
   if (!a) return fail({ code: 'NOT_FOUND' })
@@ -254,8 +297,9 @@ export const recordComplete = (a: Pick<Attempt, 'outcomeDescription' | 'criterio
   a.outcomeDescription.trim().length > 0 && a.criterionVerdict !== undefined && a.assistance !== undefined && a.contextRelation !== undefined
 
 /**
- * Close the attempt: it leaves one immutable piece of evidence — whatever the verdict. Its moment is only what is known: a LIVE
- * attempt happened now; a RETROSPECTIVE one has no exact moment (`occurredAt: null`) and, at most, the day the person gave.
+ * Close the attempt — evaluate it: it leaves exactly one immutable piece of evidence, whatever the verdict. Its moment is only
+ * what is known: a LIVE attempt happened when it was performed (if it was saved to be evaluated later) or now; a RETROSPECTIVE one
+ * has no exact moment (`occurredAt: null`) and, at most, the day the person gave.
  */
 export function confirmAttempt(data: CapabilityData, id: string, evidenceId: string, now: number): Result {
   const a = attemptOf(data, id)
@@ -273,10 +317,10 @@ export function confirmAttempt(data: CapabilityData, id: string, evidenceId: str
     criterionVerdict: a.criterionVerdict!,
     assistance: a.assistance!,
     contextRelation: a.contextRelation!,
-    occurredAt: retro ? null : now,
+    occurredAt: retro ? null : a.performedAt ?? now,
     ...(retro && a.occurredOn ? { occurredOn: a.occurredOn } : {}),
     recordedAt: now,
-    objectiveRevision: objectiveOf(data, a.objectiveId)?.revision ?? 1,
+    objectiveRevision: a.objectiveRevision ?? objectiveOf(data, a.objectiveId)?.revision ?? 1,
     provenance: 'SELF_REPORTED',
     capture: a.capture,
     testStatement: a.testStatement,

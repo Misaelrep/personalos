@@ -64,7 +64,12 @@ export const DIMENSION_STATUSES = ['UNKNOWN', 'NOT_YET', 'SUPPORTED', 'DEMONSTRA
 export type DimensionStatus = (typeof DIMENSION_STATUSES)[number]
 
 export const MAX_ACTIVE_OBJECTIVES = 3
-export const MIN_SKILLS = 3
+/**
+ * One valid skill is enough to start testing (B1.2: progressive decomposition). Mapping a broad capability usually takes
+ * 3–7 skills — that is ORIENTATION, said in words, never a gate and never shown as progress ("1/3", "33 %").
+ */
+export const MIN_SKILLS = 1
+export const SUGGESTED_SKILLS = { from: 3, to: 7 } as const
 export const MAX_SKILLS = 7
 export const MAX_FIELD_LENGTH = 500
 // B1 has no notion of an "occasion" (that needs Session, B2): no rule here depends on how much time passed between attempts,
@@ -143,8 +148,15 @@ export interface Skill {
 }
 
 /**
- * A concrete attempt. While it is in progress (no completedAt) its record is a draft that is saved as it is written, so a
- * reload never loses it; once confirmed it is closed and it leaves one piece of Evidence.
+ * A concrete attempt, in three states (all persisted; a reload never loses one):
+ *
+ *   RUNNING     started, the action not done yet (no performedAt, no completedAt) — its record is a draft. At most one.
+ *   PERFORMED   the action is done but cannot be judged against the criterion yet (performedAt, no completedAt): "pendiente de
+ *               evaluar" — e.g. the landing is built, the five people have not tried it. It has NO verdict and leaves NO
+ *               evidence; nothing is derived from it. Its evaluation can be resumed at any time.
+ *   COMPLETED   evaluated and confirmed (completedAt): it has left exactly one piece of Evidence.
+ *
+ * RUNNING is not PERFORMED: a draft written before acting is not an action done and waiting for its judgement.
  */
 export interface Attempt {
   id: string
@@ -158,7 +170,11 @@ export interface Attempt {
   gapId?: string
   capture: EvidenceCapture
   startedAt: number
+  /** When the action was done, if it was saved to be evaluated later (LIVE only). It becomes the evidence's moment. */
+  performedAt?: number
   completedAt?: number
+  /** The objective's definition revision in force when the attempt started (its evidence keeps it). */
+  objectiveRevision?: number
   /* The record — filled in when the attempt ends. */
   outcomeDescription: string
   criterionVerdict?: CriterionVerdict

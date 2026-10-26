@@ -26,14 +26,23 @@ import {
  * defaults: every objective and skill is revision 1 of itself, every piece of evidence was produced under revision 1 of its
  * objective, and a RETROSPECTIVE record's moment becomes unknown (`null`) — schema 1 had stamped it with the time it was typed,
  * which was never the moment it happened.
+ *
+ * Schema 3 (B1.2) adds to an attempt `performedAt` (done, pending evaluation) and `objectiveRevision` (the definition it started
+ * under). Both are optional: a schema 1–2 attempt simply has neither (it is RUNNING or COMPLETED, never PERFORMED).
  */
-export const CAPABILITY_SCHEMA = 2
+export const CAPABILITY_SCHEMA = 3
 /** The oldest schema this code still reads (and upgrades on the next write). */
 export const OLDEST_CAPABILITY_SCHEMA = 1
 
 /** Where the person is in DESARROLLAR, so a reload brings them back to the same screen. Not derived, not evidence: navigation. */
 export const FLOW_STEPS = ['intent', 'observable', 'skills', 'pick', 'attempt', 'record', 'result'] as const
 export type FlowStep = (typeof FLOW_STEPS)[number]
+/**
+ * Where DESARROLLAR opens for an objective that has no skill yet: with the person's words already written, straight to making
+ * them observable (they can still edit them there) — never a second screen that only asks to confirm what was just written.
+ */
+export const entryStep = (rawIntent: string): FlowStep => (rawIntent.trim() ? 'observable' : 'intent')
+
 export interface CapabilityFlow {
   objectiveId?: string
   step?: FlowStep
@@ -101,9 +110,11 @@ function toSkill(v: unknown, schema: number): Skill | undefined {
 
 function toAttempt(v: unknown): Attempt | undefined {
   if (!isObject(v)) return undefined
-  const { id, objectiveId, skillId, testStatement, contextDescription, gapId, capture, startedAt, completedAt, outcomeDescription, criterionVerdict, assistance, contextRelation, explanation, reference, occurredOn } = v
+  const { id, objectiveId, skillId, testStatement, contextDescription, gapId, capture, startedAt, completedAt, outcomeDescription, criterionVerdict, assistance, contextRelation, explanation, reference, occurredOn, performedAt, objectiveRevision } = v
   if (!str(id) || !str(objectiveId) || !str(skillId) || !str(testStatement) || !str(contextDescription) || !num(startedAt) || !oneOf(EVIDENCE_CAPTURES, capture)) return undefined
   if (completedAt !== undefined && !num(completedAt)) return undefined
+  if (performedAt !== undefined && (!num(performedAt) || capture !== 'LIVE')) return undefined
+  if (objectiveRevision !== undefined && !num(objectiveRevision)) return undefined
   if (criterionVerdict !== undefined && !oneOf(CRITERION_VERDICTS, criterionVerdict)) return undefined
   if (assistance !== undefined && !oneOf(AUTONOMY_LEVELS, assistance)) return undefined
   if (contextRelation !== undefined && !oneOf(CONTEXT_RELATIONS, contextRelation)) return undefined
@@ -116,7 +127,9 @@ function toAttempt(v: unknown): Attempt | undefined {
     ...(str(gapId) ? { gapId } : {}),
     capture,
     startedAt,
+    ...(performedAt !== undefined ? { performedAt } : {}),
     ...(completedAt !== undefined ? { completedAt } : {}),
+    ...(objectiveRevision !== undefined ? { objectiveRevision } : {}),
     outcomeDescription: text(outcomeDescription) ?? '',
     ...(criterionVerdict !== undefined ? { criterionVerdict } : {}),
     ...(assistance !== undefined ? { assistance } : {}),
@@ -202,10 +215,18 @@ export function decodeCapability(raw: unknown): { stored: StoredCapability; drop
   const lists = { objectives: raw.objectives, skills: raw.skills, attempts: raw.attempts, evidence: raw.evidence }
   const objectives = unique(each(lists.objectives, (x) => toObjective(x, schema)))
   const skills = unique(each(lists.skills, (x) => toSkill(x, schema)))
-  // At most one attempt can be in progress: if several were stored, the latest started is kept open.
+  // At most one attempt RUNNING, and at most one open attempt per skill: if more were stored, the latest started of each is kept.
   const allAttempts = unique(each(lists.attempts, toAttempt))
-  const open = allAttempts.filter((a) => a.completedAt === undefined).sort((a, b) => b.startedAt - a.startedAt)
-  const attempts = allAttempts.filter((a) => a.completedAt !== undefined || a === open[0])
+  const byLatest = [...allAttempts].sort((a, b) => b.startedAt - a.startedAt)
+  const running = byLatest.find((a) => a.completedAt === undefined && a.performedAt === undefined)
+  const openPerSkill = new Set<string>()
+  const keep = new Set(
+    byLatest
+      .filter((a) => a.completedAt === undefined && (a.performedAt !== undefined || a === running))
+      .filter((a) => !openPerSkill.has(a.skillId) && openPerSkill.add(a.skillId))
+      .map((a) => a.id),
+  )
+  const attempts = allAttempts.filter((a) => a.completedAt !== undefined || keep.has(a.id))
   const evidence = unique(each(lists.evidence, (x) => toEvidence(x, schema)))
   const data: CapabilityData = { objectives, skills, attempts, evidence }
   const total = Object.values(lists).reduce<number>((n, l) => n + (Array.isArray(l) ? l.length : 0), 0)

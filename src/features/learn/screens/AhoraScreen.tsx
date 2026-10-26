@@ -7,12 +7,13 @@ import { IntentSuggestions } from '../components/IntentSuggestions'
 import { Reveal } from '../components/Reveal'
 import { TemporaryRoutingFallback } from '../components/TemporaryRoutingFallback'
 import { activeSkillsOf } from '../domain/capability/validate'
-import { createObjective, objectiveOf } from '../domain/capability/commands'
+import { createObjective, objectiveOf, pendingEvaluations } from '../domain/capability/commands'
 import { shortSkill } from '../domain/capability/language'
 import type { CapabilityObjective, ObjectiveStatus } from '../domain/capability/model'
 import type { LearnState } from '../domain/state'
 import type { LearnRoute } from '../domain/types'
 import { newId, type CapabilityApi } from '../hooks/useCapability'
+import { entryStep, type CapabilityFlow } from '../storage/capabilityCodec'
 
 /** Which pieces of the screen the ritual has brought in so far. */
 export interface Reveals {
@@ -53,10 +54,10 @@ export function AhoraScreen({ state, reveal, skipped, locked, onDraft, onCommit,
   const [refused, setRefused] = useState(false)
   const { intention } = state
 
-  /** DESARROLLAR begins: the words become the objective's rawIntent — nothing else is filled in from them. */
+  /** DESARROLLAR begins: the words become the objective's rawIntent — nothing else is filled in from them — and, if there are words, it opens on «Hazlo observable». */
   const develop = (text: string) => {
     const id = newId('objective')
-    const r = cap.run((d, now) => createObjective(d, { id, rawIntent: text, now }), { objectiveId: id, step: 'intent' })
+    const r = cap.run((d, now) => createObjective(d, { id, rawIntent: text, now }), { objectiveId: id, step: entryStep(text) })
     setRefused(!r.ok)
     return r.ok
   }
@@ -156,6 +157,13 @@ export function AhoraScreen({ state, reveal, skipped, locked, onDraft, onCommit,
   )
 }
 
+/** Where a capability reopens: an attempt waiting to be evaluated first, then where its definition stands. */
+function reopen(cap: CapabilityApi, o: CapabilityObjective): CapabilityFlow {
+  const pending = pendingEvaluations(cap.data).find((a) => a.objectiveId === o.id && activeSkillsOf(cap.data, o.id).some((s) => s.id === a.skillId))
+  if (o.status === 'ACTIVE' && pending) return { objectiveId: o.id, step: 'record', skillId: pending.skillId }
+  return { objectiveId: o.id, step: o.status === 'ACTIVE' ? 'pick' : activeSkillsOf(cap.data, o.id).length ? 'skills' : o.action ? 'observable' : entryStep(o.rawIntent) }
+}
+
 /** The capabilities already begun, as quiet lines: what each one is, and its status in words. No progress. */
 function Capabilities({ objectives, cap }: { objectives: CapabilityObjective[]; cap: CapabilityApi }) {
   return (
@@ -168,13 +176,16 @@ function Capabilities({ objectives, cap }: { objectives: CapabilityObjective[]; 
           <li key={o.id}>
             <button
               type="button"
-              onClick={() => cap.go({ objectiveId: o.id, step: o.status === 'ACTIVE' ? 'pick' : activeSkillsOf(cap.data, o.id).length ? 'skills' : o.action ? 'observable' : 'intent' })}
+              onClick={() => cap.go(reopen(cap, o))}
               className="hit group flex min-h-11 w-full items-baseline gap-3 py-1.5 text-left"
             >
               <span aria-hidden className="text-ink-4 group-hover:text-accent">
                 →
               </span>
-              <span className="flex-1 text-[15px] leading-snug text-ink-2 group-hover:text-ink">{o.action ? shortSkill(o) : o.rawIntent || 'Sin título'}</span>
+              <span className="flex-1 text-[15px] leading-snug text-ink-2 group-hover:text-ink">
+                {o.action ? shortSkill(o) : o.rawIntent || 'Sin título'}
+                {pendingEvaluations(cap.data).some((a) => a.objectiveId === o.id) && <span className="mt-0.5 block text-[13px] text-ink-3">Pendiente de evaluar</span>}
+              </span>
               <span className="label-spaced shrink-0 text-ink-4" style={{ fontSize: 10 }}>
                 {STATUS_LABEL[o.status]}
               </span>

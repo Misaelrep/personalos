@@ -460,3 +460,121 @@ describe('P2-R1 · almacén de prueba separado', () => {
     expect((await backupOf(JSON.stringify(file))).file.origin).toBe('prueba-p2r1')
   })
 })
+
+describe('P2-R1 · escenario del iPhone: copia anterior a reiniciar el almacén de prueba', () => {
+  /**
+   * The procedure's steps as storage operations: «Cargar datos sintéticos» → «Exportar este almacén»
+   * → «Borrar el almacén de prueba» → «Cargar datos sintéticos» again (or recover Exportar's copy of
+   * PROYECTOS) → pick the OLD copy. Each fill makes projects with new internal ids.
+   */
+  async function afterReset(refill: 'sinteticos' | 'copia-de-proyectos') {
+    const storage = new MemoryStorage()
+    const locks = memoryLocks()
+    await seeded(storage, locks, await syntheticSix(now, random))
+    const oldCopy = await exported(storage)
+    storage.map.clear()
+    if (refill === 'sinteticos') await seeded(storage, locks, await syntheticSix(now, random))
+    else {
+      // PROYECTOS itself, filled on its own (two imports), recovered whole into the cleared store.
+      const main = new MemoryStorage()
+      const six = await syntheticSix(now, random)
+      const two = { ...six, projects: six.projects.slice(0, 2), vocabularies: Object.fromEntries(Object.entries(six.vocabularies).filter(([k]) => six.projects.slice(0, 2).some((p) => p.dossier === k))), weeks: [] }
+      await seeded(main, locks, two)
+      const l0 = await loaded(main)
+      await performRestore(env(storage, locks), planRestore(emptyLike(l0.data), 0, await backupOf(await exported(main))), { mode: 'todo' })
+    }
+    const l = await loaded(storage)
+    return { storage, locks, l, backup: await backupOf(oldCopy) }
+  }
+  const emptyLike = (d: ProjectsData): ProjectsData => ({ ...d, projects: [], milestones: [], tasks: [], references: [], sources: [], imports: [], routineLinks: [], weeks: [], history: [], vocabularies: {} })
+
+  /** Whatever can be chosen leaves valid data that keeps every local task, its origin and references, and the local history. */
+  function checkEverySelection(local: ProjectsData, plan: ReturnType<typeof planRestore>) {
+    const selectable = plan.units.filter((u) => u.selectable).map((u) => u.key)
+    const subsets: string[][] = [[]]
+    for (const k of selectable) for (const s of [...subsets]) subsets.push([...s, k])
+    let built = 0
+    for (const units of subsets.filter((s) => s.length)) {
+      const r = buildRestore(plan, { mode: 'seleccion', units }, now())
+      if (!r.ok) continue
+      built++
+      const chosen = new Set(units.filter((k) => k.startsWith('proyecto:')).map((k) => k.slice(9)))
+      for (const t of local.tasks.filter((x) => !chosen.has(x.projectId))) expect(r.data.tasks.find((x) => x.id === t.id)).toEqual(t)
+      for (const p of local.projects.filter((x) => !chosen.has(x.id))) expect(r.data.projects.find((x) => x.id === p.id)).toEqual(p)
+      for (const h of local.history) expect(r.data.history).toContainEqual(h)
+      const ids = [...r.data.projects, ...r.data.milestones, ...r.data.tasks, ...r.data.atlas].map((x) => x.id)
+      expect(new Set(ids).size).toBe(ids.length)
+      const taskIds = new Set(r.data.tasks.map((t) => t.id))
+      for (const w of r.data.weeks) for (const c of w.commitments) expect(taskIds.has(c.taskId)).toBe(true)
+      expect(validateProjectsData(r.data).ok).toBe(true)
+    }
+    return { selectable, built }
+  }
+
+  it('refilled with synthetic data: each project appears twice (copy / here) — explained by new ids, nothing is lost', async () => {
+    const { l, backup } = await afterReset('sinteticos')
+    const plan = planRestore(l.data, l.generation, backup)
+    const names = (state: string) => plan.units.filter((u) => u.kind === 'proyecto' && u.state === state).map((u) => u.label).sort()
+    expect(names('solo-en-copia')).toEqual(names('solo-local'))
+    expect(names('solo-en-copia')).toHaveLength(6)
+    // Same names, different internal ids on each side: identification is by id, as designed.
+    for (const p of backup.data.projects) expect(l.data.projects.some((q) => q.id === p.id)).toBe(false)
+    // The two imported projects: their tasks keep the dossier's ids (src:HUE-01…), so recovering them alone is refused.
+    const blocked = plan.units.filter((u) => u.state === 'solo-en-copia' && !u.selectable)
+    expect(blocked.map((u) => u.label).sort()).toEqual(['Huerto de prueba', 'Taller de prueba'])
+    expect(blocked.every((u) => /comparte su dossier/.test(u.why.join(' ')))).toBe(true)
+    // The weeks commit the same dossier task on both sides: equal.
+    expect(plan.units.find((u) => u.key === 'semanas')!.state).toBe('igual')
+    // Everything that can be chosen, alone or together, keeps local data intact and valid.
+    const { selectable, built } = checkEverySelection(l.data, plan)
+    expect(selectable).toHaveLength(4)
+    expect(built).toBe(15)
+    expect(buildRestore(plan, { mode: 'todo' }, now()).ok).toBe(true)
+  })
+
+  it('refilled with PROYECTOS’ own copy: the weekly commitment of the old copy points to a dossier task that exists here', async () => {
+    const { l, backup } = await afterReset('copia-de-proyectos')
+    const plan = planRestore(l.data, l.generation, backup)
+    expect(plan.units.filter((u) => u.kind === 'proyecto' && u.state === 'solo-local')).toHaveLength(2)
+    const weeks = plan.units.find((u) => u.key === 'semanas')!
+    expect(weeks.state).toBe('solo-en-copia')
+    checkEverySelection(l.data, plan)
+  })
+
+  it('the old copy after losing a project here: «compromiso con una tarea desconocida» is the weekly review guarding its reference, not a defect', async () => {
+    const storage = new MemoryStorage()
+    const locks = memoryLocks()
+    const { data } = await seeded(storage, locks)
+    const copy = await backupOf(await exported(storage))
+    const s = createStore({ storage, locks, now, writer: 'x' })
+    await s.save(loseProject(data, data.projects[0].id), (await loaded(storage)).generation)
+    const l = await loaded(storage)
+    const plan = planRestore(l.data, l.generation, copy)
+    const weeks = plan.units.find((u) => u.key === 'semanas')!
+    expect(weeks.selectable).toBe(false)
+    expect(weeks.why.join(' ')).toMatch(/compromiso con una tarea desconocida: src:HUE-01/)
+    // With the project it needs, the weeks come back and the commitment resolves.
+    const r = buildRestore(plan, { mode: 'seleccion', units: ['semanas', `proyecto:${data.projects[0].id}`] }, now())
+    expect(r.ok && r.data.weeks[0].commitments[0].taskId).toBe('src:HUE-01')
+    checkEverySelection(l.data, plan)
+  })
+
+  it('a stale tab still conflicts in the reset scenario: nothing is written', async () => {
+    const { storage, locks, l, backup } = await afterReset('sinteticos')
+    const plan = planRestore(l.data, l.generation, backup)
+    await createStore({ storage, locks, now, writer: 'otra' }).save(setNextAction(l.data, l.data.tasks[0].id, 'otra pestaña', { now: now() }), l.generation)
+    const before = storage.getItem(DATA_KEY)
+    const cocina = plan.units.find((u) => u.label === 'Cocina de prueba' && u.state === 'solo-en-copia')!
+    expect(await performRestore(env(storage, locks), plan, { mode: 'seleccion', units: [cocina.key] })).toMatchObject({ ok: false, reason: 'conflicto' })
+    expect(storage.getItem(DATA_KEY)).toBe(before)
+  })
+
+  it('provenance survives a recovery: imported tasks keep origin and raw record exactly', async () => {
+    const { storage, locks, text, huerto } = await scenario()
+    const copy = await backupOf(text)
+    const l = await loaded(storage)
+    await performRestore(env(storage, locks), planRestore(l.data, l.generation, copy), { mode: 'seleccion', units: [`proyecto:${huerto.id}`] })
+    const after = await loaded(storage)
+    for (const t of copy.data.tasks.filter((x) => x.projectId === huerto.id)) expect(after.data.tasks.find((x) => x.id === t.id)!.origin).toEqual(t.origin)
+  })
+})

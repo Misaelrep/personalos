@@ -252,6 +252,19 @@ try {
   await page.getByTestId('sandbox-clear').click()
   await page.waitForFunction(() => document.querySelector('[data-testid="sandbox-state"]')?.textContent?.includes('Vacío'))
   check('clearing the test store removes only its keys', (await notSandbox(page)) === mainBefore && (await getKey(page, SB_DATA)) === null)
+  // ── 11a · The iPhone case: an OLD copy after clearing and refilling the test store ──
+  await sandboxAction(page, 'sandbox-fill')
+  await pick(page, 'copia-prueba.json', sandboxCopy)
+  await page.waitForSelector('[data-testid="restore-plan"]')
+  const rows = async (state, selectable) => page.locator(`[data-testid="restore-unit"][data-state="${state}"]${selectable === undefined ? '' : `[data-selectable="${selectable}"]`}`).count()
+  const blockedText = await page.locator('[data-testid="restore-unit"][data-state="solo-en-copia"][data-selectable="false"]').allInnerTexts()
+  check(
+    'old copy after a reset: six «solo en la copia» + six «solo aquí» (new ids); Huerto and Taller blocked as sharing their dossier; nothing preselected',
+    (await rows('solo-en-copia')) === 6 && (await rows('solo-local')) === 6 && blockedText.length === 2 && blockedText.every((t) => t.includes('comparte su dossier')) && (await page.locator('[data-testid="restore-unit"] input:checked').count()) === 0,
+  )
+  await shot(page, '21-recuperar-copia-anterior-al-reinicio.png')
+  await page.getByTestId('sandbox-clear').click()
+  await page.waitForFunction(() => document.querySelector('[data-testid="sandbox-state"]')?.textContent?.includes('Vacío'))
   await pick(page, 'elyum-proyectos.json', mainCopy)
   await page.waitForSelector('[data-testid="restore-plan"]')
   r = await recover(page, [], true)

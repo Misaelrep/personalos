@@ -67,12 +67,34 @@ export const MAX_ACTIVE_OBJECTIVES = 3
 export const MIN_SKILLS = 3
 export const MAX_SKILLS = 7
 export const MAX_FIELD_LENGTH = 500
-/** Two attempts are separate occasions when at least this far apart (ms): consistency and corroboration need them. */
-export const SEPARATE_OCCASION_MS = 8 * 60 * 60 * 1000
-/** A dimension is judged on its most recent occasions: an old contradiction stays in the history and stops ruling the state once this many later occasions follow it. */
-export const RECENT_OCCASIONS = 3
+// B1 has no notion of an "occasion" (that needs Session, B2): no rule here depends on how much time passed between attempts,
+// and no contradiction stops counting because time passed or because later attempts went well.
 
-/** What the person wants to be able to do, made observable. */
+/** The semantic definition of an objective: what changing it means (see revisions below). */
+export interface ObjectiveDefinition {
+  rawIntent: string
+  action: string
+  result: string
+  context: string
+  criterion: string
+  targetAutonomy: Autonomy
+}
+
+/** An earlier definition of an objective, frozen as it was while it was in force (until the moment it was replaced). */
+export interface ObjectiveRevision extends ObjectiveDefinition {
+  revision: number
+  until: number
+}
+
+/**
+ * What the person wants to be able to do, made observable.
+ *
+ * Revisions: changing the definition never rewrites history. Until there is evidence the definition is simply edited. Once
+ * there is, a change freezes the definition in force into `previousRevisions` (append-only) and raises `revision`; every
+ * piece of evidence keeps the `objectiveRevision` it was produced under. (The objective keeps its id — skills and attempts
+ * point to it — so its earlier definitions are kept as frozen snapshots rather than as separate records; skills, whose
+ * evidence depends on their exact criterion, are revised as separate records: see Skill.)
+ */
 export interface CapabilityObjective {
   id: string
   /** What they wrote, as they wrote it. Never turned into the fields below automatically. */
@@ -83,15 +105,31 @@ export interface CapabilityObjective {
   criterion: string
   targetAutonomy: Autonomy
   status: ObjectiveStatus
-  /** Its skills, in the order they were added (archived ones included: see Skill.archivedAt). */
+  /** Its skills, in the order they were added — archived and superseded revisions included. */
   skillIds: string[]
   createdAt: number
   updatedAt: number
+  /** The definition's revision: 1 until it is changed after evidence exists. */
+  revision: number
+  /** The definitions it had before, oldest first. Never edited. */
+  previousRevisions: ObjectiveRevision[]
 }
 
-/** One capability the objective depends on, in the same template. */
+/**
+ * One capability the objective depends on, in the same template.
+ *
+ * Revisions: a skill with evidence is never edited. Changing its definition creates a NEW record — same `lineageId`,
+ * `revision + 1`, `supersedesSkillId` = the one it replaces — and the earlier record stays as it was, with its evidence
+ * still attached to it. The new revision starts with no evidence: the old one never shows the new criterion. The current
+ * revision of a lineage is the one no other record supersedes.
+ */
 export interface Skill {
   id: string
+  /** The same skill across its revisions (the id of its first revision). */
+  lineageId: string
+  revision: number
+  /** The revision this one replaces. */
+  supersedesSkillId?: string
   objectiveId: string
   action: string
   result: string
@@ -128,8 +166,10 @@ export interface Attempt {
   contextRelation?: ContextRelation
   /** In the person's own words (optional). Stored; NOT evaluated in B1. */
   explanation: string
-  /** Something a third party could check: a link to the result (optional). */
+  /** A link or pointer to the result (optional). Kept as given; NOT verified in B1. */
   reference: string
+  /** RETROSPECTIVE only: the day it happened, if the person gives it (YYYY-MM-DD, local). Never filled in for them. */
+  occurredOn?: string
 }
 
 /**
@@ -145,10 +185,17 @@ export interface Evidence {
   criterionVerdict: CriterionVerdict
   assistance: Autonomy
   contextRelation: ContextRelation
-  /** When the attempt ended (its own moment, not when it was typed). */
-  occurredAt: number
-  /** When this record was confirmed. */
+  /**
+   * When the attempt happened, exactly — known only for a LIVE attempt (the moment it was recorded as ended). For a
+   * RETROSPECTIVE one it is `null`: the moment is not known, and none is made up.
+   */
+  occurredAt: number | null
+  /** RETROSPECTIVE: the approximate day the person gave, if any (YYYY-MM-DD, local). Absent: unknown. */
+  occurredOn?: string
+  /** When this record was confirmed. Always known. */
   recordedAt: number
+  /** The objective's definition revision in force when it was produced. */
+  objectiveRevision: number
   provenance: EvidenceProvenance
   capture: EvidenceCapture
   /** The conditions it was taken under, copied from the attempt so the record stands on its own. */

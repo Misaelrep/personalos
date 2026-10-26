@@ -40,13 +40,10 @@ describe('execution', () => {
     expect(p.next).toMatchObject({ kind: 'FOCUS_CRITERION', maxAssistance: 'SUPPORTED', targetContext: 'SAME' })
   })
 
-  it('one success supports execution; successes on two separate occasions demonstrate it; earlier failures are the way there, not a contradiction', () => {
-    let d = attempt(activeObjective(), 's1', T0, 'NOT_MET')
-    d = attempt(d, 's1', T0 + DAY, 'MET')
+  it('one success supports execution; two independent successes demonstrate it — no time between them is required (B1.1)', () => {
+    let d = attempt(activeObjective(), 's1', T0, 'MET')
     expect(dims(d).EXECUTION.status).toBe('SUPPORTED')
-    d = attempt(d, 's1', T0 + DAY + HOUR, 'MET') // same occasion: does not count twice
-    expect(dims(d).EXECUTION.status).toBe('SUPPORTED')
-    d = attempt(d, 's1', T0 + 2 * DAY, 'MET')
+    d = attempt(d, 's1', T0 + 60_000, 'MET') // a minute later: still an independent attempt
     expect(dims(d).EXECUTION.status).toBe('DEMONSTRATED')
   })
 
@@ -63,14 +60,11 @@ describe('execution', () => {
     expect(p.next!.statement).toMatch(/^Reproduce las condiciones del intento que no salió \(en el mismo contexto, de forma autónoma\)/)
   })
 
-  it('a contradiction stops ruling the state only after RECENT_OCCASIONS later occasions agree — it stays in the history', () => {
+  it('a contradiction does not stop counting because later attempts went well (B1.1: no recency window)', () => {
     let d = attempt(activeObjective(), 's1', T0, 'MET')
     d = attempt(d, 's1', T0 + DAY, 'PARTIAL')
-    d = attempt(d, 's1', T0 + 2 * DAY, 'MET')
-    d = attempt(d, 's1', T0 + 3 * DAY, 'MET')
+    for (let i = 2; i <= 6; i++) d = attempt(d, 's1', T0 + i * DAY, 'MET')
     expect(dims(d).EXECUTION.status).toBe('MIXED')
-    d = attempt(d, 's1', T0 + 4 * DAY, 'MET')
-    expect(dims(d).EXECUTION.status).toBe('DEMONSTRATED')
     expect(d.evidence.some((e) => e.criterionVerdict === 'PARTIAL')).toBe(true)
   })
 })
@@ -120,39 +114,39 @@ describe('transfer: the same context never shows it', () => {
     expect(p.next).toMatchObject({ kind: 'TRANSFER', targetContext: 'VARIED' })
   })
 
-  it('a VARIED success supports it; demonstrating it needs a NOVEL success too; then the next test asks for a new context', () => {
-    let d = attempt(activeObjective(), 's1', T0, 'MET', 'AUTONOMOUS', 'VARIED')
+  it('a VARIED success supports it; demonstrating it needs coherent direct successes in more than one context, one of them NOVEL', () => {
+    let d = attempt(activeObjective(), 's1', T0, 'MET', 'AUTONOMOUS', 'VARIED', { context: 'Un cliente distinto' })
     expect(dims(d).TRANSFER.status).toBe('SUPPORTED')
-    d = attempt(d, 's1', T0 + DAY, 'MET', 'AUTONOMOUS', 'VARIED')
-    expect(dims(d).TRANSFER.status).toBe('SUPPORTED')
+    d = attempt(d, 's1', T0 + DAY, 'MET', 'AUTONOMOUS', 'VARIED', { context: 'Otro equipo' })
+    expect(dims(d).TRANSFER.status).toBe('SUPPORTED') // two contexts, none NOVEL
     expect(nextTestFor(skill(d), skillGaps(skill(d), effectiveEvidence(d)).find((g) => g.reason === 'TRANSFER_UNKNOWN')!, effectiveEvidence(d))).toMatchObject({ targetContext: 'NOVEL' })
-    d = attempt(d, 's1', T0 + 2 * DAY, 'MET', 'AUTONOMOUS', 'NOVEL')
+    d = attempt(d, 's1', T0 + 2 * DAY, 'MET', 'AUTONOMOUS', 'NOVEL', { context: 'Una conferencia' })
     expect(dims(d).TRANSFER.status).toBe('DEMONSTRATED')
+  })
+
+  it('two NOVEL successes written as the same context are one context: transfer stays SUPPORTED', () => {
+    let d = attempt(activeObjective(), 's1', T0, 'MET', 'AUTONOMOUS', 'NOVEL', { context: 'Una conferencia' })
+    d = attempt(d, 's1', T0 + DAY, 'MET', 'AUTONOMOUS', 'NOVEL', { context: 'una conferencia.' })
+    expect(dims(d).TRANSFER.status).toBe('SUPPORTED')
   })
 })
 
-describe('consistency: one success never shows it', () => {
-  it('a single positive piece of evidence: consistency UNKNOWN; the next test repeats it on another occasion, not before 8 h', () => {
+describe('consistency: one success never shows it, and B1 never demonstrates it', () => {
+  it('a single positive piece of evidence: consistency UNKNOWN; the next test repeats it «en otra ocasión», with no made-up time', () => {
     const d = attempt(activeObjective(), 's1', T0, 'MET')
-    expect(dims(d).CONSISTENCY).toMatchObject({ status: 'UNKNOWN', note: 'SINGLE_OCCASION' })
+    expect(dims(d).CONSISTENCY).toMatchObject({ status: 'UNKNOWN', note: 'SINGLE_SUCCESS' })
     const p = picture(d)
     expect(p.current).toMatchObject({ reason: 'CONSISTENCY_UNKNOWN', statement: 'Existe un resultado exitoso, pero todavía no sabemos si es consistente.' })
-    expect(p.next).toMatchObject({ kind: 'REPEAT', notBefore: T0 + 8 * HOUR, maxAssistance: 'AUTONOMOUS' })
+    expect(p.next).toMatchObject({ kind: 'REPEAT', maxAssistance: 'AUTONOMOUS' })
+    expect(p.next).not.toHaveProperty('notBefore')
+    expect(p.next!.statement).toBe('Repítelo en otra ocasión: explicar la arquitectura en inglés para producir una explicación de 3 minutos.')
   })
 
-  it('many successes in one sitting are one occasion: still UNKNOWN', () => {
-    let d = activeObjective()
-    for (let i = 0; i < 5; i++) d = attempt(d, 's1', T0 + i * HOUR, 'MET')
-    expect(dims(d).CONSISTENCY.status).toBe('UNKNOWN')
-  })
-
-  it('two occasions support it, three demonstrate it; a recent failure makes it MIXED', () => {
+  it('several successes support it at most; a success and a failure make it MIXED', () => {
     let d = attempt(activeObjective(), 's1', T0, 'MET')
-    d = attempt(d, 's1', T0 + DAY, 'MET')
-    expect(dims(d).CONSISTENCY.status).toBe('SUPPORTED')
-    d = attempt(d, 's1', T0 + 2 * DAY, 'MET')
-    expect(dims(d).CONSISTENCY.status).toBe('DEMONSTRATED')
-    d = attempt(d, 's1', T0 + 3 * DAY, 'NOT_MET')
+    d = attempt(d, 's1', T0 + HOUR, 'MET')
+    expect(dims(d).CONSISTENCY).toMatchObject({ status: 'SUPPORTED', note: 'NO_OCCASIONS_IN_B1' })
+    d = attempt(d, 's1', T0 + 2 * HOUR, 'NOT_MET')
     expect(dims(d).CONSISTENCY.status).toBe('MIXED')
   })
 })
@@ -170,23 +164,11 @@ describe('comprehension: no false semantic evaluation', () => {
 describe('evidence strength is derived, never chosen', () => {
   it('direct and complete: MODERATE; recorded afterwards or without context: WEAK', () => {
     let d = attempt(activeObjective(), 's1', T0, 'MET')
-    expect(evidenceStrength(d.evidence[0], d.evidence)).toBe('MODERATE')
+    expect(evidenceStrength(d.evidence[0])).toBe('MODERATE')
     d = attempt(d, 's2', T0, 'MET', 'AUTONOMOUS', 'SAME', { capture: 'RETROSPECTIVE' })
-    expect(evidenceStrength(d.evidence[1], d.evidence)).toBe('WEAK')
+    expect(evidenceStrength(d.evidence[1])).toBe('WEAK')
     d = attempt(d, 's3', T0, 'MET', 'AUTONOMOUS', 'SAME', { context: '' })
-    expect(evidenceStrength(d.evidence[2], d.evidence)).toBe('WEAK')
-  })
-
-  it('STRONG with a verifiable link, or corroborated by another direct attempt on a separate occasion; VERY_STRONG never in B1', () => {
-    let d = attempt(activeObjective(), 's1', T0, 'MET', 'AUTONOMOUS', 'SAME', { reference: 'https://example.com/grabacion' })
-    expect(evidenceStrength(d.evidence[0], d.evidence)).toBe('STRONG')
-    d = attempt(activeObjective(), 's1', T0, 'MET', 'AUTONOMOUS', 'SAME', { reference: 'mi cuaderno' })
-    expect(evidenceStrength(d.evidence[0], d.evidence)).toBe('MODERATE')
-    d = attempt(d, 's1', T0 + HOUR, 'MET')
-    expect(evidenceStrength(d.evidence[0], d.evidence)).toBe('MODERATE') // same occasion
-    d = attempt(d, 's1', T0 + DAY, 'MET')
-    expect(evidenceStrength(d.evidence[0], d.evidence)).toBe('STRONG')
-    for (const e of d.evidence) expect(evidenceStrength(e, d.evidence)).not.toBe('VERY_STRONG')
+    expect(evidenceStrength(d.evidence[2])).toBe('WEAK')
   })
 
   it('a record made afterwards does not count as a direct attempt: the gap asks for one, and it enters no dimension', () => {
@@ -215,14 +197,14 @@ describe('derivation follows the history', () => {
 })
 
 describe('the words say only what the evidence says', () => {
-  it('what we know keeps the failures that came before a success; nothing is a percentage', async () => {
+  it('what we know keeps a failure next to a later success (they do not agree); nothing is a percentage', async () => {
     const { whatWeKnow } = await import('./language')
     const { bestAssistanceMet } = await import('./dimensions')
     let d = attempt(activeObjective(), 's1', T0, 'NOT_MET', 'GUIDED')
     d = attempt(d, 's1', T0 + DAY, 'MET', 'AUTONOMOUS')
     const ev = effectiveEvidence(d)
     const known = whatWeKnow(skill(d), dims(d), ev, bestAssistanceMet(ev))
-    expect(known).toEqual(['Has cumplido el criterio en un intento directo.', 'Antes, un intento no lo cumplió.', 'Tu mejor resultado fue de forma autónoma.'])
+    expect(known).toEqual(['Has cumplido el criterio en un intento, y en otro no: los resultados no coinciden.', 'Tu mejor resultado fue de forma autónoma.'])
     for (const t of [...known, ...whatWeDontKnow(skill(d), dims(d))]) expect(t).not.toMatch(/\d+\s?%/)
   })
 })

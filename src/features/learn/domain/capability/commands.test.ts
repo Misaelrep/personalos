@@ -98,14 +98,16 @@ describe('activation: limits and skills', () => {
     expect(archiveSkill(activeObjective(), 's1', T0)).toEqual({ ok: false, error: { code: 'INVALID', issues: ['TOO_FEW_SKILLS'] } })
   })
 
-  it('the decomposition can be edited until the first evidence, and not after', () => {
+  it('the decomposition is edited in place until there is evidence; after, a change is a new revision, never an edit (B1.1)', () => {
     let d = activeObjective()
     d = must(updateSkill(d, 's1', { criterion: 'sin pausas de más de 3 segundos' }, T0))
+    expect(d.skills.find((s) => s.id === 's1')).toMatchObject({ criterion: 'sin pausas de más de 3 segundos', revision: 1 })
     d = must(updateObjective(d, 'o1', { context: 'una reunión real' }, T0))
+    expect(d.objectives[0]).toMatchObject({ context: 'una reunión real', revision: 1, previousRevisions: [] })
     d = attempt(d, 's1', T0 + HOUR, 'NOT_MET')
-    expect(updateSkill(d, 's1', { criterion: 'otro' }, T0).ok).toBe(false)
-    expect(updateObjective(d, 'o1', { criterion: 'otro' }, T0)).toEqual({ ok: false, error: { code: 'LOCKED_BY_EVIDENCE' } })
-    expect(addSkill(d, { ...SKILLS[0], action: 'Otra cosa', id: 'sx', objectiveId: 'o1', now: T0 })).toEqual({ ok: false, error: { code: 'LOCKED_BY_EVIDENCE' } })
+    expect(updateSkill(d, 's1', { criterion: 'otro' }, T0)).toEqual({ ok: false, error: { code: 'NEEDS_REVISION_ID' } })
+    // adding a skill does not rewrite anything: it is allowed after evidence too
+    expect(addSkill(d, { ...SKILLS[0], action: 'Otra cosa', id: 'sx', objectiveId: 'o1', now: T0 }).ok).toBe(true)
   })
 })
 

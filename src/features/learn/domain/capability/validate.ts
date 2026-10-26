@@ -74,7 +74,14 @@ export function templateIssues(f: TemplateFields): Issue[] {
 /** Two skills are the same skill when every part of the template is the same, normalized. */
 export const skillKey = (f: TemplateFields) => [f.action, f.result, f.context, f.criterion].map(normalize).join('|') + `|${f.targetAutonomy}`
 
-export const activeSkillsOf = (data: CapabilityData, objectiveId: string): Skill[] => data.skills.filter((s) => s.objectiveId === objectiveId && s.archivedAt === undefined)
+/** Revisions another record replaces: history, not part of the current decomposition. */
+export const supersededSkillIds = (data: CapabilityData) => new Set(data.skills.map((s) => s.supersedesSkillId).filter((x): x is string => !!x))
+
+/** The current decomposition: the latest revision of each skill, not archived. */
+export function activeSkillsOf(data: CapabilityData, objectiveId: string): Skill[] {
+  const superseded = supersededSkillIds(data)
+  return data.skills.filter((s) => s.objectiveId === objectiveId && s.archivedAt === undefined && !superseded.has(s.id))
+}
 
 /** Everything that stands between this objective and ACTIVE (empty: it can be activated). The limit of active objectives is checked apart. */
 export function activationIssues(data: CapabilityData, objective: CapabilityObjective): Issue[] {

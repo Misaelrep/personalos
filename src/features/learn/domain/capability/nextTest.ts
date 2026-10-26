@@ -1,4 +1,4 @@
-import { AUTONOMY_LEVELS, SEPARATE_OCCASION_MS, autonomyRank, type Autonomy, type ContextRelation, type Dimension, type Evidence, type Skill } from './model'
+import { AUTONOMY_LEVELS, autonomyRank, type Autonomy, type ContextRelation, type Dimension, type Evidence, type Skill } from './model'
 import { bestAssistanceMet, skillDimensions } from './dimensions'
 import { skillGaps, type Gap, type GapReason } from './gaps'
 import { nextTestStatement } from './language'
@@ -12,7 +12,7 @@ import { nextTestStatement } from './language'
  *   B  criterion not met          → the same test again, aimed at the criterion, with no more help than last time
  *   C  met, but with more help    → the same, with one step less help (never beyond the target)
  *   D  execution demonstrated, transfer unknown → the same in a VARIED context (a NOVEL one once a varied one has worked)
- *   E  a single success           → the same again on a separate occasion (not before SEPARATE_OCCASION_MS)
+ *   E  a single success           → the same again "en otra ocasión" (no minimum time is made up: what an occasion is, B2 defines)
  *   F  contradictory evidence     → reproduce the conditions of the attempt that went against the rest
  */
 
@@ -33,13 +33,12 @@ export interface NextTest {
   maxAssistance: Autonomy
   /** Met when the result meets the skill's criterion — always the skill's own, never a softer one. */
   successCriterion: string
-  /** Not before this moment (a separate occasion), when that matters. */
-  notBefore?: number
   /** The evidence the test answers to. */
   evidenceRefs: string[]
 }
 
-const byTime = (a: Evidence, b: Evidence) => a.occurredAt - b.occurredAt
+// Live evidence always has its moment; recorded order breaks ties (and stands in for a missing moment).
+const byTime = (a: Evidence, b: Evidence) => (a.occurredAt ?? a.recordedAt) - (b.occurredAt ?? b.recordedAt) || a.recordedAt - b.recordedAt
 const last = (list: readonly Evidence[]) => [...list].sort(byTime).at(-1)
 const lessHelp = (a: Autonomy, cap: Autonomy): Autonomy => AUTONOMY_LEVELS[Math.min(autonomyRank(a) + 1, autonomyRank(cap))]
 
@@ -68,13 +67,7 @@ function plan(skill: Skill, gap: Gap, evidence: readonly Evidence[]): Plan {
     }
     case 'CONSISTENCY_UNKNOWN': {
       const prev = last(mine.filter((e) => e.criterionVerdict === 'MET'))
-      return {
-        ...base,
-        kind: 'REPEAT',
-        targetContext: 'SAME',
-        maxAssistance: prev?.assistance ?? skill.targetAutonomy,
-        ...(prev ? { notBefore: prev.occurredAt + SEPARATE_OCCASION_MS } : {}),
-      }
+      return { ...base, kind: 'REPEAT', targetContext: 'SAME', maxAssistance: prev?.assistance ?? skill.targetAutonomy }
     }
     case 'CONTRADICTION': {
       // The conditions to reproduce are those of the latest attempt that went against the rest.
@@ -86,7 +79,7 @@ function plan(skill: Skill, gap: Gap, evidence: readonly Evidence[]): Plan {
 
 export function nextTestFor(skill: Skill, gap: Gap, evidence: readonly Evidence[]): NextTest {
   const p = plan(skill, gap, evidence)
-  const against = p.kind === 'RESOLVE' ? evidence.filter((e) => p.evidenceRefs.includes(e.id) && e.criterionVerdict !== 'MET').sort((a, b) => a.occurredAt - b.occurredAt).at(-1) : undefined
+  const against = p.kind === 'RESOLVE' ? evidence.filter((e) => p.evidenceRefs.includes(e.id) && e.criterionVerdict !== 'MET').sort(byTime).at(-1) : undefined
   return { ...p, reason: gap.reason, statement: nextTestStatement(p.kind, skill, p, against) }
 }
 

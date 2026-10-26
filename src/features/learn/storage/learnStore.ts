@@ -1,7 +1,7 @@
 import { SIMULATED } from '../../../state/clock'
 import { EMPTY_STATE, MAX_INTENTION_LENGTH, type EntryMemory, type Intention, type LearnState } from '../domain/state'
 import { LEARN_ROUTES } from '../domain/types'
-import { CAPABILITY_SCHEMA, EMPTY_STORED, decodeCapability, encodeCapability, type StoredCapability } from './capabilityCodec'
+import { CAPABILITY_SCHEMA, EMPTY_STORED, OLDEST_CAPABILITY_SCHEMA, decodeCapability, encodeCapability, type StoredCapability } from './capabilityCodec'
 
 /**
  * APRENDER's own storage: a versioned envelope under its own namespace.
@@ -26,7 +26,8 @@ import { CAPABILITY_SCHEMA, EMPTY_STORED, decodeCapability, encodeCapability, ty
  *       missing                      → empty
  *       unreadable / not this shape  → 'corrupt': the raw text is copied once to `…capability:backup`, the session starts empty
  *       a newer envelope or schema   → 'newer': nothing is read AND nothing is written — newer data is never overwritten by older code
- *       this schema                  → each record is checked on its own; one that does not hold is dropped, the rest kept
+ *       this schema, or an older one it still knows (capabilityCodec.ts: OLDEST_CAPABILITY_SCHEMA) → each record is checked on
+ *                                      its own (an older one upgraded with explicit defaults); one that does not hold is dropped
  *   · a simulated session uses `elyum:learn:v1:sim:capability`, as it does for the other slots.
  */
 export const LEARN_STORAGE_VERSION = 1
@@ -154,7 +155,7 @@ export function createLearnStore({ storage, simulated }: { storage?: StorageLike
       capabilityFrozen = true
       return { status: 'newer', stored: EMPTY_STORED, dropped: 0 }
     }
-    if (envelope?.v !== LEARN_STORAGE_VERSION || !isObject(data) || data.schema !== CAPABILITY_SCHEMA) {
+    if (envelope?.v !== LEARN_STORAGE_VERSION || !isObject(data) || typeof data.schema !== 'number' || data.schema < OLDEST_CAPABILITY_SCHEMA) {
       // Keep what was there before anything new is written over it (once: a backup is never itself overwritten).
       try {
         if (storage && storage.getItem(`${keys.capability}:backup`) == null) storage.setItem(`${keys.capability}:backup`, raw)

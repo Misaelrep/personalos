@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { saveAttemptRecord, startAttempt } from '../domain/capability/commands'
+import { confirmAttempt as confirmAttemptFn, saveAttemptRecord, startAttempt } from '../domain/capability/commands'
 import { activeObjective, attempt, must, T0 } from '../domain/capability/fixtures'
 import { EMPTY_STATE, commitIntention, setDraft } from '../domain/state'
 import { CAPABILITY_SCHEMA, EMPTY_STORED } from './capabilityCodec'
@@ -137,5 +137,54 @@ describe('DESARROLLAR persistence (elyum:learn:v1:capability)', () => {
     const data = activeObjective()
     expect(store.saveCapability({ data, flow: {} })).toBe(true)
     expect(store.loadCapability().stored.data).toEqual(data)
+  })
+})
+
+describe('B1.1 · storage: schema 2, and schema 1 read with explicit defaults', () => {
+  it('writes schema 2; a retrospective record round-trips with its unknown moment (null) and its approximate day', () => {
+    const storage = new FakeStorage()
+    let data = must(startAttempt(activeObjective(), { id: 'r1', skillId: 's1', testStatement: 't', contextDescription: 'c', capture: 'RETROSPECTIVE', now: T0 }))
+    data = must(saveAttemptRecord(data, 'r1', { outcomeDescription: 'antes', criterionVerdict: 'MET', assistance: 'GUIDED', contextRelation: 'SAME', occurredOn: '2026-09-01' }))
+    const { confirmAttempt } = { confirmAttempt: (d: typeof data) => must(confirmAttemptFn(d, 'r1', 'er1', T0 + 3600_000)) }
+    data = confirmAttempt(data)
+    fresh(storage).saveCapability({ data, flow: {} })
+    expect(JSON.parse(storage.data[key.capability]).data.schema).toBe(2)
+    const back = fresh(storage).loadCapability()
+    expect(back.status).toBe('ok')
+    expect(back.stored.data).toEqual(data)
+    expect(back.stored.data.evidence[0]).toMatchObject({ occurredAt: null, occurredOn: '2026-09-01' })
+  })
+
+  it('schema 1 (B1): revisions default to 1, and a retrospective record loses the moment it never had', () => {
+    const storage = new FakeStorage()
+    const v1 = {
+      schema: 1,
+      objectives: [{ id: 'o1', rawIntent: 'x', action: 'Presentar algo', result: 'una presentación', context: 'una reunión', criterion: 'se entiende', targetAutonomy: 'AUTONOMOUS', status: 'ACTIVE', skillIds: ['s1'], createdAt: 1, updatedAt: 1 }],
+      skills: [{ id: 's1', objectiveId: 'o1', action: 'Explicar algo', result: 'una explicación', context: 'una llamada', criterion: 'sin pausas', targetAutonomy: 'AUTONOMOUS', createdAt: 1, updatedAt: 1 }],
+      attempts: [],
+      evidence: [
+        { id: 'e1', attemptId: 'a1', objectiveId: 'o1', skillId: 's1', observedResult: 'r', criterionVerdict: 'MET', assistance: 'GUIDED', contextRelation: 'SAME', occurredAt: 5, recordedAt: 5, provenance: 'SELF_REPORTED', capture: 'LIVE', testStatement: 't', contextDescription: 'c' },
+        { id: 'e2', attemptId: 'a2', objectiveId: 'o1', skillId: 's1', observedResult: 'r', criterionVerdict: 'MET', assistance: 'GUIDED', contextRelation: 'SAME', occurredAt: 9, recordedAt: 9, provenance: 'SELF_REPORTED', capture: 'RETROSPECTIVE', testStatement: 't', contextDescription: 'c' },
+      ],
+      flow: {},
+    }
+    storage.data[key.capability] = JSON.stringify({ v: 1, data: v1 })
+    const r = fresh(storage).loadCapability()
+    expect(r.status).toBe('ok')
+    expect(r.dropped).toBe(0)
+    expect(r.stored.data.objectives[0]).toMatchObject({ revision: 1, previousRevisions: [] })
+    expect(r.stored.data.skills[0]).toMatchObject({ lineageId: 's1', revision: 1 })
+    expect(r.stored.data.evidence[0]).toMatchObject({ occurredAt: 5, objectiveRevision: 1 })
+    expect(r.stored.data.evidence[1]).toMatchObject({ occurredAt: null, recordedAt: 9, objectiveRevision: 1 })
+  })
+
+  it('schema 2 refuses a retrospective record with a stored exact moment, and a live one without it', () => {
+    const storage = new FakeStorage()
+    const good = attempt(activeObjective(), 's1', T0, 'MET')
+    const bad = [{ ...good.evidence[0], id: 'x1', capture: 'RETROSPECTIVE', occurredAt: T0 }, { ...good.evidence[0], id: 'x2', occurredAt: null }]
+    storage.data[key.capability] = JSON.stringify({ v: 1, data: { schema: 2, ...good, evidence: [...good.evidence, ...bad], flow: {} } })
+    const r = fresh(storage).loadCapability()
+    expect(r.dropped).toBe(2)
+    expect(r.stored.data.evidence).toEqual(good.evidence)
   })
 })

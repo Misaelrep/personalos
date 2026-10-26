@@ -1,29 +1,24 @@
-import { INDEPENDENT_PROVENANCES, SEPARATE_OCCASION_MS, type Evidence, type EvidenceStrength } from './model'
+import { INDEPENDENT_PROVENANCES, type Evidence, type EvidenceStrength } from './model'
 
 /**
- * How strong a piece of evidence is — derived from what the record holds, never chosen by the person ("my evidence is very
- * strong" is not an input). Conservative:
+ * How strong ONE piece of evidence is — derived from that record alone, never chosen by the person and never changed by
+ * other records (an attempt is one attempt; what many attempts add up to is the dimensions' business, dimensions.ts).
  *
- *   WEAK         it informs, but conditions are missing: recorded afterwards (RETROSPECTIVE), or without the test or the context
- *   MODERATE     a direct attempt with result, verdict, help and context all recorded
- *   STRONG       MODERATE, and either a reference a third party could check (an http(s) link), or corroborated by another
- *                direct attempt with the same verdict on a separate occasion (SEPARATE_OCCASION_MS)
- *   VERY_STRONG  STRONG and independently verified (INDEPENDENT_PROVENANCES). Nothing in B1 can produce it — on purpose.
+ *   WEAK         recorded afterwards (RETROSPECTIVE), or without the test, the context or the observed result
+ *   MODERATE     a direct (LIVE) attempt with result, verdict, help and context all recorded — the most a self-report can be
+ *   STRONG       reserved for a provenance that is really verifiable / independent (INDEPENDENT_PROVENANCES)
+ *   VERY_STRONG  reserved for a higher standard still
+ *
+ * B1 only has SELF_REPORTED evidence, so it can only produce WEAK and MODERATE — on purpose. A link attached to the record
+ * changes nothing: it may be irrelevant, unreachable, not show the criterion, and it was added by the same person.
  */
-
-/** A link someone else could open: the minimum for "verifiable". */
-export const isVerifiableReference = (ref: string | undefined) => !!ref && /^https?:\/\/[^\s/]+\.[^\s]+$/i.test(ref.trim())
 
 /** Recorded live, with the test, the context and the observed result. */
 export const isDirect = (e: Evidence) =>
   e.capture === 'LIVE' && e.observedResult.trim().length > 0 && e.testStatement.trim().length > 0 && e.contextDescription.trim().length > 0
 
-/** `others`: the rest of the effective evidence of the same skill. */
-export function evidenceStrength(e: Evidence, others: readonly Evidence[]): EvidenceStrength {
+export function evidenceStrength(e: Evidence): EvidenceStrength {
   if (!isDirect(e)) return 'WEAK'
-  const corroborated = others.some(
-    (o) => o.id !== e.id && o.attemptId !== e.attemptId && isDirect(o) && o.criterionVerdict === e.criterionVerdict && Math.abs(o.occurredAt - e.occurredAt) >= SEPARATE_OCCASION_MS,
-  )
-  if (!corroborated && !isVerifiableReference(e.reference)) return 'MODERATE'
-  return INDEPENDENT_PROVENANCES.includes(e.provenance) ? 'VERY_STRONG' : 'STRONG'
+  // No independent provenance exists in B1 (the list is empty): a self-report stops at MODERATE.
+  return INDEPENDENT_PROVENANCES.includes(e.provenance) ? 'STRONG' : 'MODERATE'
 }

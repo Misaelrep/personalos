@@ -62,15 +62,12 @@ export function gapStatement(reason: GapReason, dimension: Dimension, skill: Ski
       return dims.TRANSFER.status === 'UNKNOWN' ? 'Solo existe evidencia en el contexto original.' : 'Ha funcionado fuera del contexto original, pero todavía no en uno nuevo.'
     case 'CONSISTENCY_UNKNOWN':
       return dims.CONSISTENCY.status === 'SUPPORTED'
-        ? 'Ha salido bien en dos ocasiones distintas; falta una tercera para poder hablar de consistencia.'
+        ? 'Ha salido bien en varios intentos, pero todavía no sabemos si se mantiene en otras ocasiones.'
         : 'Existe un resultado exitoso, pero todavía no sabemos si es consistente.'
   }
 }
 
-const day = (ms: number) => new Date(ms).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })
-const hour = (ms: number) => new Date(ms).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
-
-export function nextTestStatement(kind: NextTestKind, skill: Skill, t: { targetContext: ContextRelation; maxAssistance: Autonomy; notBefore?: number }, against?: Evidence): string {
+export function nextTestStatement(kind: NextTestKind, skill: Skill, t: { targetContext: ContextRelation; maxAssistance: Autonomy }, against?: Evidence): string {
   const act = lower(shortSkill(skill))
   const res = lower(blank(skill.result, '[resultado]'))
   switch (kind) {
@@ -85,9 +82,7 @@ export function nextTestStatement(kind: NextTestKind, skill: Skill, t: { targetC
         ? `Prueba a ${act} en un contexto en el que no lo hayas hecho nunca, con el mismo criterio.`
         : `Prueba a ${act} en un contexto parecido pero distinto del original, con el mismo criterio.`
     case 'REPEAT':
-      return t.notBefore
-        ? `Repite la misma prueba en otra ocasión, a partir del ${day(t.notBefore)} a las ${hour(t.notBefore)}: ${act} para producir ${res}.`
-        : `Repite la misma prueba en otra ocasión: ${act} para producir ${res}.`
+      return `Repítelo en otra ocasión: ${act} para producir ${res}.`
     case 'RESOLVE':
       return against
         ? `Reproduce las condiciones del intento que no salió (${CONTEXT_PHRASE[against.contextRelation]}, ${AUTONOMY_PHRASE[against.assistance]}): ${act} para producir ${res}.`
@@ -102,17 +97,15 @@ export function whatWeKnow(skill: Skill, dims: SkillDimensions, evidence: readon
   const out: string[] = []
   const ex = dims.EXECUTION
   if (ex.status === 'NOT_YET') out.push(live.length === 1 ? 'Lo has intentado una vez y el resultado todavía no cumple el criterio.' : `Lo has intentado ${live.length} veces y el resultado todavía no cumple el criterio.`)
-  // The failures before the first success are part of what we know: they are not erased by it.
-  const firstMet = live.filter((e) => e.criterionVerdict === 'MET').reduce((t, e) => Math.min(t, e.occurredAt), Infinity)
-  const before = live.filter((e) => e.criterionVerdict !== 'MET' && e.occurredAt < firstMet).length
+  const met = live.filter((e) => e.criterionVerdict === 'MET').length
   if (ex.status === 'SUPPORTED') out.push('Has cumplido el criterio en un intento directo.')
-  if (ex.status === 'DEMONSTRATED') out.push('Has cumplido el criterio en ocasiones distintas, sin resultados en contra recientes.')
-  if (ex.status === 'MIXED') out.push('Has cumplido el criterio, y también hay intentos recientes que no lo cumplen.')
-  if (before && ex.status !== 'NOT_YET') out.push(before === 1 ? 'Antes, un intento no lo cumplió.' : `Antes, ${before} intentos no lo cumplieron.`)
+  if (ex.status === 'DEMONSTRATED') out.push(`Has cumplido el criterio en ${met} intentos directos, sin ninguno en contra.`)
+  if (ex.status === 'MIXED') {
+    const against = live.length - met
+    out.push(`Has cumplido el criterio en ${met === 1 ? 'un intento' : `${met} intentos`}, y en ${against === 1 ? 'otro' : `otros ${against}`} no: los resultados no coinciden.`)
+  }
   if (best) out.push(`Tu mejor resultado fue ${AUTONOMY_PHRASE[best]}.`)
   if (dims.TRANSFER.status === 'SUPPORTED' || dims.TRANSFER.status === 'DEMONSTRATED') out.push('Ha funcionado fuera del contexto original.')
-  if (dims.CONSISTENCY.status === 'SUPPORTED') out.push('Ha salido bien en dos ocasiones distintas.')
-  if (dims.CONSISTENCY.status === 'DEMONSTRATED') out.push('Ha salido bien en al menos tres ocasiones distintas seguidas.')
   const retro = mine.filter((e) => e.capture === 'RETROSPECTIVE')
   if (retro.length) out.push(`Registraste ${retro.length === 1 ? 'un intento anterior' : `${retro.length} intentos anteriores`}: es un indicio débil, sin las condiciones de un intento directo.`)
   return out
@@ -153,8 +146,10 @@ export function errorText(error: import('./commands').CapabilityError): string {
       return ISSUE_TEXT[error.issues[0]]
     case 'ACTIVE_LIMIT':
       return 'Ya hay 3 capacidades activas. Pausa una para activar esta.'
-    case 'LOCKED_BY_EVIDENCE':
-      return 'Ya hay evidencia: lo que se definió antes de producirla no cambia.'
+    case 'SUPERSEDED':
+      return 'Esa es una versión anterior: se conserva tal como estaba.'
+    case 'BAD_DATE':
+      return 'Esa fecha no vale: un día real, no posterior a hoy.'
     case 'ATTEMPT_IN_PROGRESS':
       return 'Hay un intento en curso: regístralo o descártalo primero.'
     case 'INCOMPLETE_RECORD':

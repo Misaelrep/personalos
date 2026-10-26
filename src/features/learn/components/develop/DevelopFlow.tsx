@@ -14,6 +14,7 @@ import {
   recordComplete,
   saveAttemptRecord,
   setObjectiveStatus,
+  skillHasEvidence,
   skillOf,
   startAttempt,
   updateObjective,
@@ -36,10 +37,11 @@ import {
   whatWeDontKnow,
   whatWeKnow,
 } from '../../domain/capability/language'
-import { AUTONOMY_LEVELS, CONTEXT_RELATIONS, CRITERION_VERDICTS, MAX_SKILLS, type Autonomy, type CapabilityData, type CapabilityObjective, type ContextRelation, type CriterionVerdict, type Evidence, type Skill } from '../../domain/capability/model'
+import { AUTONOMY_LEVELS, CONTEXT_RELATIONS, CRITERION_VERDICTS, MAX_SKILLS, type Autonomy, type CapabilityData, type CapabilityObjective, type ContextRelation, type CriterionVerdict, type Evidence, type ObjectiveDefinition, type Skill } from '../../domain/capability/model'
 import { skillPicture } from '../../domain/capability/nextTest'
 import { activeSkillsOf, templateIssues, type TemplateFields } from '../../domain/capability/validate'
 import { newId, type CapabilityApi } from '../../hooks/useCapability'
+import { nowMs } from '../../../../state/clock'
 import type { FlowStep } from '../../storage/capabilityCodec'
 import { Choice } from './Choice'
 import { Field } from './Field'
@@ -110,28 +112,52 @@ export function DevelopFlow({ cap, onExit }: { cap: CapabilityApi; onExit: () =>
   )
 }
 
+const REVISION_NOTE = 'Cambiar esta definición crea una nueva versión. Tus intentos anteriores se conservan.'
+
+/**
+ * The objective's definition as it is being edited. Before any evidence every change is saved as it is written. After, the
+ * definition is versioned: it is edited apart and applied once, on going on — one change, one new revision (never one per keystroke).
+ */
+function useDefinition(cap: CapabilityApi, objective: CapabilityObjective) {
+  const versioned = hasEvidence(cap.data, objective.id)
+  const [draft, setDraft] = useState<ObjectiveDefinition>(() => ({ rawIntent: objective.rawIntent, action: objective.action, result: objective.result, context: objective.context, criterion: objective.criterion, targetAutonomy: objective.targetAutonomy }))
+  const value: ObjectiveDefinition = versioned ? draft : objective
+  const change = (patch: Partial<ObjectiveDefinition>) => (versioned ? setDraft((d) => ({ ...d, ...patch })) : cap.run((d, now) => updateObjective(d, objective.id, patch, now)))
+  /** Apply what was written (a new revision if it changed); the reason it was refused, if it was. */
+  const commit = (): string | undefined => {
+    if (!versioned) return undefined
+    const r = cap.run((d, now) => updateObjective(d, objective.id, draft, now))
+    return r.ok ? undefined : errorText(r.error)
+  }
+  return { versioned, value, change, commit }
+}
+
 /* —— 1 · ¿Qué quieres poder hacer? —— */
 
 function IntentStep({ cap, objective, go }: StepProps) {
-  const locked = hasEvidence(cap.data, objective.id)
+  const def = useDefinition(cap, objective)
+  const [error, setError] = useState<string>()
   return (
     <Step
       label={LABEL}
       title="¿Qué quieres poder hacer?"
       lead="Con tus palabras, como lo dirías. Después lo haremos observable."
       actions={
-        <Button disabled={!objective.rawIntent.trim()} onClick={() => go('observable')}>
+        <Button
+          disabled={!def.value.rawIntent.trim()}
+          onClick={() => {
+            const refused = def.commit()
+            setError(refused)
+            if (!refused) go('observable')
+          }}
+        >
           Continuar
         </Button>
       }
     >
-      <Field
-        label="Quiero poder…"
-        value={objective.rawIntent}
-        readOnly={locked}
-        placeholder="p. ej. hablar en inglés en el trabajo"
-        onChange={(rawIntent) => cap.run((d, now) => updateObjective(d, objective.id, { rawIntent }, now))}
-      />
+      <Field label="Quiero poder…" value={def.value.rawIntent} placeholder="p. ej. hablar en inglés en el trabajo" onChange={(rawIntent) => def.change({ rawIntent })} />
+      {def.versioned && <p className="text-[13px] text-ink-3">{REVISION_NOTE}</p>}
+      {error && <Notice>{error}</Notice>}
     </Step>
   )
 }
@@ -158,9 +184,10 @@ function Sentence({ fields }: { fields: TemplateFields }) {
 }
 
 function ObservableStep({ cap, objective, go }: StepProps) {
-  const locked = hasEvidence(cap.data, objective.id)
+  const def = useDefinition(cap, objective)
   const [tried, setTried] = useState(false)
-  const issues = templateIssues(objective)
+  const [error, setError] = useState<string>()
+  const issues = templateIssues(def.value)
   // After trying to go on: what is missing, next to the button (the unobservable action is already said under the action).
   const shown = tried ? issues.find((i) => i !== 'NOT_OBSERVABLE') ?? issues[0] : undefined
   return (
@@ -169,7 +196,7 @@ function ObservableStep({ cap, objective, go }: StepProps) {
       title="Hazlo observable."
       lead={
         <>
-          <span className="text-ink-2">«{objective.rawIntent}»</span> — ¿qué harías, y cómo se vería que salió bien?
+          <span className="text-ink-2">«{def.value.rawIntent}»</span> — ¿qué harías, y cómo se vería que salió bien?
         </>
       }
       actions={
@@ -177,7 +204,10 @@ function ObservableStep({ cap, objective, go }: StepProps) {
           <Button
             onClick={() => {
               setTried(true)
-              if (issues.length === 0) go('skills')
+              if (issues.length) return
+              const refused = def.commit()
+              setError(refused)
+              if (!refused) go('skills')
             }}
           >
             Continuar
@@ -188,16 +218,18 @@ function ObservableStep({ cap, objective, go }: StepProps) {
         </>
       }
     >
-      <TemplateFieldsEditor value={objective} readOnly={locked} onChange={(patch) => cap.run((d, now) => updateObjective(d, objective.id, patch, now))} />
-      <Sentence fields={objective} />
+      <TemplateFieldsEditor value={def.value} onChange={def.change} />
+      <Sentence fields={def.value} />
+      {def.versioned && <p className="text-[13px] text-ink-3">{REVISION_NOTE}</p>}
       {shown && <Notice>{ISSUE_TEXT[shown]}</Notice>}
+      {error && <Notice>{error}</Notice>}
     </Step>
   )
 }
 
 /* —— 3 · ¿De qué habilidades depende? —— */
 
-function SkillEditor({ initial, onSave, onCancel, onRemove }: { initial: TemplateFields; onSave: (f: TemplateFields) => Result; onCancel: () => void; onRemove?: () => Result }) {
+function SkillEditor({ initial, onSave, onCancel, onRemove, versioned = false }: { initial: TemplateFields; onSave: (f: TemplateFields) => Result; onCancel: () => void; onRemove?: () => Result; versioned?: boolean }) {
   const [fields, setFields] = useState(initial)
   const [error, setError] = useState<string>()
   const attempt = (r: Result) => (r.ok ? undefined : setError(errorText(r.error)))
@@ -222,6 +254,7 @@ function SkillEditor({ initial, onSave, onCancel, onRemove }: { initial: Templat
     >
       <TemplateFieldsEditor value={fields} onChange={(patch) => setFields((f) => ({ ...f, ...patch }))} />
       <Sentence fields={fields} />
+      {versioned && <p className="text-[13px] text-ink-3">{REVISION_NOTE}</p>}
       {error && <Notice>{error}</Notice>}
     </Step>
   )
@@ -229,7 +262,6 @@ function SkillEditor({ initial, onSave, onCancel, onRemove }: { initial: Templat
 
 function SkillsStep({ cap, objective, go }: StepProps) {
   const skills = activeSkillsOf(cap.data, objective.id)
-  const locked = hasEvidence(cap.data, objective.id)
   const [editing, setEditing] = useState<Skill | 'new'>()
   const [error, setError] = useState<string>()
 
@@ -250,8 +282,9 @@ function SkillsStep({ cap, objective, go }: StepProps) {
     ) : (
       <SkillEditor
         initial={editing}
+        versioned={skillHasEvidence(cap.data, editing.id)}
         onCancel={() => setEditing(undefined)}
-        onSave={(f) => close(cap.run((d, now) => updateSkill(d, editing.id, f, now)))}
+        onSave={(f) => close(cap.run((d, now) => updateSkill(d, editing.id, f, now, newId('skill'))))}
         onRemove={() => close(cap.run((d, now) => archiveSkill(d, editing.id, now)))}
       />
     )
@@ -267,7 +300,7 @@ function SkillsStep({ cap, objective, go }: StepProps) {
     <Step
       label={LABEL}
       title="¿De qué habilidades depende?"
-      lead={locked ? 'Ya hay evidencia: la descomposición queda fija tal como estaba al producirla.' : 'Entre 3 y 7. Cada una, algo que se pueda ver hacer. Puedes cambiarlas hasta el primer intento.'}
+      lead="Entre 3 y 7. Cada una, algo que se pueda ver hacer. Si cambias una que ya tiene intentos, se crea una nueva versión y los anteriores se conservan."
       actions={
         <>
           <Button onClick={proceed}>{objective.status === 'ACTIVE' ? 'Continuar' : 'Activar y empezar'}</Button>
@@ -281,13 +314,14 @@ function SkillsStep({ cap, objective, go }: StepProps) {
       <ol className="flex flex-col">
         {skills.map((s) => (
           <li key={s.id} className="border-t border-line first:border-t-0">
-            <button type="button" disabled={locked} onClick={() => setEditing(s)} className="hit block w-full py-3.5 text-left text-[15px] leading-snug text-ink-2 hover:text-ink disabled:hover:text-ink-2">
+            <button type="button" onClick={() => setEditing(s)} className="hit block w-full py-3.5 text-left text-[15px] leading-snug text-ink-2 hover:text-ink">
               {templateSentence(s)}
+              {s.revision > 1 && <span className="ml-2 text-[12px] text-ink-4">versión {s.revision}</span>}
             </button>
           </li>
         ))}
       </ol>
-      {!locked && skills.length < MAX_SKILLS && (
+      {skills.length < MAX_SKILLS && (
         <div className="-ml-4">
           <Button variant="quiet" onClick={() => setEditing('new')}>
             + Añadir una habilidad
@@ -304,7 +338,7 @@ function SkillsStep({ cap, objective, go }: StepProps) {
 function skillLine(data: CapabilityData, skill: Skill): string {
   if (attemptInProgress(data)?.skillId === skill.id) return 'Intento en curso.'
   const ev = effectiveEvidence(data).filter((e) => e.skillId === skill.id)
-  if (!ev.length) return 'Sin intentos todavía.'
+  if (!ev.length) return skill.revision > 1 ? 'Sin intentos en esta versión.' : 'Sin intentos todavía.'
   return skillPicture(skill, ev).current?.statement ?? 'Sin hueco abierto que B1 pueda comprobar.'
 }
 
@@ -466,15 +500,38 @@ function RecordStep({ cap, objective, go, skill }: StepProps & { skill?: Skill }
         </>
       }
     >
+      {retro && <WhenField value={attempt.occurredOn ?? ''} onChange={(occurredOn) => save({ occurredOn })} />}
       <Field label="¿Qué ocurrió?" value={attempt.outcomeDescription} placeholder="Lo que salió, tal cual: qué hiciste y qué quedó." onChange={(outcomeDescription) => save({ outcomeDescription })} />
       <Choice<CriterionVerdict> label={`¿Cumplió el criterio? «${skill.criterion}»`} options={verdictOptions} value={attempt.criterionVerdict} onChange={(criterionVerdict) => save({ criterionVerdict })} />
       <Choice<Autonomy> label="¿Con cuánta ayuda?" options={autonomyOptions} value={attempt.assistance} onChange={(assistance) => save({ assistance })} />
       <Choice<ContextRelation> label="¿En qué contexto?" options={contextOptions} value={attempt.contextRelation} onChange={(contextRelation) => save({ contextRelation })} />
       <Field label="Explícalo con tus palabras (opcional)" value={attempt.explanation} hint="Se guarda tal cual. Todavía no se evalúa." onChange={(explanation) => save({ explanation })} />
-      <Field label="Enlace al resultado (opcional)" value={attempt.reference} hint="Algo que otra persona pueda abrir y comprobar." onChange={(reference) => save({ reference })} />
+      <Field label="Enlace al resultado (opcional)" value={attempt.reference} hint="Se guarda como referencia. No se verifica." onChange={(reference) => save({ reference })} />
       <p className="text-[13px] text-ink-4">Un intento que no salió también es evidencia: se guarda igual.</p>
       {error && <Notice>{error}</Notice>}
     </Step>
+  )
+}
+
+/** A record of an earlier attempt: the day, only if the person knows it. Left empty, the moment stays unknown — none is made up. */
+function WhenField({ value, onChange }: { value: string; onChange: (day: string) => void }) {
+  const today = new Date(nowMs())
+  const max = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+  return (
+    <div>
+      <label htmlFor="develop-when" className="block text-[13px] text-ink-3">
+        ¿Cuándo fue? (aproximado, opcional)
+      </label>
+      <input
+        id="develop-when"
+        type="date"
+        value={value}
+        max={max}
+        onChange={(e) => onChange(e.target.value)}
+        className="mt-1 block w-full border-b border-line bg-transparent pb-2 text-[17px] text-ink focus:border-accent focus:outline-none"
+      />
+      <p className="mt-1.5 text-[12.5px] text-ink-4">{value ? 'Se guarda como día aproximado.' : 'Si no lo sabes, déjalo vacío: quedará como «fecha desconocida».'}</p>
+    </div>
   )
 }
 
@@ -482,11 +539,21 @@ function RecordStep({ cap, objective, go, skill }: StepProps & { skill?: Skill }
 
 const VERDICT_PHRASE: Record<CriterionVerdict, string> = { MET: 'cumplió el criterio', PARTIAL: 'lo cumplió en parte', NOT_MET: 'no cumplió el criterio' }
 
+/** When it happened, as far as it is known. */
+function moment(e: Evidence): string {
+  if (e.occurredAt !== null) return when(e.occurredAt)
+  const day = e.occurredOn ? new Date(`${e.occurredOn}T12:00:00`).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }) : undefined
+  return `${day ? `hacia el ${day}` : 'fecha desconocida'} (registrado el ${when(e.recordedAt)})`
+}
+
 function History({ cap, skill }: { cap: CapabilityApi; skill: Skill }) {
-  const all = cap.data.evidence.filter((e) => e.skillId === skill.id).sort((a, b) => b.occurredAt - a.occurredAt || b.recordedAt - a.recordedAt)
+  // The whole lineage: the evidence of earlier revisions stays attached to the revision it was produced under.
+  const revisions = new Map(cap.data.skills.filter((s) => s.lineageId === skill.lineageId).map((s) => [s.id, s.revision]))
+  const all = cap.data.evidence.filter((e) => revisions.has(e.skillId)).sort((a, b) => (b.occurredAt ?? b.recordedAt) - (a.occurredAt ?? a.recordedAt) || b.recordedAt - a.recordedAt)
   const superseded = new Set(cap.data.evidence.map((e) => e.supersedes).filter(Boolean))
   const [correcting, setCorrecting] = useState<Evidence>()
   if (correcting) return <CorrectionEditor cap={cap} evidence={correcting} onDone={() => setCorrecting(undefined)} />
+  if (!all.length) return null
   return (
     <details className="group">
       <summary className="hit flex min-h-11 cursor-pointer list-none items-center text-[13px] text-ink-3 hover:text-ink-2">Lo que ya has intentado</summary>
@@ -494,7 +561,8 @@ function History({ cap, skill }: { cap: CapabilityApi; skill: Skill }) {
         {all.map((e) => (
           <li key={e.id} className={`border-l pl-4 text-[14px] leading-snug ${superseded.has(e.id) ? 'border-line text-ink-4 line-through' : 'border-line text-ink-2'}`}>
             <span className="block text-ink-3">
-              {when(e.occurredAt)} · {e.capture === 'RETROSPECTIVE' ? 'registrado después' : 'intento directo'} · {AUTONOMY_PHRASE[e.assistance]} · {CONTEXT_PHRASE[e.contextRelation]}
+              {moment(e)} · {e.capture === 'RETROSPECTIVE' ? 'registrado después' : 'intento directo'} · {AUTONOMY_PHRASE[e.assistance]} · {CONTEXT_PHRASE[e.contextRelation]}
+              {revisions.get(e.skillId) !== skill.revision && ` · versión ${revisions.get(e.skillId)} de la habilidad`}
             </span>
             <span className="block">
               {e.observedResult} — {VERDICT_PHRASE[e.criterionVerdict]}.

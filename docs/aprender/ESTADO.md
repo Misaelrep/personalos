@@ -8,7 +8,7 @@ Documento de continuidad. Léelo antes de trabajar en APRENDER: lo que aquí fig
 |---|---|---|
 | **APRENDER FASE A** (esqueleto) | **CERRADA** | `main`, merge `8420da7` |
 | **APRENDER FASE A.1 ATMÓSFERAS** | **CERRADA** | `main`, merge `8420da7` |
-| FASE B · DESARROLLAR / CAPABILITY ENGINE | **B1 Capability Foundation implementada, en revisión** (B2 no iniciada) | rama `feature/aprender-capability-engine`, desde `main` `62be277`; reglas en [`fase-b/B1-CAPABILITY-FOUNDATION.md`](fase-b/B1-CAPABILITY-FOUNDATION.md) |
+| FASE B · DESARROLLAR / CAPABILITY ENGINE | **B1 Capability Foundation + corrección B1.1 implementadas, en revisión** (B2 no iniciada) | rama `feature/aprender-capability-engine`, desde `main` `62be277`; reglas en [`fase-b/B1-CAPABILITY-FOUNDATION.md`](fase-b/B1-CAPABILITY-FOUNDATION.md) |
 
 **Fase A** incluye:
 - la sección APRENDER y su entrada con ritual;

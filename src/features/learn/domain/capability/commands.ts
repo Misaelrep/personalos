@@ -1,3 +1,4 @@
+import { dateKey } from '../../../../domain/time'
 import {
   MAX_ACTIVE_OBJECTIVES,
   MAX_FIELD_LENGTH,
@@ -7,12 +8,13 @@ import {
   type CapabilityData,
   type CapabilityObjective,
   type ContextRelation,
+  type ObjectiveDefinition,
   type CriterionVerdict,
   type Evidence,
   type EvidenceCapture,
   type Skill,
 } from './model'
-import { activationIssues, activeSkillsOf, skillKey, templateIssues, type Issue, type TemplateFields } from './validate'
+import { activationIssues, activeSkillsOf, skillKey, supersededSkillIds, templateIssues, type Issue, type TemplateFields } from './validate'
 
 /**
  * Every change DESARROLLAR can make, as a pure transition: (data, input) → new data, or the reason it is refused.
@@ -23,7 +25,9 @@ export type CapabilityError =
   | { code: 'NOT_FOUND' }
   | { code: 'INVALID'; issues: Issue[] }
   | { code: 'ACTIVE_LIMIT' }
-  | { code: 'LOCKED_BY_EVIDENCE' }
+  | { code: 'SUPERSEDED' }
+  | { code: 'NEEDS_REVISION_ID' }
+  | { code: 'BAD_DATE' }
   | { code: 'NOT_ACTIVE' }
   | { code: 'ATTEMPT_IN_PROGRESS' }
   | { code: 'ATTEMPT_CLOSED' }
@@ -43,8 +47,10 @@ export const skillOf = (data: CapabilityData, id: string) => data.skills.find((s
 export const attemptOf = (data: CapabilityData, id: string) => data.attempts.find((a) => a.id === id)
 /** The attempt that has been started and not yet recorded, if any (there is at most one). */
 export const attemptInProgress = (data: CapabilityData) => data.attempts.find((a) => a.completedAt === undefined)
-/** Once there is evidence, the decomposition it was produced against is fixed. */
+/** Whether any evidence was produced under this objective (any of its definitions). */
 export const hasEvidence = (data: CapabilityData, objectiveId: string) => data.evidence.some((e) => e.objectiveId === objectiveId)
+/** Whether this exact skill revision has evidence: then its definition can only change by a new revision. */
+export const skillHasEvidence = (data: CapabilityData, skillId: string) => data.evidence.some((e) => e.skillId === skillId)
 
 const replace = <T extends { id: string }>(list: T[], item: T) => list.map((x) => (x.id === item.id ? item : x))
 
@@ -64,18 +70,33 @@ export function createObjective(data: CapabilityData, input: { id: string; rawIn
     skillIds: [],
     createdAt: input.now,
     updatedAt: input.now,
+    revision: 1,
+    previousRevisions: [],
   }
   return ok({ ...data, objectives: [...data.objectives, objective] })
 }
 
-export function updateObjective(data: CapabilityData, id: string, patch: Partial<TemplateFields & { rawIntent: string }>, now: number): Result {
+const DEFINITION = ['rawIntent', 'action', 'result', 'context', 'criterion', 'targetAutonomy'] as const
+const definitionOf = (o: ObjectiveDefinition): ObjectiveDefinition => ({ rawIntent: o.rawIntent, action: o.action, result: o.result, context: o.context, criterion: o.criterion, targetAutonomy: o.targetAutonomy })
+
+/**
+ * Change the objective's definition. Before any evidence it is simply edited. Once evidence exists, the change never rewrites
+ * history: the definition in force is frozen into `previousRevisions` and `revision` rises — the evidence keeps the revision it
+ * was produced under. A revised definition must be complete (it is already in use), and nothing changes while an attempt is open.
+ */
+export function updateObjective(data: CapabilityData, id: string, patch: Partial<ObjectiveDefinition>, now: number): Result {
   const o = objectiveOf(data, id)
   if (!o) return fail({ code: 'NOT_FOUND' })
-  if (hasEvidence(data, id)) return fail({ code: 'LOCKED_BY_EVIDENCE' })
-  const next: CapabilityObjective = { ...o, updatedAt: now }
-  for (const k of ['rawIntent', 'action', 'result', 'context', 'criterion'] as const) if (patch[k] !== undefined) next[k] = clip(patch[k]!)
-  if (patch.targetAutonomy) next.targetAutonomy = patch.targetAutonomy
-  return ok({ ...data, objectives: replace(data.objectives, next) })
+  const def = definitionOf(o)
+  for (const k of DEFINITION) if (patch[k] !== undefined) (def as unknown as Record<string, string>)[k] = k === 'targetAutonomy' ? patch[k]! : clip(patch[k]!)
+  const changed = DEFINITION.some((k) => def[k] !== o[k])
+  if (!changed) return ok(data)
+  if (!hasEvidence(data, id)) return ok({ ...data, objectives: replace(data.objectives, { ...o, ...def, updatedAt: now }) })
+  if (attemptInProgress(data)?.objectiveId === id) return fail({ code: 'ATTEMPT_IN_PROGRESS' })
+  const issues = templateIssues(def)
+  if (issues.length) return fail({ code: 'INVALID', issues })
+  const frozen = { ...definitionOf(o), revision: o.revision, until: now }
+  return ok({ ...data, objectives: replace(data.objectives, { ...o, ...def, revision: o.revision + 1, previousRevisions: [...o.previousRevisions, frozen], updatedAt: now }) })
 }
 
 /** DRAFT or PAUSED → ACTIVE: the template complete, 3–7 valid skills with no duplicate, and room among the active ones. */
@@ -101,19 +122,18 @@ export function setObjectiveStatus(data: CapabilityData, id: string, status: 'PA
   return ok({ ...data, objectives: replace(data.objectives, { ...o, status, updatedAt: now }) })
 }
 
-/* —— skills: editable until the first evidence —— */
+/* —— skills: edited until they have evidence; revised after —— */
 
 export function addSkill(data: CapabilityData, input: TemplateFields & { id: string; objectiveId: string; now: number }): Result {
   const o = objectiveOf(data, input.objectiveId)
   if (!o) return fail({ code: 'NOT_FOUND' })
-  if (hasEvidence(data, o.id)) return fail({ code: 'LOCKED_BY_EVIDENCE' })
   const fields = { action: clip(input.action), result: clip(input.result), context: clip(input.context), criterion: clip(input.criterion), targetAutonomy: input.targetAutonomy }
   const issues = templateIssues(fields)
   if (issues.length) return fail({ code: 'INVALID', issues })
   const skills = activeSkillsOf(data, o.id)
   if (skills.length >= MAX_SKILLS) return fail({ code: 'INVALID', issues: ['TOO_MANY_SKILLS'] })
   if (skills.some((s) => skillKey(s) === skillKey(fields))) return fail({ code: 'INVALID', issues: ['DUPLICATE_SKILL'] })
-  const skill: Skill = { id: input.id, objectiveId: o.id, ...fields, createdAt: input.now, updatedAt: input.now }
+  const skill: Skill = { id: input.id, lineageId: input.id, revision: 1, objectiveId: o.id, ...fields, createdAt: input.now, updatedAt: input.now }
   return ok({
     ...data,
     skills: [...data.skills, skill],
@@ -121,27 +141,43 @@ export function addSkill(data: CapabilityData, input: TemplateFields & { id: str
   })
 }
 
-export function updateSkill(data: CapabilityData, id: string, patch: Partial<TemplateFields>, now: number): Result {
+/**
+ * Change a skill's definition. A skill without evidence is simply edited. A skill WITH evidence is never edited: the change
+ * creates a new revision (`newId`) of the same lineage that supersedes it; the earlier record and its evidence stay exactly as
+ * they were, and the new revision starts with no evidence of its own.
+ */
+export function updateSkill(data: CapabilityData, id: string, patch: Partial<TemplateFields>, now: number, newId?: string): Result {
   const s = skillOf(data, id)
   if (!s || s.archivedAt !== undefined) return fail({ code: 'NOT_FOUND' })
-  if (hasEvidence(data, s.objectiveId)) return fail({ code: 'LOCKED_BY_EVIDENCE' })
+  if (supersededSkillIds(data).has(id)) return fail({ code: 'SUPERSEDED' })
   const next: Skill = { ...s, updatedAt: now }
   for (const k of ['action', 'result', 'context', 'criterion'] as const) if (patch[k] !== undefined) next[k] = clip(patch[k]!)
   if (patch.targetAutonomy) next.targetAutonomy = patch.targetAutonomy
+  if ((['action', 'result', 'context', 'criterion', 'targetAutonomy'] as const).every((k) => next[k] === s[k])) return ok(data)
   const issues = templateIssues(next)
   if (issues.length) return fail({ code: 'INVALID', issues })
   if (activeSkillsOf(data, s.objectiveId).some((x) => x.id !== id && skillKey(x) === skillKey(next))) return fail({ code: 'INVALID', issues: ['DUPLICATE_SKILL'] })
-  return ok({ ...data, skills: replace(data.skills, next) })
+  if (!skillHasEvidence(data, id)) return ok({ ...data, skills: replace(data.skills, next) })
+  if (!newId) return fail({ code: 'NEEDS_REVISION_ID' })
+  if (attemptInProgress(data)?.skillId === id) return fail({ code: 'ATTEMPT_IN_PROGRESS' })
+  const revision: Skill = { ...next, id: newId, lineageId: s.lineageId, revision: s.revision + 1, supersedesSkillId: s.id, createdAt: now, updatedAt: now }
+  const o = objectiveOf(data, s.objectiveId)!
+  return ok({
+    ...data,
+    skills: [...data.skills, revision],
+    objectives: replace(data.objectives, { ...o, skillIds: [...o.skillIds, newId], updatedAt: now }),
+  })
 }
 
 /**
- * Take a skill out of the decomposition (before any evidence). An ACTIVE objective cannot drop below three: it is paused first —
- * the count is never left in a state the activation rules would refuse.
+ * Take a skill out of the current decomposition. Its definition and its evidence are kept; only `archivedAt` is set. An ACTIVE
+ * objective cannot drop below three — the count is never left in a state the activation rules would refuse.
  */
 export function archiveSkill(data: CapabilityData, id: string, now: number): Result {
   const s = skillOf(data, id)
   if (!s || s.archivedAt !== undefined) return fail({ code: 'NOT_FOUND' })
-  if (hasEvidence(data, s.objectiveId)) return fail({ code: 'LOCKED_BY_EVIDENCE' })
+  if (supersededSkillIds(data).has(id)) return fail({ code: 'SUPERSEDED' })
+  if (attemptInProgress(data)?.skillId === id) return fail({ code: 'ATTEMPT_IN_PROGRESS' })
   const o = objectiveOf(data, s.objectiveId)
   if (o?.status === 'ACTIVE' && activeSkillsOf(data, o.id).length <= 3) return fail({ code: 'INVALID', issues: ['TOO_FEW_SKILLS'] })
   return ok({ ...data, skills: replace(data.skills, { ...s, archivedAt: now, updatedAt: now }) })
@@ -156,6 +192,7 @@ export function startAttempt(
 ): Result {
   const s = skillOf(data, input.skillId)
   if (!s || s.archivedAt !== undefined) return fail({ code: 'NOT_FOUND' })
+  if (supersededSkillIds(data).has(s.id)) return fail({ code: 'SUPERSEDED' })
   if (objectiveOf(data, s.objectiveId)?.status !== 'ACTIVE') return fail({ code: 'NOT_ACTIVE' })
   if (attemptInProgress(data)) return fail({ code: 'ATTEMPT_IN_PROGRESS' })
   const attempt: Attempt = {
@@ -174,7 +211,16 @@ export function startAttempt(
   return ok({ ...data, attempts: [...data.attempts, attempt] })
 }
 
-export type AttemptRecord = Partial<Pick<Attempt, 'contextDescription' | 'outcomeDescription' | 'criterionVerdict' | 'assistance' | 'contextRelation' | 'explanation' | 'reference'>>
+export type AttemptRecord = Partial<Pick<Attempt, 'contextDescription' | 'outcomeDescription' | 'criterionVerdict' | 'assistance' | 'contextRelation' | 'explanation' | 'reference' | 'occurredOn'>>
+
+const DAY = /^\d{4}-\d{2}-\d{2}$/
+/** A real calendar day, not after today (the person's own local day). */
+export function isPastDay(day: string, now: number): boolean {
+  if (!DAY.test(day)) return false
+  const [y, m, d] = day.split('-').map(Number)
+  const probe = new Date(y, m - 1, d)
+  return probe.getFullYear() === y && probe.getMonth() === m - 1 && probe.getDate() === d && day <= dateKey(new Date(now))
+}
 
 /** The record of an attempt in progress, as it is written (saved at every change). */
 export function saveAttemptRecord(data: CapabilityData, id: string, patch: AttemptRecord): Result {
@@ -186,6 +232,12 @@ export function saveAttemptRecord(data: CapabilityData, id: string, patch: Attem
   if (patch.criterionVerdict) next.criterionVerdict = patch.criterionVerdict
   if (patch.assistance) next.assistance = patch.assistance
   if (patch.contextRelation) next.contextRelation = patch.contextRelation
+  if (patch.occurredOn !== undefined) {
+    // Only for a record of an earlier attempt; '' clears it (the moment is then unknown).
+    if (a.capture !== 'RETROSPECTIVE' || (patch.occurredOn !== '' && !DAY.test(patch.occurredOn))) return fail({ code: 'BAD_DATE' })
+    if (patch.occurredOn === '') delete next.occurredOn
+    else next.occurredOn = patch.occurredOn
+  }
   return ok({ ...data, attempts: replace(data.attempts, next) })
 }
 
@@ -201,12 +253,17 @@ export function discardAttempt(data: CapabilityData, id: string): Result {
 export const recordComplete = (a: Pick<Attempt, 'outcomeDescription' | 'criterionVerdict' | 'assistance' | 'contextRelation'>) =>
   a.outcomeDescription.trim().length > 0 && a.criterionVerdict !== undefined && a.assistance !== undefined && a.contextRelation !== undefined
 
-/** Close the attempt: it leaves one immutable piece of evidence — whatever the verdict. */
+/**
+ * Close the attempt: it leaves one immutable piece of evidence — whatever the verdict. Its moment is only what is known: a LIVE
+ * attempt happened now; a RETROSPECTIVE one has no exact moment (`occurredAt: null`) and, at most, the day the person gave.
+ */
 export function confirmAttempt(data: CapabilityData, id: string, evidenceId: string, now: number): Result {
   const a = attemptOf(data, id)
   if (!a) return fail({ code: 'NOT_FOUND' })
   if (a.completedAt !== undefined) return fail({ code: 'ATTEMPT_CLOSED' })
   if (!recordComplete(a)) return fail({ code: 'INCOMPLETE_RECORD' })
+  if (a.occurredOn !== undefined && !isPastDay(a.occurredOn, now)) return fail({ code: 'BAD_DATE' })
+  const retro = a.capture === 'RETROSPECTIVE'
   const evidence: Evidence = {
     id: evidenceId,
     attemptId: a.id,
@@ -216,8 +273,10 @@ export function confirmAttempt(data: CapabilityData, id: string, evidenceId: str
     criterionVerdict: a.criterionVerdict!,
     assistance: a.assistance!,
     contextRelation: a.contextRelation!,
-    occurredAt: now,
+    occurredAt: retro ? null : now,
+    ...(retro && a.occurredOn ? { occurredOn: a.occurredOn } : {}),
     recordedAt: now,
+    objectiveRevision: objectiveOf(data, a.objectiveId)?.revision ?? 1,
     provenance: 'SELF_REPORTED',
     capture: a.capture,
     testStatement: a.testStatement,

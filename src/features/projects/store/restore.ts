@@ -597,19 +597,20 @@ export type JournalStatus =
   /** Open, and the stored text is exactly the one before: nothing was written. */
   | { kind: 'sin-escribir'; journal: Journal; closeError?: string }
   /** Open, and the stored data is neither: something else wrote after. The text before is in the journal. */
-  | { kind: 'desconocida'; journal: Journal }
+  | { kind: 'desconocida'; journal: Journal; raw: string }
 
 export async function inspectJournal(storage: KeyValue): Promise<JournalStatus> {
-  const j = await readJournal(storage)
-  if (j === undefined) return { kind: 'ninguna' }
-  if (isDamaged(j)) return { kind: 'ilegible', reason: j.ilegible, raw: j.raw }
+  const a = await assessJournal(storage)
+  if (a.kind === 'ninguno') return { kind: 'ninguna' }
+  if (a.kind === 'ilegible') return { kind: 'ilegible', reason: a.reason, raw: a.raw }
+  const j = a.journal
   if (j.state !== 'en-curso') return { kind: 'cerrada', journal: j }
   const raw = storage.getItem(DATA_KEY)
   const current = await readEnvelope(raw)
   if (current.kind === 'ok' && (await sha(current.data)) === j.targetSha256) return { kind: 'escrita-sin-cerrar', journal: j }
   // Only the exact text before proves nothing was written. The same generation alone does not (audit H4).
   if (raw === j.before) return { kind: 'sin-escribir', journal: j }
-  return { kind: 'desconocida', journal: j }
+  return { kind: 'desconocida', journal: j, raw: a.raw }
 }
 
 /**
@@ -701,8 +702,16 @@ export async function diagnoseJournal(raw: string): Promise<{ reason: string; be
  * changes. A damaged journal is closed only once the person says they saved
  * it (`savedDamaged`); its text is kept exactly inside the closed journal,
  * with the text before when it is still whole. It is never deleted.
+ *
+ * P2-R1.3.1 · R13-01: `reviewed` is the exact journal text the person saw
+ * (and, when damaged, exported and confirmed). Inside the recovery lock, right
+ * before writing, the journal is read again; if it is gone or its text is not
+ * exactly `reviewed`, nothing is written («diario-cambiado») and the person
+ * reviews the current one. A screen left open never closes another journal.
  */
-export type DismissResult = { ok: true } | { ok: false; reason: 'otra-recuperacion' | 'sin-guardar' | 'sin-espacio' | 'error-de-escritura' | 'sin-web-locks'; message: string }
+export type DismissResult = { ok: true } | { ok: false; reason: 'otra-recuperacion' | 'sin-guardar' | 'sin-espacio' | 'error-de-escritura' | 'sin-web-locks' | 'diario-cambiado'; message: string }
+
+const JOURNAL_CHANGED = 'El diario ha cambiado desde que lo revisaste (otra pestaña o la app instalada). No se ha cerrado nada y las escrituras siguen bloqueadas. Revisa el diario actual; si está dañado, vuelve a guardarlo y a confirmarlo.'
 
 const isQuota = (e: unknown) => e instanceof Error && (e.name === 'QuotaExceededError' || /quota/i.test(e.message))
 /** A failed close, said plainly. The journal is left exactly as it was (F04 · cuota). */
@@ -712,14 +721,17 @@ function closeFailure(e: unknown): string {
     : `No se pudo cerrar el diario (${e instanceof Error ? e.message : String(e)}). Sigue intacto.`
 }
 
-export async function dismissJournal(env: RestoreEnv, opts: { savedDamaged?: boolean } = {}): Promise<DismissResult> {
+export async function dismissJournal(env: RestoreEnv, opts: { reviewed: string; savedDamaged?: boolean }): Promise<DismissResult> {
   if (!env.locks) return { ok: false, reason: 'sin-web-locks', message: 'Sin Web Locks no se cierra el diario.' }
   return exclusively<DismissResult>(
     env.locks,
     () => ({ ok: false, reason: 'otra-recuperacion', message: 'Otra pestaña está recuperando ahora; vuelve a intentarlo.' }),
     async () => {
-      const j = await readJournal(env.storage)
-      if (j === undefined) return { ok: true }
+      // R13-01 · the authoritative check: the journal as it is now, inside the lock, against the exact text reviewed.
+      const a = await assessJournal(env.storage)
+      if (a.kind === 'ninguno') return { ok: false, reason: 'diario-cambiado', message: JOURNAL_CHANGED }
+      if (a.raw !== null && a.raw !== opts.reviewed) return { ok: false, reason: 'diario-cambiado', message: JOURNAL_CHANGED }
+      const j: Exclude<JournalRaw, undefined> = a.kind === 'ilegible' ? { ilegible: a.reason, raw: a.raw } : a.journal
       let text: string
       try {
         if (isDamaged(j)) {

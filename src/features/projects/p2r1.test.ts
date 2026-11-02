@@ -409,7 +409,7 @@ describe('P2-R1 · si se interrumpe', () => {
     const cur = await loaded(storage)
     const plan = planRestore(cur.data, cur.generation, b)
     expect(await performRestore(env(storage, locks), plan, { mode: 'todo' })).toMatchObject({ ok: false, reason: 'recuperacion-interrumpida' })
-    expect(await dismissJournal(env(storage, locks))).toMatchObject({ ok: true }) // P2-R1.3: result object instead of a boolean
+    expect(await dismissJournal(env(storage, locks), { reviewed: storage.getItem(JOURNAL_KEY)! })).toMatchObject({ ok: true }) // P2-R1.3: result object; P2-R1.3.1: exact text reviewed
     expect(await performRestore(env(storage, locks), plan, { mode: 'todo' })).toMatchObject({ ok: true })
     expect((await loaded(storage)).data.tasks[0].nextAction).toBe(l.data.tasks[0].nextAction)
   })

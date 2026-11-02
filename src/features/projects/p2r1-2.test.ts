@@ -319,7 +319,7 @@ describe('H03 · el diario se valida entero', () => {
     const cut = storage.getItem(JOURNAL_KEY)!.slice(0, 200)
     storage.setItem(JOURNAL_KEY, cut)
     expect((await inspectJournal(storage)).kind).toBe('ilegible')
-    await dismissJournal(env(storage, locks))
+    await dismissJournal(env(storage, locks), { reviewed: cut }) // P2-R1.3.1: the close names the exact text reviewed
     expect(storage.getItem(JOURNAL_KEY)).toBe(cut)
   })
 
@@ -332,7 +332,7 @@ describe('H03 · el diario se valida entero', () => {
     expect(d.reason).toMatch(/estado desconocido/)
     expect(d.before).toBe(j.before) // still whole: it can be recovered through the same steps
     const data = storage.getItem(DATA_KEY)
-    expect(await dismissJournal(env(storage, locks), { savedDamaged: true })).toMatchObject({ ok: true }) // P2-R1.3: result object instead of a boolean
+    expect(await dismissJournal(env(storage, locks), { savedDamaged: true, reviewed: bad })).toMatchObject({ ok: true }) // P2-R1.3: result object; P2-R1.3.1: exact text reviewed
     const closed = await inspectJournal(storage)
     expect(closed).toMatchObject({ kind: 'cerrada', journal: { state: 'revisada', damaged: bad, before: j.before } })
     expect(storage.getItem(DATA_KEY)).toBe(data)

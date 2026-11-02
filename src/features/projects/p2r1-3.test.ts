@@ -239,7 +239,7 @@ describe('F03 · cerrar un diario abierto de 8c7ea4c deja un diario válido', ()
     const other = JSON.parse(JSON.stringify(setNextAction(l.data, l.data.tasks[0].id, 'fuera', ctx())))
     storage.setItem(DATA_KEY, JSON.stringify({ format: 'elyum-projects-store/1', generation: l.generation + 1, savedAt: now(), writer: 'fuera', sha256: await sha256Hex(JSON.stringify(other)), data: other }))
     expect((await inspectJournal(storage)).kind).toBe('desconocida')
-    expect(await dismissJournal(env(storage, locks))).toMatchObject({ ok: true })
+    expect(await dismissJournal(env(storage, locks), { reviewed: storage.getItem(JOURNAL_KEY)! })).toMatchObject({ ok: true }) // P2-R1.3.1: exact text reviewed
     const again = await inspectJournal(storage)
     expect(again).toMatchObject({ kind: 'cerrada', journal: { state: 'revisada', before: legacy.before } })
   })
@@ -283,7 +283,7 @@ describe('cuota al cerrar un diario dañado', () => {
     storage.setItem(JOURNAL_KEY, bad)
     storage.failOn = (k) => (k === JOURNAL_KEY ? quota() : undefined)
     const before = storage.snapshot()
-    const r = await dismissJournal(env(storage, locks), { savedDamaged: true })
+    const r = await dismissJournal(env(storage, locks), { savedDamaged: true, reviewed: bad }) // P2-R1.3.1: exact text reviewed
     expect(r).toMatchObject({ ok: false, reason: 'sin-espacio' })
     expect(storage.snapshot()).toBe(before)
     expect(storage.getItem(JOURNAL_KEY)).toBe(bad)

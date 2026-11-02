@@ -316,8 +316,10 @@ export function RestoreView() {
                     onClick={async () => {
                       setBusy(true)
                       try {
-                        const r = await dismissJournal(env, { savedDamaged: true })
+                        // R13-01 · the close applies only to the exact text delivered and confirmed.
+                        const r = await dismissJournal(env, { savedDamaged: true, reviewed: damage.delivered! })
                         setCloseError(r.ok ? undefined : r.message)
+                        if (!r.ok && r.reason === 'diario-cambiado') setDamage((prev) => prev && { reason: prev.reason, confirmed: false })
                         await refresh()
                       } finally {
                         setBusy(false)
@@ -590,7 +592,7 @@ export function RestoreView() {
                 disabled={busy}
                 data-testid="journal-dismiss"
                 onClick={async () => {
-                  const r = await dismissJournal(env)
+                  const r = await dismissJournal(env, { reviewed: journal.raw })
                   setCloseError(r.ok ? undefined : r.message)
                   await refresh()
                 }}

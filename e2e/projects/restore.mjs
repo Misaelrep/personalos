@@ -371,6 +371,95 @@ try {
     check('F03 · and edits work again', (await sandbox(page)).generation === curNow.generation + 1)
   }
 
+  // ── 10e · P2-R1.3.1 · R13-01: a close applies only to the exact journal text delivered and confirmed ──
+  {
+    const g = await journal(page)
+    const textA = JSON.stringify({ ...g, state: 'terminada', summary: 'diario A' })
+    const textB = JSON.stringify({ ...g, state: 'otra-cosa', summary: 'diario B' })
+    const settled = () => page.waitForFunction(() => document.querySelector('[data-testid="journal-close-error"]') || !document.querySelector('[data-testid="journal-open"]')).then(() => page.waitForTimeout(300))
+    const off = async (id) => (await page.getByTestId(id).count()) === 0 || (await page.getByTestId(id).isDisabled())
+    const confirmA = async () => {
+      await reopen(textA)
+      const got = await download(page, 'journal-save-damaged')
+      await page.getByTestId('journal-damaged-confirm').check()
+      return got === textA && !(await page.getByTestId('journal-close-damaged').isDisabled())
+    }
+    // A · the journal is replaced (another tab or the installed app) while this screen still shows A, confirmed.
+    check('R13-01 · A exported and confirmed: close enabled on this screen', await confirmA())
+    await page.evaluate(([k, v]) => localStorage.setItem(k, v), [SB_JOURNAL, textB]) // same page: no «storage» event, the screen stays stale
+    const dataA = await getKey(page, SB_DATA)
+    const keysA = await page.evaluate(() => JSON.stringify(Object.keys(localStorage).sort().map((k) => [k, localStorage.getItem(k)])))
+    await page.getByTestId('journal-close-damaged').click()
+    await settled() // refused (error shown) or, on the faulty code, closed
+    check(
+      'R13-01 · A · journal replaced by B: close refused, B kept exactly, no key changed, message says it changed',
+      (await getKey(page, SB_JOURNAL)) === textB &&
+        (await page.evaluate(() => JSON.stringify(Object.keys(localStorage).sort().map((k) => [k, localStorage.getItem(k)])))) === keysA &&
+        (await page.getByTestId('journal-close-error').innerText()).includes('ha cambiado'),
+    )
+    check(
+      'R13-01 · A · old confirmation gone: no checkbox, close disabled, the screen now shows B and asks to save it again',
+      (await page.getByTestId('journal-damaged-confirm').count()) === 0 && (await off('journal-close-damaged')) && (await openKind()) === 'ilegible' && (await page.getByTestId('journal-damaged').count()) === 1 && (await page.getByTestId('journal-damaged').innerText()).includes('estado desconocido: otra-cosa'),
+    )
+    await shot(page, '29-r1301-diario-sustituido.png')
+    await page.getByTestId('sandbox-change').click()
+    await page.waitForTimeout(500)
+    check('R13-01 · A · writes still blocked', (await getKey(page, SB_DATA)) === dataA)
+
+    // B · client B (the other tab) resolves A and starts a new recovery, interrupted after the new journal and before the data.
+    check('R13-01 · B · client A exported and confirmed A', await confirmA())
+    await other.reload()
+    await other.waitForSelector('[data-testid="sandbox-state"]')
+    await other.waitForTimeout(300)
+    check('R13-01 · B · client B saves the same A', (await download(other, 'journal-save-damaged')) === textA)
+    await other.getByTestId('journal-damaged-confirm').check()
+    await other.getByTestId('journal-close-damaged').click()
+    await other.waitForFunction(() => !document.querySelector('[data-testid="journal-open"]'))
+    check('R13-01 · B · client B closed A', (await journal(other)).state === 'revisada' && (await journal(other)).damaged === textA)
+    const dataB = await getKey(other, SB_DATA)
+    await other.evaluate(([dk, jk]) => {
+      window.__realSetItem = Storage.prototype.setItem
+      const real = window.__realSetItem
+      let journalWrites = 0
+      Storage.prototype.setItem = function (k, v) {
+        if (k === dk || (k === jk && ++journalWrites > 1)) throw new DOMException('interrumpida', 'UnknownError') // the process stops here
+        return real.call(this, k, v)
+      }
+    }, [SB_DATA, SB_JOURNAL])
+    await pick(other, 'copia-prueba.json', sandboxCopy)
+    await other.waitForSelector('[data-testid="restore-plan"]')
+    const rb = await recover(other, [], true)
+    await other.evaluate(() => (Storage.prototype.setItem = window.__realSetItem))
+    const fresh = await getKey(page, SB_JOURNAL)
+    check('R13-01 · B · new recovery interrupted: new open journal written, data untouched', !rb.ok && JSON.parse(fresh).state === 'en-curso' && (await getKey(page, SB_DATA)) === dataB, rb.text)
+    const keysB = await page.evaluate(() => JSON.stringify(Object.keys(localStorage).sort().map((k) => [k, localStorage.getItem(k)])))
+    // Client A's screen still shows A, delivered and confirmed.
+    check('R13-01 · B · client A still shows A with its old confirmation', !(await page.getByTestId('journal-close-damaged').isDisabled()))
+    await page.getByTestId('journal-close-damaged').click()
+    await settled() // refused (error shown) or, on the faulty code, closed
+    check(
+      'R13-01 · B · old confirmation: close refused, the new journal kept exactly, no key changed, no data lost',
+      (await getKey(page, SB_JOURNAL)) === fresh && (await page.evaluate(() => JSON.stringify(Object.keys(localStorage).sort().map((k) => [k, localStorage.getItem(k)])))) === keysB && (await getKey(page, SB_DATA)) === dataB && (await page.getByTestId('journal-close-error').innerText()).includes('ha cambiado'),
+    )
+    check('R13-01 · B · the screen now shows the new journal to review (interrupted before writing)', (await openKind()) === 'sin-escribir')
+    await shot(page, '30-r1301-recuperacion-nueva-interrumpida.png')
+    await page.getByTestId('sandbox-change').click()
+    await page.waitForTimeout(500)
+    check('R13-01 · B · write block intact', (await getKey(page, SB_DATA)) === dataB)
+    // Resolved the normal way, for the steps that follow.
+    if (await page.getByTestId('journal-settle').count()) {
+      await page.getByTestId('journal-settle').click()
+      await page.waitForFunction(() => !document.querySelector('[data-testid="journal-open"]'))
+    }
+
+    // C · A unchanged, exported and confirmed: closes normally.
+    check('R13-01 · C · A exported and confirmed again', await confirmA())
+    await page.getByTestId('journal-close-damaged').click()
+    await page.waitForFunction(() => !document.querySelector('[data-testid="journal-open"]'))
+    const closedC = await journal(page)
+    check('R13-01 · C · legitimate close: closed, its exact text kept, data untouched', closedC.state === 'revisada' && closedC.damaged === textA && (await getKey(page, SB_DATA)) === dataB && (await page.getByTestId('journal-close-error').count()) === 0)
+  }
+
   // ── 10c · P2-R1.2 · H04: PROYECTOS itself, opened with an unresolved recovery in its own store ──
   {
     const mainRaw = await getKey(page, DATA_KEY)

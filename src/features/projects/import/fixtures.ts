@@ -1,0 +1,75 @@
+/**
+ * SYNTHETIC dossier for tests and demos. Same LAYOUT as a real dossier
+ * (named Markdown tables); every word of content is invented. Never put a
+ * real dossier here: the repository is public.
+ */
+export const SYNTHETIC_DOSSIER_NAME = 'DOSSIER_SINTETICO_HUERTO_2026-10-20.md'
+
+export const SYNTHETIC_DOSSIER = `# DOSSIER OPERATIVO — HUERTO DE PRUEBA
+
+**Fecha de elaboración:** 20 de octubre de 2026.
+**Finalidad:** comprobar el importador con un proyecto inventado.
+
+## 1. Fuentes
+
+| Clave | Fuente | Evidencia específica |
+|---|---|---|
+| F1 | \`manual_inventado.md\` | Reglas de riego |
+| F2 | Conversación ficticia | Decisiones de siembra |
+
+Regla del proyecto: máximo **dos parcelas activas**.
+
+## 3. Estado de las parcelas
+
+| Parcela | Riego | Aprob. | Pendiente |
+|---|---|---|---|
+| Parcela norte | Instalado | **Sí, usuario** | Revisar goteo |
+| Parcela sur | No | No | Todo |
+
+## 8. Backlog
+
+| ID | Área | Tarea concreta | Estado | Entregable | Dependencia | Tiempo humano | Agente posible | Hecho cuando… | Fuente |
+|---|---|---|---|---|---|---|---|---|---|
+| HUE-01 | Riego | Comprobar la llave de *paso* | Pendiente | Foto de la llave | Acceso al jardín | 20–35 min | IA sugiere; humano revisa | La llave abre y cierra | F1 §2; F2 |
+| HUE-02 | Riego | Cambiar el goteo | Pendiente | Goteo nuevo | HUE-01 | 25–45 min | Claude Code | No hay fugas | F1 |
+| HUE-03 | Siembra | Elegir semillas | Borrador existente | Lista de semillas | HUE-02 o semillas del vecino | 10–20 min | IA compara | Lista cerrada | F2 |
+| HUE-04 | Siembra | Sembrar según parcela | No consta | Parcelas sembradas | HUE-01..03 según parcela | 30–60 min sesión | Operador humano | Brotes visibles | F2 |
+| HUE-05 | Registro | Anotar el riego \\| diario | No iniciado | Hoja de riego | HUE-02,03 | 15–25 min/sem | IA agrega | Cada día tiene dato | F1; F9 |
+| HUE-06 | Registro | Medir la cosecha | Pendiente | Tabla de pesos | HUE-04 + báscula | 1 h | — | Pesos con fecha | F2 |
+`
+
+/**
+ * P4a · The same SYNTHETIC dossier, a later version: HUE-02 changes its title,
+ * HUE-03 its status (a word the first version did not use), HUE-06 is gone and
+ * HUE-07 is new. For trying a re-import on the test page.
+ */
+export const SYNTHETIC_DOSSIER_V2_NAME = 'DOSSIER_SINTETICO_HUERTO_2026-11-02.md'
+
+export const SYNTHETIC_DOSSIER_V2 = SYNTHETIC_DOSSIER.replace('20 de octubre de 2026', '2 de noviembre de 2026')
+  .replace('| Cambiar el goteo |', '| Cambiar el goteo de la parcela norte |')
+  .replace('| Elegir semillas | Borrador existente |', '| Elegir semillas | En curso |')
+  .replace(/\| HUE-06 .*\n/, '| HUE-07 | Registro | Fotografiar los brotes | Pendiente | Carpeta de fotos | HUE-04 | 10 min | — | Una foto por parcela | F2 |\n')
+
+/** P4b · A second SYNTHETIC project, so the weekly review has more than one backlog. Invented words only. */
+export const SYNTHETIC_TALLER_NAME = 'DOSSIER_SINTETICO_TALLER_2026-10-21.md'
+
+export const SYNTHETIC_TALLER = `# DOSSIER OPERATIVO — TALLER DE PRUEBA
+
+**Fecha de elaboración:** 21 de octubre de 2026.
+**Finalidad:** ordenar un taller inventado para probar la revisión semanal.
+
+## 1. Fuentes
+
+| Clave | Fuente | Evidencia específica |
+|---|---|---|
+| F1 | \`inventario_ficticio.md\` | Herramientas disponibles |
+
+## 8. Backlog
+
+| ID | Área | Tarea concreta | Estado | Entregable | Dependencia | Tiempo humano | Agente posible | Hecho cuando… | Fuente |
+|---|---|---|---|---|---|---|---|---|---|
+| TAL-01 | Orden | Vaciar la mesa de trabajo | Pendiente | Mesa libre | — | 30 min | — | La mesa está vacía | F1 |
+| TAL-02 | Orden | Etiquetar los cajones | Pendiente | Cajones con etiqueta | TAL-01 | 45 min | IA propone etiquetas | Cada cajón tiene etiqueta | F1 |
+| TAL-03 | Registro | Escribir el inventario | Pendiente | Lista de herramientas | — | 1 h | Claude Code | La lista está completa | F1 |
+| TAL-04 | Compras | Pedir tornillos | Hecho | Pedido | — | 10 min | — | Pedido enviado | F1 |
+`

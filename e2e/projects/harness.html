@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>P3 · banco de pruebas</title>
+    <style>
+      body { font: 15px/1.4 system-ui, sans-serif; margin: 16px; background: #fff; color: #111 }
+      #error { background: #fde8e8; color: #8a1111; padding: 8px; display: none }
+      #error.on { display: block }
+      table { border-collapse: collapse } td, th { border: 1px solid #ccc; padding: 2px 6px; font-size: 13px }
+      .conflicto { background: #fff1c2 }
+    </style>
+  </head>
+  <body>
+    <!-- Test harness for P3 only (served by `vite` in development; not part of the app build). -->
+    <h1>P3 · banco de pruebas (datos sintéticos)</h1>
+    <p id="mode"></p>
+    <p id="status"></p>
+    <div id="error" role="alert"></div>
+    <label>Dossier <input id="file" type="file" accept=".md,text/markdown,text/plain" /></label>
+    <section id="preview" hidden>
+      <p id="counts"></p>
+      <ul id="literals"></ul>
+      <table><tbody id="items"></tbody></table>
+      <button id="confirm">Confirmar importación</button>
+      <button id="cancel">Cancelar</button>
+    </section>
+    <p><button id="export">Exportar PROYECTOS</button> <span id="exported"></span></p>
+    <script type="module" src="./harness.ts"></script>
+  </body>
+</html>

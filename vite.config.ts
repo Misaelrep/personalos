@@ -28,11 +28,12 @@ export default defineConfig({
       },
     }),
   ],
-  // P4 · Página de prueba de PROYECTOS (proyectos.html): en vistas previas y en local, nunca en producción
-  // (comparte almacén con la sección PROYECTOS y ofrece dossiers sintéticos).
+  // P4 · Página de prueba de PROYECTOS (proyectos.html): solo en las vistas previas de Vercel, nunca en
+  // producción (comparte almacén con la sección PROYECTOS y ofrece dossiers sintéticos). En local, `vite`
+  // la sirve igualmente. Si Vercel no indica el entorno, se excluye.
   build: {
     rollupOptions: {
-      input: process.env.VERCEL_ENV === 'production' ? undefined : { main: 'index.html', proyectos: 'proyectos.html' },
+      input: process.env.VERCEL_ENV === 'preview' ? { main: 'index.html', proyectos: 'proyectos.html' } : undefined,
     },
   },
 })

@@ -2,7 +2,10 @@ import { validateProjectsData, type Issue } from '../domain/schema'
 import type { DossierReference, DossierSource, HistoryEntry, ImportRecord, Milestone, Project, ProjectsData, RoutineLink, Task, Vocabulary } from '../domain/types'
 import { sha256Hex } from '../import/sha256'
 import { EXPORT_FORMAT, verifyExport, type ExportFile } from './export'
+import { JOURNAL_FORMAT, JOURNAL_KEY, parseJournal, type Journal } from './journal'
 import { createStore, DATA_KEY, LOCK_NAME, readEnvelope, type KeyValue, type Locks, type SaveFailure } from './store'
+
+export { JOURNAL_FORMAT, JOURNAL_KEY, type Journal } from './journal'
 
 /**
  * P2-R1 · Recovering PROYECTOS from a copy exported by PROYECTOS (`export.ts`).
@@ -28,8 +31,6 @@ import { createStore, DATA_KEY, LOCK_NAME, readEnvelope, type KeyValue, type Loc
  *                        counts as recovered.
  */
 
-export const JOURNAL_KEY = 'elyum:projects:v1:antes-de-recuperar'
-export const JOURNAL_FORMAT = 'elyum-projects-restore/1'
 export const RESTORE_LOCK = `${LOCK_NAME}:recuperacion`
 /** The separate store the test page recovers into: every key of PROYECTOS moved under this prefix. */
 export const SANDBOX_PREFIX = 'elyum:prueba-p2r1:'
@@ -131,9 +132,16 @@ export interface RestoreUnit {
   state: UnitState
   /** What choosing it would do, line by line. */
   changes: string[]
-  /** Whether it can be chosen on its own; `why` says why not. */
+  /** Whether it can be recovered on its own; `why` says why not. */
   selectable: boolean
   why: string[]
+  /**
+   * P2-R1.2 · H02: whether it can be ticked at all (it has something to
+   * recover). A unit that cannot be recovered alone can still be part of a
+   * selection that is valid as a whole (the weeks with the project their
+   * commitments need); the selection is rebuilt and checked on every change.
+   */
+  choosable: boolean
   /** Local changes made after the copy was exported: choosing the unit drops them (they stay in the journal). */
   localNewer: number
 }
@@ -221,13 +229,13 @@ export function planRestore(local: ProjectsData, baseGeneration: number, backup:
     const c = unitOf(copy, id)
     const label = (c ?? l)!.project.name
     if (!c) {
-      units.push({ key: `proyecto:${id}`, kind: 'proyecto', label, state: 'solo-local', changes: ['No está en la copia: se conserva tal cual.'], selectable: false, why: ['No hay nada que recuperar.'], localNewer: 0 })
+      units.push({ key: `proyecto:${id}`, kind: 'proyecto', label, state: 'solo-local', changes: ['No está en la copia: se conserva tal cual.'], selectable: false, why: ['No hay nada que recuperar.'], choosable: false, localNewer: 0 })
       continue
     }
     const changes = projectChanges(l, c)
     const state: UnitState = !l ? 'solo-en-copia' : changes.length ? 'distinta' : 'igual'
     const touched = new Set([id, ...(l?.tasks ?? []).map((t) => t.id), ...(l?.milestones ?? []).map((m) => m.id)])
-    units.push({ key: `proyecto:${id}`, kind: 'proyecto', label, state, changes: state === 'igual' ? ['Igual que en la copia.'] : changes, selectable: false, why: [], localNewer: l ? localChangesAfter(local, touched, since) : 0 })
+    units.push({ key: `proyecto:${id}`, kind: 'proyecto', label, state, changes: state === 'igual' ? ['Igual que en la copia.'] : changes, selectable: false, why: [], choosable: state !== 'igual', localNewer: l ? localChangesAfter(local, touched, since) : 0 })
   }
   const weeksSame = same(local.weeks, copy.weeks)
   const localWeeks = new Set(local.weeks.map((w) => w.weekStart))
@@ -241,6 +249,7 @@ export function planRestore(local: ProjectsData, baseGeneration: number, backup:
       : [`La copia tiene ${n(copy.weeks.length, 'semana', 'semanas')}; aquí hay ${local.weeks.length}. Elegirla sustituye todas las semanas (capacidad, compromisos y notas) por las de la copia.`, ...copy.weeks.filter((w) => !localWeeks.has(w.weekStart)).map((w) => `Recupera la semana del ${w.weekStart}.`)],
     selectable: false,
     why: [],
+    choosable: !weeksSame && copy.weeks.length > 0,
     localNewer: localChangesAfter(local, new Set(local.weeks.map((w) => w.weekStart)), since),
   })
 
@@ -266,7 +275,8 @@ export function planRestore(local: ProjectsData, baseGeneration: number, backup:
 
 export type Selection = { mode: 'todo' } | { mode: 'seleccion'; units: string[] }
 
-export type Built = { ok: true; data: ProjectsData; summary: string } | { ok: false; problems: string[] }
+/** `warnings`: references that were already broken before this recovery (here or in the copy); kept as they are, never repaired (H01). */
+export type Built = { ok: true; data: ProjectsData; summary: string; warnings: string[] } | { ok: false; problems: string[] }
 
 /** Replace the items `belongs` picks with `incoming`, keeping their place in the list. */
 function replaceIn<T>(list: T[], belongs: (x: T) => boolean, incoming: T[]): T[] {
@@ -280,6 +290,102 @@ function replaceIn<T>(list: T[], belongs: (x: T) => boolean, incoming: T[]): T[]
 function unionById<T extends { id: string }>(local: T[], copy: T[]): T[] {
   const have = new Set(local.map((x) => x.id))
   return [...local, ...copy.filter((x) => !have.has(x.id))]
+}
+
+// ── H01 · References a recovery must not break ──────────────────────────────
+
+/** One reference that points to nothing: from a task (dependency, requirement) or a week (commitment, note). */
+interface BrokenRef {
+  key: string
+  /** `task:<id>` or `week:<weekStart>`: the entity that holds the reference. */
+  holder: string
+  kind: 'dependencia' | 'requisito' | 'compromiso' | 'nota'
+  /** Task id, or project id for a note. */
+  target: string
+  /** The task that holds it, or the week. */
+  from: string
+  /** Requirement text, for requirements. */
+  literal?: string
+}
+
+function brokenReferences(d: ProjectsData): BrokenRef[] {
+  const tasks = new Set(d.tasks.map((t) => t.id))
+  const projects = new Set(d.projects.map((p) => p.id))
+  const out: BrokenRef[] = []
+  for (const t of d.tasks) {
+    for (const dep of t.dependsOn ?? []) if (!tasks.has(dep)) out.push({ key: `dep|${t.id}|${dep}`, holder: `task:${t.id}`, kind: 'dependencia', target: dep, from: t.id })
+    for (const r of t.requirements ?? [])
+      for (const o of r.options ?? [])
+        if (o.kind === 'tarea' && !tasks.has(o.taskId)) out.push({ key: `req|${t.id}|${r.id}|${o.taskId}`, holder: `task:${t.id}`, kind: 'requisito', target: o.taskId, from: t.id, literal: r.literal })
+  }
+  for (const w of d.weeks) {
+    for (const c of w.commitments ?? []) if (!tasks.has(c.taskId)) out.push({ key: `commit|${w.weekStart}|${c.taskId}`, holder: `week:${w.weekStart}`, kind: 'compromiso', target: c.taskId, from: w.weekStart })
+    for (const x of w.notes ?? []) if (!projects.has(x.projectId)) out.push({ key: `note|${w.weekStart}|${x.projectId}`, holder: `week:${w.weekStart}`, kind: 'nota', target: x.projectId, from: w.weekStart })
+  }
+  return out
+}
+
+function holderIn(d: ProjectsData, holder: string): unknown {
+  const [kind, ...rest] = holder.split(':')
+  const id = rest.join(':')
+  return kind === 'task' ? d.tasks.find((t) => t.id === id) : d.weeks.find((w) => w.weekStart === id)
+}
+
+/**
+ * Split the broken references of `next` into those this recovery would
+ * introduce and those that were already there. A reference is historical
+ * only if the entity that holds it is exactly as it was on the side it came
+ * from (here, or in the copy) and it was already broken there. Anything else
+ * is new: the recovery itself would break it.
+ */
+function referenceCheck(plan: RestorePlan, next: ProjectsData, chosen: Set<string>): { problems: string[]; warnings: string[] } {
+  const local = plan.local
+  const copy = plan.backup.data
+  const localBroken = new Set(brokenReferences(local).map((r) => r.key))
+  const copyBroken = new Set(brokenReferences(copy).map((r) => r.key))
+  const projectName = (id: string) => (next.projects.find((p) => p.id === id) ?? local.projects.find((p) => p.id === id) ?? copy.projects.find((p) => p.id === id))?.name
+  const taskIn = (id: string) => next.tasks.find((t) => t.id === id) ?? local.tasks.find((t) => t.id === id) ?? copy.tasks.find((t) => t.id === id)
+  const describeTask = (id: string) => {
+    const t = taskIn(id)
+    if (!t) return `«${id}»`
+    const p = projectName(t.projectId)
+    return `${taskName(t)}${p ? ` de «${p}»` : ''}`
+  }
+  const holderText = (r: BrokenRef) => (r.holder.startsWith('task:') ? `La tarea ${describeTask(r.from)}` : `La revisión de la semana del ${r.from}`)
+  /** What would bring the missing target back, or why it would be gone. */
+  const remedy = (r: BrokenRef) => {
+    if (r.kind === 'nota') {
+      const inCopy = copy.projects.some((p) => p.id === r.target)
+      return inCopy && !chosen.has(`proyecto:${r.target}`) ? `recupera también «${projectName(r.target)}»` : 'ese proyecto no existe ni aquí ni en la copia'
+    }
+    const inCopy = copy.tasks.find((t) => t.id === r.target)
+    if (inCopy && !chosen.has(`proyecto:${inCopy.projectId}`)) return `recupera también «${projectName(inCopy.projectId)}»`
+    const inLocal = local.tasks.find((t) => t.id === r.target)
+    if (inLocal && chosen.has(`proyecto:${inLocal.projectId}`))
+      return `«${projectName(inLocal.projectId)}» de la copia no tiene esa tarea (es posterior a la copia): recuperarlo la quitaría`
+    return 'esa tarea no existe ni aquí ni en la copia'
+  }
+  const sentence = (r: BrokenRef) => {
+    switch (r.kind) {
+      case 'dependencia':
+        return `${holderText(r)} depende de ${describeTask(r.target)}, que no quedaría: ${remedy(r)}.`
+      case 'requisito':
+        return `${holderText(r)} tiene un requisito («${r.literal}») sobre ${describeTask(r.target)}, que no quedaría: ${remedy(r)}.`
+      case 'compromiso':
+        return `${holderText(r)} compromete ${describeTask(r.target)}, que no quedaría: ${remedy(r)}.`
+      case 'nota':
+        return `${holderText(r)} tiene una nota de «${projectName(r.target) ?? r.target}», que no quedaría: ${remedy(r)}.`
+    }
+  }
+  const problems: string[] = []
+  const warnings: string[] = []
+  for (const r of brokenReferences(next)) {
+    const now = JSON.stringify(holderIn(next, r.holder))
+    const historical = (localBroken.has(r.key) && JSON.stringify(holderIn(local, r.holder)) === now) || (copyBroken.has(r.key) && JSON.stringify(holderIn(copy, r.holder)) === now)
+    if (historical) warnings.push(`Ya estaba así antes de recuperar (se conserva): ${holderText(r).replace(/^La /, 'la ')} apunta a «${r.target}», que no existe.`)
+    else problems.push(sentence(r))
+  }
+  return { problems, warnings }
 }
 
 const issueText = (i: Issue) => (i.path ? `${i.path}: ${i.message}` : i.message)
@@ -337,30 +443,15 @@ export function buildRestore(plan: RestorePlan, sel: Selection, at: string): Bui
   }
 
   next.history = [...next.history, { at, by: 'usuario', entity: 'import', id: plan.backup.storedSha256.slice(0, 16), field: 'recuperación', note: summary }]
+  // H01 · before anything else: no reference this recovery would break. Nothing is repaired or removed to pass.
+  const refs = referenceCheck(plan, next, new Set(sel.mode === 'todo' ? [] : sel.units))
+  if (refs.problems.length) return { ok: false, problems: refs.problems }
   const v = validateProjectsData(next)
   if (!v.ok) return { ok: false, problems: v.errors.map(issueText) }
-  return { ok: true, data: v.data, summary }
+  return { ok: true, data: v.data, summary, warnings: refs.warnings }
 }
 
 // ── 4 · Writing, with a journal ─────────────────────────────────────────────
-
-export interface Journal {
-  format: typeof JOURNAL_FORMAT
-  state: 'en-curso' | 'completada' | 'fallida' | 'no-aplicada' | 'revisada'
-  startedAt: string
-  finishedAt?: string
-  writer: string
-  baseGeneration: number
-  /** The stored text the recovery replaced, exactly (null: nothing was stored). */
-  before: string | null
-  beforeSha256: string | null
-  /** SHA-256 of the data it writes. */
-  targetSha256: string
-  resultGeneration?: number
-  source: { exportedAt: string; storedSha256: string; generation: number; name?: string; origin?: string }
-  summary: string
-  error?: string
-}
 
 export interface RestoreEnv {
   storage: KeyValue
@@ -374,15 +465,22 @@ export type RestoreResult =
   | { ok: true; generation: number; summary: string; verified: true }
   | { ok: false; reason: RestoreFailure; message: string; details?: string[]; written: boolean }
 
-function readJournalRaw(storage: KeyValue): Journal | undefined | 'ilegible' {
+type JournalRaw = Journal | undefined | { ilegible: string; raw: string }
+const isDamaged = (j: JournalRaw): j is { ilegible: string; raw: string } => typeof j === 'object' && 'ilegible' in j
+
+/** H03 · The whole structure (`parseJournal`) and, when it says what it replaced, that text against its fingerprint. */
+async function readJournal(storage: KeyValue): Promise<JournalRaw> {
   const raw = storage.getItem(JOURNAL_KEY)
   if (raw === null) return undefined
-  try {
-    const j = JSON.parse(raw) as Journal
-    return isObject(j) && j.format === JOURNAL_FORMAT ? j : 'ilegible'
-  } catch {
-    return 'ilegible'
+  const r = parseJournal(raw)
+  if (!r.ok) return { ilegible: r.reason, raw }
+  const j = r.journal
+  if (j.before !== null) {
+    if (j.beforeSha256 !== null && (await sha256Hex(j.before)) !== j.beforeSha256) return { ilegible: 'el texto anterior no coincide con su huella', raw }
+    const b = await readEnvelope(j.before)
+    if (b.kind !== 'ok') return { ilegible: `el texto anterior no se puede leer (${b.kind === 'ilegible' ? b.reason : b.kind})`, raw }
   }
+  return j
 }
 
 const writeJournal = (storage: KeyValue, j: Journal) => storage.setItem(JOURNAL_KEY, JSON.stringify(j))
@@ -399,9 +497,14 @@ export async function performRestore(env: RestoreEnv, plan: RestorePlan, sel: Se
     locks,
     () => ({ ok: false, reason: 'otra-recuperacion', message: 'Otra pestaña o la app instalada está recuperando ahora. No se ha escrito nada.', written: false }),
     async () => {
-      const j = readJournalRaw(env.storage)
-      if (j === 'ilegible' || j?.state === 'en-curso')
+      const j = await readJournal(env.storage)
+      if (isDamaged(j))
+        return { ok: false, reason: 'recuperacion-interrumpida', message: `El diario de la recuperación anterior está dañado (${j.ilegible}). Revísalo antes de empezar otra; no se ha escrito nada.`, written: false }
+      if (j?.state === 'en-curso')
         return { ok: false, reason: 'recuperacion-interrumpida', message: 'Hay una recuperación anterior sin cerrar. Revísala antes de empezar otra; no se ha escrito nada.', written: false }
+      // The text it will replace, and its fingerprint, computed now: the journal is complete from its first write.
+      const expectedRaw = env.storage.getItem(DATA_KEY)
+      const expectedSha = expectedRaw === null ? null : await sha256Hex(expectedRaw)
 
       const at = env.now()
       const built = buildRestore(plan, sel, at)
@@ -426,11 +529,17 @@ export async function performRestore(env: RestoreEnv, plan: RestorePlan, sel: Se
         summary: built.summary,
       }
       let journaled = false
+      let movedUnder = false
       const store = createStore(env)
       const r = await store.save(built.data, plan.baseGeneration, {
         beforeWrite: (raw) => {
+          // Same generation but other text (H4 of the audit): it is not the data the preview saw.
+          if (raw !== expectedRaw) {
+            movedUnder = true
+            throw new Error('los datos cambiaron')
+          }
           journal.before = raw
-          // Synchronous hashing is not available: the text itself is kept, and its hash is added after.
+          journal.beforeSha256 = expectedSha
           writeJournal(env.storage, journal)
           journaled = true
         },
@@ -443,8 +552,8 @@ export async function performRestore(env: RestoreEnv, plan: RestorePlan, sel: Se
             /* the journal says «en-curso»; inspectJournal works out that nothing was written */
           }
         }
-        const conflict = r.reason === 'conflicto'
-        return { ok: false, reason: r.reason, message: conflict ? 'Los datos cambiaron después de la vista previa (otra pestaña o la app instalada). No se ha escrito nada; vuelve a cargar la copia.' : r.message, written: false }
+        const conflict = r.reason === 'conflicto' || movedUnder
+        return { ok: false, reason: movedUnder ? 'conflicto' : r.reason, message: conflict ? 'Los datos cambiaron después de la vista previa (otra pestaña o la app instalada). No se ha escrito nada; vuelve a cargar la copia.' : r.message, written: false }
       }
 
       // Read it back with a store that shares nothing with the one that wrote.
@@ -458,7 +567,7 @@ export async function performRestore(env: RestoreEnv, plan: RestorePlan, sel: Se
           written: true,
         }
       try {
-        writeJournal(env.storage, { ...journal, beforeSha256: journal.before === null ? null : await sha256Hex(journal.before), state: 'completada', finishedAt: env.now(), resultGeneration: r.generation })
+        writeJournal(env.storage, { ...journal, state: 'completada', finishedAt: env.now(), resultGeneration: r.generation })
       } catch {
         /* the data is verified; the journal stays «en-curso» and inspectJournal will find the target */
       }
@@ -471,25 +580,27 @@ export async function performRestore(env: RestoreEnv, plan: RestorePlan, sel: Se
 
 export type JournalStatus =
   | { kind: 'ninguna' }
-  | { kind: 'ilegible' }
+  /** H03 · The journal exists but its structure or its text before is not right. Never read as closed; kept as found. */
+  | { kind: 'ilegible'; reason: string; raw: string }
   /** Closed: `completada`, `fallida` / `no-aplicada` (nothing written) or `revisada` (closed by the person). */
   | { kind: 'cerrada'; journal: Journal }
   /** Open, and the stored data is the recovery's: it was written but not closed. */
   | { kind: 'escrita-sin-cerrar'; journal: Journal }
-  /** Open, and the stored data is still the one before: nothing was written. */
+  /** Open, and the stored text is exactly the one before: nothing was written. */
   | { kind: 'sin-escribir'; journal: Journal }
   /** Open, and the stored data is neither: something else wrote after. The text before is in the journal. */
   | { kind: 'desconocida'; journal: Journal }
 
 export async function inspectJournal(storage: KeyValue): Promise<JournalStatus> {
-  const j = readJournalRaw(storage)
+  const j = await readJournal(storage)
   if (j === undefined) return { kind: 'ninguna' }
-  if (j === 'ilegible') return { kind: 'ilegible' }
+  if (isDamaged(j)) return { kind: 'ilegible', reason: j.ilegible, raw: j.raw }
   if (j.state !== 'en-curso') return { kind: 'cerrada', journal: j }
   const raw = storage.getItem(DATA_KEY)
   const current = await readEnvelope(raw)
   if (current.kind === 'ok' && (await sha(current.data)) === j.targetSha256) return { kind: 'escrita-sin-cerrar', journal: j }
-  if (raw === j.before || (current.kind === 'vacio' && j.baseGeneration === 0) || (current.kind === 'ok' && current.generation === j.baseGeneration)) return { kind: 'sin-escribir', journal: j }
+  // Only the exact text before proves nothing was written. The same generation alone does not (audit H4).
+  if (raw === j.before) return { kind: 'sin-escribir', journal: j }
   return { kind: 'desconocida', journal: j }
 }
 
@@ -497,6 +608,7 @@ export async function inspectJournal(storage: KeyValue): Promise<JournalStatus> 
  * Close an open journal once it is clear what happened. Writes only the
  * journal, and only while no recovery runs (one could be writing it now).
  * `desconocida` stays open: the person decides, with the text before at hand.
+ * P2-R1.2 · H04: called when the person asks for it (Recuperar), never on its own.
  */
 export async function settleJournal(env: RestoreEnv): Promise<JournalStatus> {
   const status = await inspectJournal(env.storage)
@@ -551,18 +663,63 @@ export async function journalAsCopy(j: Journal): Promise<string | undefined> {
 }
 
 /**
- * The person closes an open `desconocida` journal after saving the text
- * before. Only the journal changes.
+ * H03 · What can be read from a damaged journal: why it is damaged, and the
+ * text before if it is still whole (it is an envelope with its own
+ * fingerprint, so a whole one is recognisable). Writes nothing.
  */
-export async function dismissJournal(env: RestoreEnv): Promise<boolean> {
+export async function diagnoseJournal(raw: string): Promise<{ reason: string; before?: string }> {
+  const r = parseJournal(raw)
+  let reason = r.ok ? '' : r.reason
+  let candidate: unknown
+  try {
+    candidate = (JSON.parse(raw) as { before?: unknown }).before
+  } catch {
+    candidate = undefined
+  }
+  if (r.ok) {
+    const j = r.journal
+    if (j.before !== null && j.beforeSha256 !== null && (await sha256Hex(j.before)) !== j.beforeSha256) reason = 'el texto anterior no coincide con su huella'
+    else if (j.before !== null && (await readEnvelope(j.before)).kind !== 'ok') reason = 'el texto anterior no se puede leer'
+  }
+  if (typeof candidate === 'string' && (await readEnvelope(candidate)).kind === 'ok') return { reason, before: candidate }
+  return { reason }
+}
+
+/**
+ * The person closes an open journal after reviewing it. Only the journal
+ * changes. A damaged journal is closed only once the person says they saved
+ * it (`savedDamaged`); its text is kept exactly inside the closed journal,
+ * with the text before when it is still whole. It is never deleted.
+ */
+export async function dismissJournal(env: RestoreEnv, opts: { savedDamaged?: boolean } = {}): Promise<boolean> {
   if (!env.locks) return false
   return exclusively(
     env.locks,
     () => false,
     async () => {
-      const j = readJournalRaw(env.storage)
-      if (!j || j === 'ilegible') {
-        env.storage.removeItem(JOURNAL_KEY)
+      const raw = env.storage.getItem(JOURNAL_KEY)
+      const j = await readJournal(env.storage)
+      if (j === undefined || raw === null) return true
+      if (isDamaged(j)) {
+        if (!opts.savedDamaged) return false
+        const d = await diagnoseJournal(raw)
+        const at = env.now()
+        const closed: Journal = {
+          format: JOURNAL_FORMAT,
+          state: 'revisada',
+          startedAt: at,
+          finishedAt: at,
+          writer: env.writer,
+          baseGeneration: 0,
+          before: d.before ?? null,
+          beforeSha256: d.before === undefined ? null : await sha256Hex(d.before),
+          targetSha256: '0'.repeat(64),
+          source: { exportedAt: '', storedSha256: '', generation: 0 },
+          summary: 'Diario dañado: revisado, guardado y cerrado a mano.',
+          error: j.ilegible,
+          damaged: raw,
+        }
+        writeJournal(env.storage, closed)
         return true
       }
       writeJournal(env.storage, { ...j, state: j.state === 'en-curso' ? 'revisada' : j.state, finishedAt: j.finishedAt ?? env.now(), error: j.error ?? 'Cerrada a mano tras revisarla.' })

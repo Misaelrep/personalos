@@ -136,9 +136,34 @@ try {
   check('the lost project shows as only in the copy, and can be chosen', (await lost.getAttribute('data-state')) === 'solo-en-copia' && (await lost.getAttribute('data-selectable')) === 'true')
   check('nothing is chosen by default; no confirm yet', (await page.locator('[data-testid="restore-unit"] input:checked').count()) === 0 && (await page.getByTestId('restore-confirm').count()) === 0)
   const weeks = page.locator('[data-unit="semanas"]')
-  check('weeks alone are refused (their commitment needs the lost project), with the reason', (await weeks.getAttribute('data-selectable')) === 'false' && (await weeks.innerText()).includes('compromiso con una tarea desconocida'))
+  check('weeks alone are refused (their commitment needs the lost project), with the reason', (await weeks.getAttribute('data-selectable')) === 'false' && (await weeks.innerText()).includes('recupera también «Huerto de prueba»'))
   await shot(page, '15-recuperar-vista-previa.png')
   check('preview wrote nothing', (await sandbox(page)).generation === damaged.generation)
+
+  // ── 3b · P2-R1.2 · H02: combined selections, checked as a whole on every change ──
+  const sure = page.getByTestId('restore-sure')
+  const confirmBtn = page.getByTestId('restore-confirm')
+  check('H02 · weeks cannot be recovered alone but can be ticked', (await weeks.getAttribute('data-choosable')) === 'true' && !(await weeks.locator('input').isDisabled()))
+  await weeks.locator('input').check()
+  await page.getByTestId('restore-invalid').waitFor()
+  check('H02 · weeks alone: the selection is invalid, no confirmation offered', (await confirmBtn.count()) === 0 && (await page.getByTestId('restore-invalid').locator('xpath=..').innerText()).includes('Huerto de prueba'))
+  await shot(page, '22-p2r12-semanas-solas.png')
+  await lost.locator('input').check()
+  await sure.waitFor()
+  check('H02 · weeks together with the project they need: valid, confirmation offered', (await page.getByTestId('restore-invalid').count()) === 0 && (await confirmBtn.count()) === 1)
+  await sure.check()
+  check('H02 · ticked «he revisado»: confirm enabled for this selection', !(await confirmBtn.isDisabled()))
+  await shot(page, '23-p2r12-semanas-con-proyecto.png')
+  await weeks.locator('input').uncheck()
+  await sure.waitFor()
+  check('H02 · changing the selection unticks «he revisado» and disables confirm', !(await sure.isChecked()) && (await confirmBtn.isDisabled()))
+  await sure.check()
+  await page.getByTestId('restore-all').check()
+  await sure.waitFor()
+  check('H02 · switching to «todo» unticks «he revisado» too (audit H2)', !(await sure.isChecked()) && (await confirmBtn.isDisabled()))
+  await page.getByTestId('restore-all').uncheck()
+  await lost.locator('input').uncheck()
+  check('H02 · nothing was written while choosing', (await sandbox(page)).generation === damaged.generation && (await getKey(page, SB_JOURNAL)) === null)
 
   // ── 4 · Recover the lost project ───────────────────────────────────────────
   await lost.locator('input').check()
@@ -221,21 +246,47 @@ try {
   await page.evaluate(() => (Storage.prototype.setItem = window.__realSetItem))
   check('no space for the journal: refused before touching the data', !r.ok && r.reason === 'sin-espacio' && (await sandbox(page)).generation === genOther && (await getKey(page, SB_JOURNAL)) === jBefore, r.text)
 
-  // ── 10 · Interruptions, found on reopening ─────────────────────────────────
+  // ── 10 · Interruptions, found on reopening (P2-R1.2 · H04: resolved explicitly, never on their own) ──
   const cur = await sandbox(page)
-  const shaOf = (p, d) => p.evaluate(async (data) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(data))))].map((b) => b.toString(16).padStart(2, '0')).join(''), d)
-  const base = { ...(await journal(page)), state: 'en-curso', finishedAt: undefined, error: undefined }
+  const sha = (p, text) => p.evaluate(async (t) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t)))].map((b) => b.toString(16).padStart(2, '0')).join(''), text)
+  const shaOf = (p, d) => sha(p, JSON.stringify(d))
+  const base = { ...(await journal(page)), state: 'en-curso', finishedAt: undefined, error: undefined, resultGeneration: undefined }
   const reopen = async (j) => {
-    await page.evaluate(([k, v]) => localStorage.setItem(k, v), [SB_JOURNAL, JSON.stringify(j)])
+    await page.evaluate(([k, v]) => localStorage.setItem(k, v), [SB_JOURNAL, typeof j === 'string' ? j : JSON.stringify(j)])
     await page.reload()
     await page.waitForSelector('[data-testid="sandbox-state"]')
     await page.waitForTimeout(300)
   }
-  await reopen({ ...base, baseGeneration: cur.generation, before: await getKey(page, SB_DATA), targetSha256: '0'.repeat(64) })
-  check('interrupted before writing: closed on reopening as «nothing changed»', (await journal(page)).state === 'no-aplicada')
-  await reopen({ ...base, baseGeneration: cur.generation - 1, before: 'otro', targetSha256: await shaOf(page, cur.data) })
-  check('interrupted after writing: closed on reopening as completed', (await journal(page)).state === 'completada')
-  await reopen({ ...base, baseGeneration: cur.generation - 3, before: base.before, targetSha256: '1'.repeat(64) })
+  const openKind = async () => (await page.getByTestId('journal-open').count()) && (await page.getByTestId('journal-open').getAttribute('data-kind'))
+  const nowRaw = await getKey(page, SB_DATA)
+  await reopen({ ...base, baseGeneration: cur.generation, before: nowRaw, beforeSha256: await sha(page, nowRaw), targetSha256: '0'.repeat(64) })
+  check('H04 · interrupted before writing: found on reopening, NOT closed on its own, writes blocked', (await openKind()) === 'sin-escribir' && (await journal(page)).state === 'en-curso' && (await page.getByTestId('journal-blocks').count()) === 1)
+
+  // Interruption followed by a normal edit, from this tab and from a tab opened before (other): refused, nothing written.
+  const genBlocked = (await sandbox(page)).generation
+  await page.getByTestId('sandbox-change').click()
+  await page.waitForFunction(() => document.querySelector('[data-testid="sandbox-note"]')?.textContent?.includes('no se ha guardado'))
+  const noteHere = await page.getByTestId('sandbox-note').innerText()
+  await other.getByTestId('sandbox-change').click()
+  await other.waitForFunction(() => document.querySelector('[data-testid="sandbox-note"]')?.textContent?.includes('no se ha guardado'))
+  const noteOther = await other.getByTestId('sandbox-note').innerText()
+  check('H04 · a normal edit after the interruption is refused, in this tab and in another tab', noteHere.includes('sin resolver') && noteOther.includes('sin resolver') && (await sandbox(page)).generation === genBlocked && (await journal(page)).state === 'en-curso', `${noteHere} | ${noteOther}`)
+  check('H04 · the clear button (which would delete the journal) is disabled while it is open', await page.getByTestId('sandbox-clear').isDisabled())
+  await shot(page, '24-p2r12-pendiente-bloquea.png')
+  await page.getByTestId('journal-settle').click()
+  await page.waitForFunction(() => !document.querySelector('[data-testid="journal-open"]'))
+  check('interrupted before writing: closed as «nothing changed» when the person resolves it', (await journal(page)).state === 'no-aplicada')
+  await sandboxAction(other, 'sandbox-change')
+  check('H04 · once resolved, the other tab can edit again', (await sandbox(page)).generation === genBlocked + 1)
+  const cur2 = await sandbox(page)
+
+  await reopen({ ...base, baseGeneration: cur2.generation - 1, targetSha256: await shaOf(page, cur2.data) })
+  check('interrupted after writing: found, not closed on its own', (await openKind()) === 'escrita-sin-cerrar' && (await journal(page)).state === 'en-curso')
+  await page.getByTestId('journal-settle').click()
+  await page.waitForFunction(() => !document.querySelector('[data-testid="journal-open"]'))
+  check('interrupted after writing: closed as completed when the person resolves it', (await journal(page)).state === 'completada')
+
+  await reopen({ ...base, baseGeneration: cur2.generation - 3, targetSha256: '1'.repeat(64) })
   const openCard = page.getByTestId('journal-open')
   check('unknown outcome: stays open, warns, and offers the text before', (await openCard.getAttribute('data-kind')) === 'desconocida' && (await page.getByTestId('journal-save-before').count()) === 1)
   await shot(page, '20-recuperar-interrumpida.png')
@@ -247,6 +298,47 @@ try {
   await page.getByTestId('journal-dismiss').click()
   await page.waitForFunction(() => !document.querySelector('[data-testid="journal-open"]'))
   check('after reviewing it, the person closes it', (await journal(page)).state === 'revisada')
+
+  // ── 10b · P2-R1.2 · H03: a damaged journal (right format, wrong structure) ──
+  const goodJournal = await journal(page)
+  const damagedText = JSON.stringify({ ...goodJournal, state: 'terminada' })
+  const dataBefore = await getKey(page, SB_DATA)
+  await reopen(damagedText)
+  check('H03 · damaged journal: not read as closed; diagnosed; kept exactly', (await openKind()) === 'ilegible' && (await page.getByTestId('journal-damaged').innerText()).includes('estado desconocido') && (await getKey(page, SB_JOURNAL)) === damagedText)
+  check('H03 · it cannot be closed before saving it', await page.getByTestId('journal-close-damaged').isDisabled())
+  await page.getByTestId('sandbox-change').click()
+  await page.waitForFunction(() => document.querySelector('[data-testid="sandbox-note"]')?.textContent?.includes('no se ha guardado'))
+  check('H03/H04 · with a damaged journal, edits are refused and nothing changes', (await page.getByTestId('sandbox-note').innerText()).includes('dañado') && (await getKey(page, SB_DATA)) === dataBefore && (await getKey(page, SB_JOURNAL)) === damagedText)
+  await shot(page, '25-p2r12-diario-danado.png')
+  const savedDamaged = await download(page, 'journal-save-damaged')
+  check('H03 · «guardar el diario tal cual» gives exactly its text', savedDamaged === damagedText)
+  await page.getByTestId('journal-close-damaged').click()
+  await page.waitForFunction(() => !document.querySelector('[data-testid="journal-open"]'))
+  const closedDamaged = await journal(page)
+  check('H03 · closed by the person, its text kept inside, the text before still recoverable', closedDamaged.state === 'revisada' && closedDamaged.damaged === damagedText && closedDamaged.before === goodJournal.before && (await page.getByTestId('journal-undo').count()) === 1 && (await getKey(page, SB_DATA)) === dataBefore)
+
+  // ── 10c · P2-R1.2 · H04: PROYECTOS itself, opened with an unresolved recovery in its own store ──
+  {
+    const mainRaw = await getKey(page, DATA_KEY)
+    const MAIN_JOURNAL = 'elyum:projects:v1:antes-de-recuperar'
+    await page.evaluate(([k, v]) => localStorage.setItem(k, v), [MAIN_JOURNAL, JSON.stringify({ ...base, before: mainRaw, beforeSha256: await sha(page, mainRaw), baseGeneration: JSON.parse(mainRaw).generation })])
+    const p2 = await open('#/')
+    await p2.getByTestId('pending-recovery').waitFor()
+    const rows = await p2.locator('[data-testid="go-new-project"]').count()
+    await go(p2, '#/nuevo-proyecto')
+    const createDisabled = await p2.getByTestId('create-project').isDisabled()
+    const attempt = await p2.evaluate(async () => {
+      const { browserStore } = await import('/src/features/projects/store/store.ts')
+      const s = browserStore('e2e', () => new Date().toISOString())
+      const l = await s.load()
+      return s.save(l.data, l.generation)
+    })
+    check('H04 · PROYECTOS detects it on opening, offers no writes, and its store refuses them', rows === 1 && createDisabled && attempt.ok === false && attempt.reason === 'recuperacion-pendiente' && (await getKey(p2, DATA_KEY)) === mainRaw, JSON.stringify(attempt))
+    await shot(p2, '26-p2r12-proyectos-pendiente.png')
+    await page.evaluate((k) => localStorage.removeItem(k), MAIN_JOURNAL) // test setup only: the planted journal goes
+    await p2.close()
+  }
+  check('H04 · PROYECTOS’ own keys are back exactly as before (only the planted journal was removed)', (await notSandbox(page)) === mainBefore)
 
   // ── 11 · A copy of PROYECTOS itself, recovered whole into the empty test store ──
   await page.getByTestId('sandbox-clear').click()

@@ -153,6 +153,13 @@ export function ProjectsApp() {
             <Banner tone="warn">Solo lectura en este navegador: {s.readOnlyReason ?? 'no ofrece Web Locks'}. Puedes consultar y exportar; no se guarda nada.</Banner>
           </div>
         )}
+        {s?.status === 'listo' && s.pendingRecovery && route.kind !== 'recuperar' && (
+          <div className="mt-2" data-testid="pending-recovery">
+            <Banner tone="warn">
+              {s.pendingRecovery} Mientras tanto PROYECTOS no guarda cambios en este almacén: puedes consultar y exportar. Recuperar sobre el almacén operativo aún no está habilitado, así que aquí no se ha tocado nada.
+            </Banner>
+          </div>
+        )}
         {p.notice && (
           <div className="mt-2" onClick={p.clearNotice}>
             <Banner tone="info">{p.notice}</Banner>

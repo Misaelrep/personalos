@@ -1,6 +1,7 @@
 import { validateProjectsData } from '../domain/schema'
 import type { ProjectsData } from '../domain/types'
 import { sha256Hex } from '../import/sha256'
+import { JOURNAL_KEY, pendingRecovery } from './journal'
 
 /**
  * P3 · PROYECTOS' own storage. Only this module writes `elyum:projects:v1:*`;
@@ -20,6 +21,9 @@ import { sha256Hex } from '../import/sha256'
  *    data stays as it was. A write is read back before it counts.
  *  - Before each write the previous envelope is kept (`prev:1…3`). That is a
  *    limited local recovery, not a backup: exporting is.
+ *  - P2-R1.2 · H04: while a recovery is unresolved (its journal is open or
+ *    damaged), nothing is written: «recuperacion-pendiente». Checked inside
+ *    the lock, so it holds for every tab and the installed app.
  */
 
 export const STORE_FORMAT = 'elyum-projects-store/1'
@@ -67,6 +71,7 @@ export type SaveFailure =
   | 'error-de-escritura'
   | 'verificacion-fallida'
   | 'bloqueo-no-disponible'
+  | 'recuperacion-pendiente'
 
 export type SaveResult = { ok: true; generation: number; savedAt: string } | { ok: false; reason: SaveFailure; message: string; storedGeneration?: number }
 
@@ -91,6 +96,8 @@ export interface ProjectsStore {
   readonly mode: 'escritura' | 'solo-lectura'
   readonly readOnlyReason?: string
   load(): Promise<Loaded>
+  /** P2-R1.2 · H04: why writes wait for an unresolved recovery, or `undefined`. */
+  pending(): string | undefined
   save(data: ProjectsData, expectedGeneration: number, options?: SaveOptions): Promise<SaveResult>
   previous(): Promise<{ slot: 1 | 2 | 3; loaded: Loaded }[]>
   /** Save a previous version as the newest one (the current one becomes prev:1). */
@@ -140,6 +147,8 @@ export function createStore(o: StoreOptions): ProjectsStore {
     const current = await readEnvelope(raw)
     if (current.kind === 'ilegible' || current.kind === 'version-futura')
       return { ok: false, reason: 'almacen-ilegible', message: 'Los datos guardados no se pueden leer; no se sobrescriben. Expórtalos tal cual.' }
+    const pending = pendingRecovery(o.storage.getItem(JOURNAL_KEY))
+    if (pending) return { ok: false, reason: 'recuperacion-pendiente', message: pending }
     if (current.generation !== expected)
       return { ok: false, reason: 'conflicto', message: 'Otra pestaña o la app instalada guardó cambios. No se ha escrito nada; recarga.', storedGeneration: current.generation }
 
@@ -185,6 +194,7 @@ export function createStore(o: StoreOptions): ProjectsStore {
     mode,
     ...(mode === 'solo-lectura' ? { readOnlyReason: 'Este navegador no ofrece Web Locks: PROYECTOS se abre en solo lectura para no arriesgar escrituras simultáneas.' } : {}),
     load: () => readEnvelope(o.storage.getItem(DATA_KEY)),
+    pending: () => pendingRecovery(o.storage.getItem(JOURNAL_KEY)),
     async save(data, expected, options) {
       if (!o.locks) return { ok: false, reason: 'solo-lectura', message: store.readOnlyReason! }
       const ctrl = new AbortController()

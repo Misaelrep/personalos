@@ -228,7 +228,8 @@ describe('P2-R1 · comparar y elegir', () => {
     const plan = planRestore(l.data, l.generation, await backupOf(text))
     const weeks = plan.units.find((u) => u.key === 'semanas')!
     expect(weeks.selectable).toBe(false)
-    expect(weeks.why.join(' ')).toMatch(/compromiso con una tarea desconocida/)
+    // P2-R1.2 · H01: the reason names the commitment, the task and what to recover with it.
+    expect(weeks.why.join(' ')).toMatch(/compromete «HUE-01 .*recupera también «Huerto de prueba»/)
     // Together with the project it needs, it is fine.
     expect(buildRestore(plan, { mode: 'seleccion', units: ['semanas', `proyecto:${huerto.id}`] }, now()).ok).toBe(true)
   })
@@ -392,7 +393,12 @@ describe('P2-R1 · si se interrumpe', () => {
   it('open journal and someone wrote after: «desconocida», kept open, the text before recoverable through the same steps', async () => {
     const { storage, locks, l } = await interrupted('tras-diario')
     const other = createStore({ storage, locks, now, writer: 'otra' })
-    await other.save(setNextAction(l.data, l.data.tasks[0].id, 'después', { now: now() }), l.generation)
+    // P2-R1.2 · H04: PROYECTOS itself can no longer write while the journal is open…
+    expect(await other.save(setNextAction(l.data, l.data.tasks[0].id, 'después', { now: now() }), l.generation)).toMatchObject({ ok: false, reason: 'recuperacion-pendiente' })
+    expect((await inspectJournal(storage)).kind).toBe('sin-escribir')
+    // …so «something else wrote» means a write outside this store (e.g. a raw global restore).
+    const after = JSON.parse(JSON.stringify(setNextAction(l.data, l.data.tasks[0].id, 'después', { now: now() })))
+    storage.setItem(DATA_KEY, JSON.stringify({ format: 'elyum-projects-store/1', generation: l.generation + 1, savedAt: now(), writer: 'fuera', sha256: await sha256Hex(JSON.stringify(after)), data: after }))
     expect((await inspectJournal(storage)).kind).toBe('desconocida')
     expect((await settleJournal(env(storage, locks))).kind).toBe('desconocida')
     // A new recovery is refused until the person looks at it.
@@ -552,7 +558,7 @@ describe('P2-R1 · escenario del iPhone: copia anterior a reiniciar el almacén 
     const plan = planRestore(l.data, l.generation, copy)
     const weeks = plan.units.find((u) => u.key === 'semanas')!
     expect(weeks.selectable).toBe(false)
-    expect(weeks.why.join(' ')).toMatch(/compromiso con una tarea desconocida: src:HUE-01/)
+    expect(weeks.why.join(' ')).toMatch(/compromete «HUE-01 .*recupera también «Huerto de prueba»/)
     // With the project it needs, the weeks come back and the commitment resolves.
     const r = buildRestore(plan, { mode: 'seleccion', units: ['semanas', `proyecto:${data.projects[0].id}`] }, now())
     expect(r.ok && r.data.weeks[0].commitments[0].taskId).toBe('src:HUE-01')

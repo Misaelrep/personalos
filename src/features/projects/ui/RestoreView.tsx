@@ -4,7 +4,9 @@ import { Label } from '../../../components/ui/Label'
 import { exportProjects } from '../store/export'
 import {
   buildRestore,
+  diagnoseJournal,
   dismissJournal,
+  inspectJournal,
   journalAsCopy,
   performRestore,
   planRestore,
@@ -92,8 +94,8 @@ function ReadProblem({ read }: { read: Extract<BackupRead, { ok: false }> }) {
 
 function UnitRow({ u, checked, disabled, onToggle }: { u: RestoreUnit; checked: boolean; disabled: boolean; onToggle(): void }) {
   return (
-    <label className={`flex gap-3 border-t border-[var(--line)] px-4 py-3.5 first:border-t-0 ${u.selectable && !disabled ? 'cursor-pointer' : ''}`} data-testid="restore-unit" data-unit={u.key} data-state={u.state} data-selectable={u.selectable}>
-      <input type="checkbox" className="mt-1 size-5 shrink-0" checked={checked} disabled={disabled || !u.selectable} onChange={onToggle} aria-label={`Recuperar ${u.label}`} />
+    <label className={`flex gap-3 border-t border-[var(--line)] px-4 py-3.5 first:border-t-0 ${u.choosable && !disabled ? 'cursor-pointer' : ''}`} data-testid="restore-unit" data-unit={u.key} data-state={u.state} data-selectable={u.selectable} data-choosable={u.choosable}>
+      <input type="checkbox" className="mt-1 size-5 shrink-0" checked={checked} disabled={disabled || !u.choosable} onChange={onToggle} aria-label={`Recuperar ${u.label}`} />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <p className="text-[15px] text-ink">{u.label}</p>
@@ -105,10 +107,14 @@ function UnitRow({ u, checked, disabled, onToggle }: { u: RestoreUnit; checked: 
           ))}
           {u.changes.length > 6 && <li>… y {u.changes.length - 6} cambios más.</li>}
         </ul>
-        {u.localNewer > 0 && u.selectable && (
+        {u.localNewer > 0 && u.choosable && (
           <p className="mt-1 text-[12.5px] text-[#b5531a]">Aquí hay {n(u.localNewer, 'cambio posterior', 'cambios posteriores')} a la copia: recuperarla los deshace (quedan en el diario de esta recuperación).</p>
         )}
-        {!u.selectable && u.state !== 'igual' && u.state !== 'solo-local' && <p className="mt-1 text-[12.5px] text-[#b5531a]">No se puede recuperar sola: {u.why.join(' ')}</p>}
+        {!u.selectable && u.choosable && (
+          <p className="mt-1 text-[12.5px] text-[#b5531a]" data-testid="unit-why">
+            No se puede recuperar sola: {u.why.join(' ')} Puedes marcarla junto con lo que necesita; la selección se comprueba entera.
+          </p>
+        )}
       </div>
     </label>
   )
@@ -121,7 +127,10 @@ export function RestoreView() {
   const [plan, setPlan] = useState<RestorePlan>()
   const [mode, setMode] = useState<'seleccion' | 'todo'>('seleccion')
   const [chosen, setChosen] = useState<string[]>([])
-  const [sure, setSure] = useState(false)
+  /** H02 · «He revisado» counts only for the exact selection it was ticked on; any change unticks it. */
+  const [sureFor, setSureFor] = useState<string>()
+  /** H03 · A damaged journal: what can be read from it, and whether the person saved it as it is. */
+  const [damage, setDamage] = useState<{ reason: string; before?: string; saved: boolean }>()
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<RestoreResult>()
   const [note, setNote] = useState<string>()
@@ -130,7 +139,13 @@ export function RestoreView() {
   const refresh = useCallback(async () => {
     const e = sandboxEnv()
     setSandbox(await createStore(e).load())
-    setJournal(await settleJournal(e))
+    // H04 · Found on opening, never closed on its own: the person resolves it explicitly.
+    const st = await inspectJournal(e.storage)
+    setJournal(st)
+    if (st.kind === 'ilegible') {
+      const d = await diagnoseJournal(st.raw)
+      setDamage((prev) => ({ reason: st.reason, ...(d.before ? { before: d.before } : {}), saved: prev?.saved ?? false }))
+    } else setDamage(undefined)
   }, [])
   useEffect(() => {
     void refresh()
@@ -139,7 +154,7 @@ export function RestoreView() {
   function resetChoice() {
     setMode('seleccion')
     setChosen([])
-    setSure(false)
+    setSureFor(undefined)
   }
 
   async function usePlanFrom(name: string, text: string) {
@@ -162,10 +177,10 @@ export function RestoreView() {
   }
 
   async function confirm() {
-    if (!plan) return
+    if (!plan || !built?.ok || !sure) return
     setBusy(true)
     try {
-      const r = await performRestore(env, plan, mode === 'todo' ? { mode: 'todo' } : { mode: 'seleccion', units: chosen }, source?.name)
+      const r = await performRestore(env, plan, selection, source?.name)
       setResult(r)
       setPlan(undefined)
       resetChoice()
@@ -195,8 +210,21 @@ export function RestoreView() {
   }
 
   const sandboxData = sandbox?.kind === 'ok' ? sandbox.data : undefined
-  const built = plan && (mode === 'todo' || chosen.length) ? buildRestore(plan, mode === 'todo' ? { mode: 'todo' } : { mode: 'seleccion', units: chosen }, now()) : undefined
+  // H02 · The selection as a whole, rebuilt and checked on every change of the boxes.
+  const selection = mode === 'todo' ? ({ mode: 'todo' } as const) : ({ mode: 'seleccion', units: [...chosen].sort() } as const)
+  const built = plan && (mode === 'todo' || chosen.length) ? buildRestore(plan, selection, now()) : undefined
+  const choiceKey = plan ? JSON.stringify([plan.backup.storedSha256, plan.baseGeneration, selection]) : undefined
+  const sure = !!choiceKey && sureFor === choiceKey && !!built?.ok
   const open = journal && (journal.kind === 'desconocida' || journal.kind === 'escrita-sin-cerrar' || journal.kind === 'sin-escribir' || journal.kind === 'ilegible')
+  const settle = async () => {
+    setBusy(true)
+    try {
+      await settleJournal(env)
+      await refresh()
+    } finally {
+      setBusy(false)
+    }
+  }
 
   return (
     <>
@@ -212,15 +240,62 @@ export function RestoreView() {
       </Banner>
 
       {open && (
-        <div className="mt-4" data-testid="journal-open" data-kind={journal.kind}>
+        <div className="mt-4 flex flex-col gap-2" data-testid="journal-open" data-kind={journal.kind}>
           <Banner tone="warn">
             {journal.kind === 'ilegible'
-              ? 'Hay un diario de recuperación que no se puede leer.'
+              ? `El diario de recuperación está dañado: ${journal.reason}. Se conserva tal cual, sin cerrarlo ni sobrescribirlo.`
               : journal.kind === 'desconocida'
                 ? 'Una recuperación se interrumpió y después algo más escribió en el almacén. No se puede saber qué quedó: guarda la copia de antes y decide.'
-                : 'Hay una recuperación sin cerrar en otra pestaña o en la app instalada.'}
+                : journal.kind === 'sin-escribir'
+                  ? 'Una recuperación se interrumpió antes de escribir: el almacén tiene exactamente el texto de antes.'
+                  : 'Una recuperación se escribió y coincide con lo previsto, pero no llegó a cerrarse.'}
             {journal.kind !== 'ilegible' && <span className="mt-1 block">Empezó el {dateTime(journal.journal.startedAt)}: {journal.journal.summary}</span>}
+            <span className="mt-1 block" data-testid="journal-blocks">
+              Mientras no se resuelva, no se escribe nada en este almacén (tampoco desde otras pestañas o la app instalada).
+            </span>
           </Banner>
+          {(journal.kind === 'sin-escribir' || journal.kind === 'escrita-sin-cerrar') && (
+            <Button variant="choice" className="h-10 px-3 text-[12px]" disabled={busy} data-testid="journal-settle" onClick={settle}>
+              Comprobarla otra vez y cerrarla
+            </Button>
+          )}
+          {journal.kind === 'ilegible' && damage && (
+            <div data-testid="journal-damaged">
+            <Card className="flex flex-col gap-2 px-4 py-4">
+              <p className="text-[13px] text-ink-3">Diagnóstico: {damage.reason}. {damage.before ? 'El texto de antes sigue entero dentro del diario.' : 'No se puede extraer un texto de antes completo.'}</p>
+              <Button
+                variant="choice"
+                className="h-10 px-3 text-[12px]"
+                disabled={busy}
+                data-testid="journal-save-damaged"
+                onClick={async () => {
+                  await saveJsonFile(stampedName('elyum-prueba-diario-danado', now()), journal.raw)
+                  setDamage({ ...damage, saved: true })
+                }}
+              >
+                Guardar el diario tal cual
+              </Button>
+              <Button
+                variant="choice"
+                className="h-10 px-3 text-[12px]"
+                disabled={busy || !damage.saved}
+                data-testid="journal-close-damaged"
+                onClick={async () => {
+                  setBusy(true)
+                  try {
+                    await dismissJournal(env, { savedDamaged: true })
+                    await refresh()
+                  } finally {
+                    setBusy(false)
+                  }
+                }}
+              >
+                Lo he guardado: cerrarlo
+              </Button>
+              <p className="text-[12.5px] text-ink-4">Al cerrarlo, su texto se conserva dentro del diario cerrado{damage.before ? ', y «Volver a lo de antes» queda disponible con vista previa' : ''}.</p>
+            </Card>
+            </div>
+          )}
         </div>
       )}
 
@@ -270,7 +345,7 @@ export function RestoreView() {
             <Button
               variant="choice"
               className="h-10 px-3 text-[12px]"
-              disabled={busy}
+              disabled={busy || !!open}
               data-testid="sandbox-clear"
               onClick={async () => {
                 const count = clearSandbox(window.localStorage)
@@ -340,12 +415,18 @@ export function RestoreView() {
             <p className="text-[13px] leading-[1.5] text-ink-3">Por defecto no se recupera nada: lo de aquí se conserva. Marca lo que quieras traer de la copia.</p>
             <Card className="overflow-hidden">
               {plan.units.map((u) => (
-                <UnitRow key={u.key} u={u} disabled={busy || mode === 'todo'} checked={mode === 'todo' ? u.state === 'distinta' || u.state === 'solo-en-copia' : chosen.includes(u.key)} onToggle={() => setChosen((c) => (c.includes(u.key) ? c.filter((x) => x !== u.key) : [...c, u.key]))} />
+                <UnitRow key={u.key} u={u} disabled={busy || mode === 'todo'} checked={mode === 'todo' ? u.state === 'distinta' || u.state === 'solo-en-copia' : chosen.includes(u.key)} onToggle={() => {
+                    setSureFor(undefined)
+                    setChosen((c) => (c.includes(u.key) ? c.filter((x) => x !== u.key) : [...c, u.key]))
+                  }} />
               ))}
             </Card>
             {plan.globalChanges.length > 0 && <Banner tone="info">Solo con «todo»: {plan.globalChanges.join(' ')}</Banner>}
             <label className="flex items-start gap-3 text-[14px] text-ink-2">
-              <input type="checkbox" className="mt-0.5 size-5" checked={mode === 'todo'} disabled={busy} data-testid="restore-all" onChange={(e) => setMode(e.target.checked ? 'todo' : 'seleccion')} />
+              <input type="checkbox" className="mt-0.5 size-5" checked={mode === 'todo'} disabled={busy} data-testid="restore-all" onChange={(e) => {
+                  setSureFor(undefined)
+                  setMode(e.target.checked ? 'todo' : 'seleccion')
+                }} />
               <span>
                 Sustituir <strong>todo</strong> por la copia. Lo de aquí que no esté en ella desaparece del almacén (queda en el diario).
               </span>
@@ -362,8 +443,18 @@ export function RestoreView() {
                 <p className="text-[14px] text-ink-2" data-testid="restore-summary">
                   Se recuperará: {built.summary}
                 </p>
+                {built.warnings.length > 0 && (
+                  <Banner tone="info">
+                    <span data-testid="restore-warnings">Avisos que ya existían y se conservan tal cual (no se reparan):</span>
+                    <ul className="mt-1 list-disc pl-4">
+                      {built.warnings.map((w, i) => (
+                        <li key={i}>{w}</li>
+                      ))}
+                    </ul>
+                  </Banner>
+                )}
                 <label className="flex items-start gap-3 text-[14px] text-ink-2">
-                  <input type="checkbox" className="mt-0.5 size-5" checked={sure} disabled={busy} data-testid="restore-sure" onChange={(e) => setSure(e.target.checked)} />
+                  <input type="checkbox" className="mt-0.5 size-5" checked={sure} disabled={busy} data-testid="restore-sure" onChange={(e) => setSureFor(e.target.checked ? choiceKey : undefined)} />
                   <span>He revisado lo que cambia. Lo de antes queda en el diario para volver atrás.</span>
                 </label>
                 <Button onClick={confirm} disabled={busy || !sure || !!open} data-testid="restore-confirm" className="w-full">
@@ -373,7 +464,7 @@ export function RestoreView() {
               </>
             ) : (
               <Banner tone="error">
-                Lo elegido dejaría datos no válidos; no se puede recuperar así:
+                <span data-testid="restore-invalid">Lo elegido, en conjunto, no se puede recuperar así:</span>
                 <ul className="mt-1 list-disc pl-4">
                   {built.problems.map((p, i) => (
                     <li key={i}>{p}</li>
@@ -415,6 +506,17 @@ export function RestoreView() {
               {dateTime(journal.journal.startedAt)} · {journal.journal.summary}
             </p>
             {journal.journal.error && <p className="text-[12.5px] text-ink-4">{journal.journal.error}</p>}
+            {journal.journal.damaged !== undefined && (
+              <Button
+                variant="choice"
+                className="h-10 px-3 text-[12px]"
+                disabled={busy}
+                data-testid="journal-save-damaged-closed"
+                onClick={() => saveJsonFile(stampedName('elyum-prueba-diario-danado', journal.journal.startedAt), journal.journal.damaged!)}
+              >
+                Guardar el diario dañado que se cerró
+              </Button>
+            )}
             {journal.journal.before !== null ? (
               <div className="mt-1 flex flex-col gap-2">
                 <Button
@@ -443,9 +545,9 @@ export function RestoreView() {
                 </Button>
               </div>
             ) : (
-              <p className="text-[12.5px] text-ink-4">Antes de esa recuperación el almacén estaba vacío.</p>
+              <p className="text-[12.5px] text-ink-4">{journal.journal.damaged !== undefined ? 'Del diario dañado no se pudo extraer un texto de antes completo.' : 'Antes de esa recuperación el almacén estaba vacío.'}</p>
             )}
-            {open && (
+            {journal.kind === 'desconocida' && (
               <Button
                 variant="choice"
                 className="h-10 px-3 text-[12px]"

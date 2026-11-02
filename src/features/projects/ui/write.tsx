@@ -26,7 +26,8 @@ export const useWrite = () => useContext(Ctx)
 export function WriteProvider({ p, children }: { p: Projects; children: ReactNode }) {
   const [busy, setBusy] = useState(false)
   const [outcome, setOutcome] = useState<Outcome>()
-  const writable = p.state?.status === 'listo' && p.state.writable
+  // P2-R1.2 · H04: with an unresolved recovery the screens offer no writes (the store refuses them anyway).
+  const writable = p.state?.status === 'listo' && p.state.writable && !p.state.pendingRecovery
 
   const write = useCallback(
     async (label: string, change: (d: ProjectsData) => ProjectsData) => {

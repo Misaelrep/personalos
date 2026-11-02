@@ -28,6 +28,11 @@ export default defineConfig({
       },
     }),
   ],
-  // P4 · Página de prueba de PROYECTOS (proyectos.html), fuera de la navegación hasta P4c.
-  build: { rollupOptions: { input: { main: 'index.html', proyectos: 'proyectos.html' } } },
+  // P4 · Página de prueba de PROYECTOS (proyectos.html): en vistas previas y en local, nunca en producción
+  // (comparte almacén con la sección PROYECTOS y ofrece dossiers sintéticos).
+  build: {
+    rollupOptions: {
+      input: process.env.VERCEL_ENV === 'production' ? undefined : { main: 'index.html', proyectos: 'proyectos.html' },
+    },
+  },
 })

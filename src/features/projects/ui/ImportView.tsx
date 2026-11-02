@@ -43,7 +43,8 @@ function defaultTarget(data: ProjectsData, bundle: DossierBundle): { target: Tar
   return { target: { kind: 'nuevo', name: (bundle.project.name ?? bundle.dossier.name.replace(/\.md$/i, '')).replace(/^dossier operativo\s*[—–-]\s*/i, '') } }
 }
 
-export function ImportView({ p }: { p: Projects }) {
+/** `embedded` (P4c): inside ELYUM the synthetic test dossiers are not offered; they stay on the test page. */
+export function ImportView({ p, embedded = false }: { p: Projects; embedded?: boolean }) {
   const s = p.state
   const [file, setFile] = useState<DossierFile>()
   const [readError, setReadError] = useState<string>()
@@ -182,18 +183,20 @@ export function ImportView({ p }: { p: Projects }) {
                   }}
                 />
               </label>
-              <div className="flex flex-wrap gap-2 border-t border-[var(--line)] pt-3">
-                <span className="w-full text-[12.5px] text-ink-3">Datos sintéticos para probar:</span>
-                <Button variant="choice" className="h-10 min-w-0 px-4 text-[11.5px]" onClick={() => choose(synthetic(SYNTHETIC_DOSSIER_NAME, SYNTHETIC_DOSSIER))}>
-                  Huerto v1
-                </Button>
-                <Button variant="choice" className="h-10 min-w-0 px-4 text-[11.5px]" onClick={() => choose(synthetic(SYNTHETIC_DOSSIER_V2_NAME, SYNTHETIC_DOSSIER_V2))}>
-                  Huerto v2 · cambios
-                </Button>
-                <Button variant="choice" className="h-10 min-w-0 px-4 text-[11.5px]" onClick={() => choose(synthetic(SYNTHETIC_TALLER_NAME, SYNTHETIC_TALLER))}>
-                  Taller
-                </Button>
-              </div>
+              {!embedded && (
+                <div className="flex flex-wrap gap-2 border-t border-[var(--line)] pt-3" data-testid="synthetic">
+                  <span className="w-full text-[12.5px] text-ink-3">Datos sintéticos para probar:</span>
+                  <Button variant="choice" className="h-10 min-w-0 px-4 text-[11.5px]" onClick={() => choose(synthetic(SYNTHETIC_DOSSIER_NAME, SYNTHETIC_DOSSIER))}>
+                    Huerto v1
+                  </Button>
+                  <Button variant="choice" className="h-10 min-w-0 px-4 text-[11.5px]" onClick={() => choose(synthetic(SYNTHETIC_DOSSIER_V2_NAME, SYNTHETIC_DOSSIER_V2))}>
+                    Huerto v2 · cambios
+                  </Button>
+                  <Button variant="choice" className="h-10 min-w-0 px-4 text-[11.5px]" onClick={() => choose(synthetic(SYNTHETIC_TALLER_NAME, SYNTHETIC_TALLER))}>
+                    Taller
+                  </Button>
+                </div>
+              )}
             </Card>
             {readError && (
               <div className="mt-3">

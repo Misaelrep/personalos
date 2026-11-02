@@ -98,7 +98,7 @@ export function ProjectsApp({ embedded = false }: { embedded?: boolean }) {
         </a>
       </div>
     )
-  else if (route.kind === 'importar') body = <ImportView p={p} />
+  else if (route.kind === 'importar') body = <ImportView p={p} embedded={embedded} />
   else if (route.kind === 'proyecto') body = <ProjectView data={s.data} projectId={route.id} />
   else if (route.kind === 'tarea') body = <TaskView data={s.data} taskId={route.id} />
   else if (route.kind === 'semana') body = <ReviewView data={s.data} />
@@ -106,7 +106,7 @@ export function ProjectsApp({ embedded = false }: { embedded?: boolean }) {
   else
     body = (
       <>
-        <Overview data={s.data} />
+        <Overview data={s.data} embedded={embedded} />
         <div className="mt-8 surface-quiet overflow-hidden rounded-[20px]">
           <RowLink href="#/semana" testId="go-review">
             <p className="text-[15px] text-ink">Revisión semanal</p>
@@ -124,10 +124,13 @@ export function ProjectsApp({ embedded = false }: { embedded?: boolean }) {
             <p className="text-[15px] text-ink">Exportar una copia</p>
             <p className="text-[12.5px] text-ink-3">Generarla y verificarla</p>
           </RowLink>
-          <RowLink href="#/prueba-iphone" testId="go-check">
-            <p className="text-[15px] text-ink">Prueba del iPhone</p>
-            <p className="text-[12.5px] text-ink-3">Web Locks y persistencia, con datos sintéticos</p>
-          </RowLink>
+          {/* The iPhone check is a test tool: on the test page only, not in ELYUM's menu. */}
+          {!embedded && (
+            <RowLink href="#/prueba-iphone" testId="go-check">
+              <p className="text-[15px] text-ink">Prueba del iPhone</p>
+              <p className="text-[12.5px] text-ink-3">Web Locks y persistencia, con datos sintéticos</p>
+            </RowLink>
+          )}
         </div>
       </>
     )

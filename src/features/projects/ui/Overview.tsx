@@ -24,7 +24,7 @@ function StageCounts({ s }: { s: ProjectSummary }) {
   )
 }
 
-export function Overview({ data }: { data: ProjectsData }) {
+export function Overview({ data, embedded = false }: { data: ProjectsData; embedded?: boolean }) {
   const { summaries, totals } = overview(data)
   return (
     <>
@@ -45,7 +45,7 @@ export function Overview({ data }: { data: ProjectsData }) {
 
       <Section label="Proyectos" count={summaries.length}>
         {summaries.length === 0 ? (
-          <Empty>Importa un dossier para empezar. En esta página de prueba, usa solo el dossier sintético.</Empty>
+          <Empty>{embedded ? 'Crea un proyecto o importa un dossier para empezar.' : 'Importa un dossier para empezar. En esta página de prueba, usa solo el dossier sintético.'}</Empty>
         ) : (
           <div className="flex flex-col gap-3">
             {summaries.map((s) => (

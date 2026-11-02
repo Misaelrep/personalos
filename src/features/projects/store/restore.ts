@@ -2,7 +2,7 @@ import { validateProjectsData, type Issue } from '../domain/schema'
 import type { DossierReference, DossierSource, HistoryEntry, ImportRecord, Milestone, Project, ProjectsData, RoutineLink, Task, Vocabulary } from '../domain/types'
 import { sha256Hex } from '../import/sha256'
 import { EXPORT_FORMAT, verifyExport, type ExportFile } from './export'
-import { JOURNAL_FORMAT, JOURNAL_KEY, parseJournal, type Journal } from './journal'
+import { assessJournal, closedJournal, JOURNAL_FORMAT, JOURNAL_KEY, parseJournal, type Journal } from './journal'
 import { createStore, DATA_KEY, LOCK_NAME, readEnvelope, type KeyValue, type Locks, type SaveFailure } from './store'
 
 export { JOURNAL_FORMAT, JOURNAL_KEY, type Journal } from './journal'
@@ -338,7 +338,7 @@ function holderIn(d: ProjectsData, holder: string): unknown {
  * from (here, or in the copy) and it was already broken there. Anything else
  * is new: the recovery itself would break it.
  */
-function referenceCheck(plan: RestorePlan, next: ProjectsData, chosen: Set<string>): { problems: string[]; warnings: string[] } {
+function referenceCheck(plan: RestorePlan, next: ProjectsData, chosen: Set<string>, all: boolean): { problems: string[]; warnings: string[] } {
   const local = plan.local
   const copy = plan.backup.data
   const localBroken = new Set(brokenReferences(local).map((r) => r.key))
@@ -377,11 +377,26 @@ function referenceCheck(plan: RestorePlan, next: ProjectsData, chosen: Set<strin
         return `${holderText(r)} tiene una nota de «${projectName(r.target) ?? r.target}», que no quedaría: ${remedy(r)}.`
     }
   }
+  /**
+   * P2-R1.3 · F01 · Where the holder in `next` really comes from: the copy when it belongs to a
+   * recovered unit (or «todo»), here otherwise. Only that side counts, never the other one.
+   */
+  const fromCopy = (r: BrokenRef) => {
+    if (all) return true
+    if (r.holder.startsWith('week:')) return chosen.has('semanas')
+    const t = next.tasks.find((x) => x.id === r.from)
+    return !!t && chosen.has(`proyecto:${t.projectId}`)
+  }
   const problems: string[] = []
   const warnings: string[] = []
   for (const r of brokenReferences(next)) {
     const now = JSON.stringify(holderIn(next, r.holder))
-    const historical = (localBroken.has(r.key) && JSON.stringify(holderIn(local, r.holder)) === now) || (copyBroken.has(r.key) && JSON.stringify(holderIn(copy, r.holder)) === now)
+    const inLocal = holderIn(local, r.holder)
+    // Historical only if it was already broken, with the same holder, on the side it comes from — and,
+    // when that is the copy, the same holder here did not have it resolved (no relation valid here is broken).
+    const historical = fromCopy(r)
+      ? copyBroken.has(r.key) && JSON.stringify(holderIn(copy, r.holder)) === now && (inLocal === undefined || localBroken.has(r.key))
+      : localBroken.has(r.key) && JSON.stringify(inLocal) === now
     if (historical) warnings.push(`Ya estaba así antes de recuperar (se conserva): ${holderText(r).replace(/^La /, 'la ')} apunta a «${r.target}», que no existe.`)
     else problems.push(sentence(r))
   }
@@ -444,7 +459,7 @@ export function buildRestore(plan: RestorePlan, sel: Selection, at: string): Bui
 
   next.history = [...next.history, { at, by: 'usuario', entity: 'import', id: plan.backup.storedSha256.slice(0, 16), field: 'recuperación', note: summary }]
   // H01 · before anything else: no reference this recovery would break. Nothing is repaired or removed to pass.
-  const refs = referenceCheck(plan, next, new Set(sel.mode === 'todo' ? [] : sel.units))
+  const refs = referenceCheck(plan, next, new Set(sel.mode === 'todo' ? [] : sel.units), sel.mode === 'todo')
   if (refs.problems.length) return { ok: false, problems: refs.problems }
   const v = validateProjectsData(next)
   if (!v.ok) return { ok: false, problems: v.errors.map(issueText) }
@@ -465,22 +480,15 @@ export type RestoreResult =
   | { ok: true; generation: number; summary: string; verified: true }
   | { ok: false; reason: RestoreFailure; message: string; details?: string[]; written: boolean }
 
-type JournalRaw = Journal | undefined | { ilegible: string; raw: string }
-const isDamaged = (j: JournalRaw): j is { ilegible: string; raw: string } => typeof j === 'object' && 'ilegible' in j
+type JournalRaw = Journal | undefined | { ilegible: string; raw: string | null }
+const isDamaged = (j: JournalRaw): j is { ilegible: string; raw: string | null } => typeof j === 'object' && 'ilegible' in j
 
-/** H03 · The whole structure (`parseJournal`) and, when it says what it replaced, that text against its fingerprint. */
+/** H03/F02 · The same policy the store applies to every save (`assessJournal`). A read error is «ilegible», never «no journal». */
 async function readJournal(storage: KeyValue): Promise<JournalRaw> {
-  const raw = storage.getItem(JOURNAL_KEY)
-  if (raw === null) return undefined
-  const r = parseJournal(raw)
-  if (!r.ok) return { ilegible: r.reason, raw }
-  const j = r.journal
-  if (j.before !== null) {
-    if (j.beforeSha256 !== null && (await sha256Hex(j.before)) !== j.beforeSha256) return { ilegible: 'el texto anterior no coincide con su huella', raw }
-    const b = await readEnvelope(j.before)
-    if (b.kind !== 'ok') return { ilegible: `el texto anterior no se puede leer (${b.kind === 'ilegible' ? b.reason : b.kind})`, raw }
-  }
-  return j
+  const a = await assessJournal(storage)
+  if (a.kind === 'ninguno') return undefined
+  if (a.kind === 'ilegible') return { ilegible: a.reason, raw: a.raw }
+  return a.journal
 }
 
 const writeJournal = (storage: KeyValue, j: Journal) => storage.setItem(JOURNAL_KEY, JSON.stringify(j))
@@ -581,13 +589,13 @@ export async function performRestore(env: RestoreEnv, plan: RestorePlan, sel: Se
 export type JournalStatus =
   | { kind: 'ninguna' }
   /** H03 · The journal exists but its structure or its text before is not right. Never read as closed; kept as found. */
-  | { kind: 'ilegible'; reason: string; raw: string }
+  | { kind: 'ilegible'; reason: string; raw: string | null }
   /** Closed: `completada`, `fallida` / `no-aplicada` (nothing written) or `revisada` (closed by the person). */
   | { kind: 'cerrada'; journal: Journal }
   /** Open, and the stored data is the recovery's: it was written but not closed. */
-  | { kind: 'escrita-sin-cerrar'; journal: Journal }
+  | { kind: 'escrita-sin-cerrar'; journal: Journal; closeError?: string }
   /** Open, and the stored text is exactly the one before: nothing was written. */
-  | { kind: 'sin-escribir'; journal: Journal }
+  | { kind: 'sin-escribir'; journal: Journal; closeError?: string }
   /** Open, and the stored data is neither: something else wrote after. The text before is in the journal. */
   | { kind: 'desconocida'; journal: Journal }
 
@@ -618,18 +626,21 @@ export async function settleJournal(env: RestoreEnv): Promise<JournalStatus> {
     () => status,
     async () => {
       const again = await inspectJournal(env.storage)
+      let changes: Partial<Journal> | undefined
       if (again.kind === 'escrita-sin-cerrar') {
         const loaded = await readEnvelope(env.storage.getItem(DATA_KEY))
-        const closed: Journal = { ...again.journal, state: 'completada', finishedAt: env.now(), ...(loaded.kind === 'ok' ? { resultGeneration: loaded.generation } : {}), error: 'Cerrada al volver a abrir: estaba escrita y se comprobó al releerla.' }
-        writeJournal(env.storage, closed)
-        return { kind: 'cerrada', journal: closed }
+        changes = { state: 'completada', finishedAt: env.now(), ...(loaded.kind === 'ok' ? { resultGeneration: loaded.generation } : {}), error: 'Cerrada al volver a abrir: estaba escrita y se comprobó al releerla.' }
+      } else if (again.kind === 'sin-escribir') changes = { state: 'no-aplicada', finishedAt: env.now(), error: 'Se interrumpió antes de escribir: los datos siguen como estaban.' }
+      if (!changes || (again.kind !== 'escrita-sin-cerrar' && again.kind !== 'sin-escribir')) return again
+      // F03 · complete (fingerprint of the text before, for journals of 8c7ea4c) and checked before it is written.
+      let text: string
+      try {
+        text = await closedJournal(again.journal, changes)
+        env.storage.setItem(JOURNAL_KEY, text)
+      } catch (e) {
+        return { ...again, closeError: closeFailure(e) }
       }
-      if (again.kind === 'sin-escribir') {
-        const closed: Journal = { ...again.journal, state: 'no-aplicada', finishedAt: env.now(), error: 'Se interrumpió antes de escribir: los datos siguen como estaban.' }
-        writeJournal(env.storage, closed)
-        return { kind: 'cerrada', journal: closed }
-      }
-      return again
+      return { kind: 'cerrada', journal: JSON.parse(text) as Journal }
     },
   )
 }
@@ -691,40 +702,54 @@ export async function diagnoseJournal(raw: string): Promise<{ reason: string; be
  * it (`savedDamaged`); its text is kept exactly inside the closed journal,
  * with the text before when it is still whole. It is never deleted.
  */
-export async function dismissJournal(env: RestoreEnv, opts: { savedDamaged?: boolean } = {}): Promise<boolean> {
-  if (!env.locks) return false
-  return exclusively(
+export type DismissResult = { ok: true } | { ok: false; reason: 'otra-recuperacion' | 'sin-guardar' | 'sin-espacio' | 'error-de-escritura' | 'sin-web-locks'; message: string }
+
+const isQuota = (e: unknown) => e instanceof Error && (e.name === 'QuotaExceededError' || /quota/i.test(e.message))
+/** A failed close, said plainly. The journal is left exactly as it was (F04 · cuota). */
+function closeFailure(e: unknown): string {
+  return isQuota(e)
+    ? 'No hay espacio para cerrar el diario. El diario sigue intacto y las escrituras siguen bloqueadas. Exporta lo que necesites, libera espacio de otros sitios de este navegador y vuelve a intentarlo; no se borra nada para hacer sitio.'
+    : `No se pudo cerrar el diario (${e instanceof Error ? e.message : String(e)}). Sigue intacto.`
+}
+
+export async function dismissJournal(env: RestoreEnv, opts: { savedDamaged?: boolean } = {}): Promise<DismissResult> {
+  if (!env.locks) return { ok: false, reason: 'sin-web-locks', message: 'Sin Web Locks no se cierra el diario.' }
+  return exclusively<DismissResult>(
     env.locks,
-    () => false,
+    () => ({ ok: false, reason: 'otra-recuperacion', message: 'Otra pestaña está recuperando ahora; vuelve a intentarlo.' }),
     async () => {
-      const raw = env.storage.getItem(JOURNAL_KEY)
       const j = await readJournal(env.storage)
-      if (j === undefined || raw === null) return true
-      if (isDamaged(j)) {
-        if (!opts.savedDamaged) return false
-        const d = await diagnoseJournal(raw)
-        const at = env.now()
-        const closed: Journal = {
-          format: JOURNAL_FORMAT,
-          state: 'revisada',
-          startedAt: at,
-          finishedAt: at,
-          writer: env.writer,
-          baseGeneration: 0,
-          before: d.before ?? null,
-          beforeSha256: d.before === undefined ? null : await sha256Hex(d.before),
-          targetSha256: '0'.repeat(64),
-          source: { exportedAt: '', storedSha256: '', generation: 0 },
-          summary: 'Diario dañado: revisado, guardado y cerrado a mano.',
-          error: j.ilegible,
-          damaged: raw,
-        }
-        writeJournal(env.storage, closed)
-        return true
+      if (j === undefined) return { ok: true }
+      let text: string
+      try {
+        if (isDamaged(j)) {
+          if (!opts.savedDamaged) return { ok: false, reason: 'sin-guardar', message: 'Guarda antes el diario tal cual.' }
+          // A journal that could not even be read is never replaced: its content is unknown.
+          if (j.raw === null) return { ok: false, reason: 'error-de-escritura', message: `El diario no se puede leer (${j.ilegible}); no se cierra ni se sustituye.` }
+          const d = await diagnoseJournal(j.raw)
+          const at = env.now()
+          const closed: Journal = {
+            format: JOURNAL_FORMAT,
+            state: 'revisada',
+            startedAt: at,
+            finishedAt: at,
+            writer: env.writer,
+            baseGeneration: 0,
+            before: d.before ?? null,
+            beforeSha256: null,
+            targetSha256: '0'.repeat(64),
+            source: { exportedAt: '', storedSha256: '', generation: 0 },
+            summary: 'Diario dañado: revisado, guardado y cerrado a mano.',
+            error: j.ilegible,
+            damaged: j.raw,
+          }
+          text = await closedJournal(closed, {})
+        } else text = await closedJournal(j, { state: j.state === 'en-curso' ? 'revisada' : j.state, finishedAt: j.finishedAt ?? env.now(), error: j.error ?? 'Cerrada a mano tras revisarla.' })
+        env.storage.setItem(JOURNAL_KEY, text)
+      } catch (e) {
+        return { ok: false, reason: isQuota(e) ? 'sin-espacio' : 'error-de-escritura', message: closeFailure(e) }
       }
-      writeJournal(env.storage, { ...j, state: j.state === 'en-curso' ? 'revisada' : j.state, finishedAt: j.finishedAt ?? env.now(), error: j.error ?? 'Cerrada a mano tras revisarla.' })
-      return true
+      return { ok: true }
     },
   )
 }
-

@@ -310,12 +310,66 @@ try {
   await page.waitForFunction(() => document.querySelector('[data-testid="sandbox-note"]')?.textContent?.includes('no se ha guardado'))
   check('H03/H04 · with a damaged journal, edits are refused and nothing changes', (await page.getByTestId('sandbox-note').innerText()).includes('dañado') && (await getKey(page, SB_DATA)) === dataBefore && (await getKey(page, SB_JOURNAL)) === damagedText)
   await shot(page, '25-p2r12-diario-danado.png')
+  // P2-R1.3 · F04: cancelling the share sheet is not saving.
+  await page.evaluate(() => {
+    window.__share = [Navigator.prototype.canShare, Navigator.prototype.share]
+    Navigator.prototype.canShare = () => true
+    Navigator.prototype.share = () => Promise.reject(new DOMException('Share canceled', 'AbortError'))
+  })
+  await page.getByTestId('journal-save-damaged').click()
+  await page.getByTestId('journal-save-outcome').waitFor()
+  check(
+    'F04 · share sheet cancelled: says nothing was saved, no confirmation offered, close stays disabled',
+    (await page.getByTestId('journal-save-outcome').innerText()).includes('Cancelado') && (await page.getByTestId('journal-damaged-confirm').count()) === 0 && (await page.getByTestId('journal-close-damaged').isDisabled()),
+  )
+  await shot(page, '27-p2r13-compartir-cancelado.png')
+  await page.evaluate(() => {
+    ;[Navigator.prototype.canShare, Navigator.prototype.share] = window.__share
+  })
   const savedDamaged = await download(page, 'journal-save-damaged')
   check('H03 · «guardar el diario tal cual» gives exactly its text', savedDamaged === damagedText)
+  check('F04 · download asked for: still no close until the person confirms it is kept', (await page.getByTestId('journal-save-outcome').getAttribute('data-delivered')) === '1' && (await page.getByTestId('journal-close-damaged').isDisabled()))
+  await page.getByTestId('journal-damaged-confirm').check()
+  check('F04 · confirmed by the person: close enabled', !(await page.getByTestId('journal-close-damaged').isDisabled()))
+  // Quota while closing: the journal stays exactly, the error stays on screen, writes stay blocked.
+  await page.evaluate((jk) => {
+    window.__realSetItem = Storage.prototype.setItem
+    const real = window.__realSetItem
+    Storage.prototype.setItem = function (k, v) {
+      if (k === jk) throw new DOMException('The quota has been exceeded.', 'QuotaExceededError')
+      return real.call(this, k, v)
+    }
+  }, SB_JOURNAL)
+  await page.getByTestId('journal-close-damaged').click()
+  await page.getByTestId('journal-close-error').waitFor()
+  await page.waitForTimeout(300)
+  check('cuota · closing without space: visible error, journal intact and still open', (await page.getByTestId('journal-close-error').innerText()).includes('No hay espacio') && (await getKey(page, SB_JOURNAL)) === damagedText && (await openKind()) === 'ilegible' && (await getKey(page, SB_DATA)) === dataBefore)
+  await shot(page, '28-p2r13-cuota-al-cerrar.png')
+  await page.evaluate(() => (Storage.prototype.setItem = window.__realSetItem))
   await page.getByTestId('journal-close-damaged').click()
   await page.waitForFunction(() => !document.querySelector('[data-testid="journal-open"]'))
   const closedDamaged = await journal(page)
   check('H03 · closed by the person, its text kept inside, the text before still recoverable', closedDamaged.state === 'revisada' && closedDamaged.damaged === damagedText && closedDamaged.before === goodJournal.before && (await page.getByTestId('journal-undo').count()) === 1 && (await getKey(page, SB_DATA)) === dataBefore)
+
+  // ── 10d · P2-R1.3 · F02 (closed journal, altered text before) and F03 (open journal of 8c7ea4c) ──
+  {
+    const alteredText = JSON.stringify({ ...goodJournal, before: goodJournal.before.replace('"generation":', '"generation": ') })
+    await reopen(alteredText)
+    const gen = (await sandbox(page)).generation
+    await page.getByTestId('sandbox-change').click()
+    await page.waitForFunction(() => document.querySelector('[data-testid="sandbox-note"]')?.textContent?.includes('no se ha guardado'))
+    check('F02 · closed journal whose text before no longer matches its fingerprint: damaged for Recuperar AND for a normal edit', (await openKind()) === 'ilegible' && (await page.getByTestId('sandbox-note').innerText()).includes('dañado') && (await sandbox(page)).generation === gen && (await getKey(page, SB_JOURNAL)) === alteredText)
+    const curNow = await sandbox(page)
+    const legacy = { ...goodJournal, state: 'en-curso', beforeSha256: null, finishedAt: undefined, resultGeneration: undefined, error: undefined, damaged: undefined, before: await getKey(page, SB_DATA), baseGeneration: curNow.generation, targetSha256: '0'.repeat(64), summary: 'diario de 8c7ea4c' }
+    await reopen(legacy)
+    check('F03 · open journal of 8c7ea4c (no fingerprint): found, not closed on its own', (await openKind()) === 'sin-escribir')
+    await page.getByTestId('journal-settle').click()
+    await page.waitForFunction(() => !document.querySelector('[data-testid="journal-open"]'))
+    const closedLegacy = await journal(page)
+    check('F03 · closing it leaves a VALID journal: fingerprint computed, text before kept, nothing reopens', closedLegacy.state === 'no-aplicada' && closedLegacy.before === legacy.before && closedLegacy.beforeSha256 === (await sha(page, legacy.before)) && (await page.getByTestId('journal-open').count()) === 0)
+    await sandboxAction(page, 'sandbox-change')
+    check('F03 · and edits work again', (await sandbox(page)).generation === curNow.generation + 1)
+  }
 
   // ── 10c · P2-R1.2 · H04: PROYECTOS itself, opened with an unresolved recovery in its own store ──
   {

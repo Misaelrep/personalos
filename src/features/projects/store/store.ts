@@ -1,7 +1,7 @@
 import { validateProjectsData } from '../domain/schema'
 import type { ProjectsData } from '../domain/types'
 import { sha256Hex } from '../import/sha256'
-import { JOURNAL_KEY, pendingRecovery } from './journal'
+import { pendingRecovery } from './journal'
 
 /**
  * P3 · PROYECTOS' own storage. Only this module writes `elyum:projects:v1:*`;
@@ -97,7 +97,7 @@ export interface ProjectsStore {
   readonly readOnlyReason?: string
   load(): Promise<Loaded>
   /** P2-R1.2 · H04: why writes wait for an unresolved recovery, or `undefined`. */
-  pending(): string | undefined
+  pending(): Promise<string | undefined>
   save(data: ProjectsData, expectedGeneration: number, options?: SaveOptions): Promise<SaveResult>
   previous(): Promise<{ slot: 1 | 2 | 3; loaded: Loaded }[]>
   /** Save a previous version as the newest one (the current one becomes prev:1). */
@@ -147,7 +147,8 @@ export function createStore(o: StoreOptions): ProjectsStore {
     const current = await readEnvelope(raw)
     if (current.kind === 'ilegible' || current.kind === 'version-futura')
       return { ok: false, reason: 'almacen-ilegible', message: 'Los datos guardados no se pueden leer; no se sobrescriben. Expórtalos tal cual.' }
-    const pending = pendingRecovery(o.storage.getItem(JOURNAL_KEY))
+    // F02 · the full journal policy, decided here, inside the lock.
+    const pending = await pendingRecovery(o.storage)
     if (pending) return { ok: false, reason: 'recuperacion-pendiente', message: pending }
     if (current.generation !== expected)
       return { ok: false, reason: 'conflicto', message: 'Otra pestaña o la app instalada guardó cambios. No se ha escrito nada; recarga.', storedGeneration: current.generation }
@@ -194,7 +195,7 @@ export function createStore(o: StoreOptions): ProjectsStore {
     mode,
     ...(mode === 'solo-lectura' ? { readOnlyReason: 'Este navegador no ofrece Web Locks: PROYECTOS se abre en solo lectura para no arriesgar escrituras simultáneas.' } : {}),
     load: () => readEnvelope(o.storage.getItem(DATA_KEY)),
-    pending: () => pendingRecovery(o.storage.getItem(JOURNAL_KEY)),
+    pending: () => pendingRecovery(o.storage),
     async save(data, expected, options) {
       if (!o.locks) return { ok: false, reason: 'solo-lectura', message: store.readOnlyReason! }
       const ctrl = new AbortController()

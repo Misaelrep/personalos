@@ -26,10 +26,10 @@ const DATA_KEY = 'elyum:projects:v1:data'
 const results = []
 const RUN = new Date().toISOString()
 const t0 = Date.now()
-const check = (name, ok, detail = '') => {
+const check = (name, ok, detail = '', extra) => {
   results.push({ name, ok, detail })
   console.log(`${ok ? '✓' : '✗'} ${name}${detail ? ` — ${detail}` : ''}`)
-  if (process.env.P3_LOG) appendFileSync(process.env.P3_LOG, JSON.stringify({ run: RUN, n: results.length, name, ok, detail, ms: Date.now() - t0 }) + '\n')
+  if (process.env.P3_LOG) appendFileSync(process.env.P3_LOG, JSON.stringify({ run: RUN, n: results.length, name, ok, detail, ms: Date.now() - t0, ...(extra ? { extra } : {}) }) + '\n')
 }
 /**
  * P2-R1.2 · Explicit synchronisation between tabs. localStorage reaches the other tabs of the origin
@@ -139,14 +139,16 @@ try {
     await a.click('#confirm')
     await a.waitForFunction(() => document.querySelector('#status').textContent.includes('generación 1'))
     const before = await stored(a)
-    // B's screen is stale (it opened before A saved); its storage must already see A's save, or B is not «stale» but blind (audit R1).
-    const syncB = await seesGeneration(b, 1)
-    check('sincronización: la pestaña B ve en su almacenamiento la generación 1 de A', syncB.ok, `esperó ${syncB.ms} ms${syncB.ok ? '' : `, vio ${syncB.saw}`}`)
-    const r = await b.evaluate(async () => {
+    // P2-R1.3 · NO wait here (Codex): B tries at once, as a stale tab would. What B's storage showed right
+    // before is logged. If B's write were accepted on generation 0 that would be a real lost update (audit R1),
+    // and this check fails: the test does not hide it.
+    const { r, sawBefore } = await b.evaluate(async (k) => {
+      const sawBefore = JSON.parse(localStorage.getItem(k) ?? '{"generation":0}').generation
       const { session, ops } = window.p3
-      return session.change((d) => ops.setWeekLimits(d, '2026-10-26', { wipLimit: 3 }, { now: new Date().toISOString() }))
-    })
-    check('pestaña desactualizada: conflicto, no escribe', r.ok === false && r.reason === 'conflicto' && (await stored(a)) === before, r.reason)
+      const r = await session.change((d) => ops.setWeekLimits(d, '2026-10-26', { wipLimit: 3 }, { now: new Date().toISOString() }))
+      return { r, sawBefore }
+    }, DATA_KEY)
+    check('pestaña desactualizada (sin espera): conflicto, no escribe', r.ok === false && r.reason === 'conflicto' && (await stored(a)) === before, `${r.reason ?? 'ok'}; B veía la generación ${sawBefore} justo antes`, { sawBefore, accepted: r.ok ? r.generation : null })
     // The `storage` event is asynchronous too: wait for it explicitly instead of reading at once.
     const notified = await b
       .waitForFunction(() => document.querySelector('#status').textContent.includes('otra pestaña guardó cambios'), null, { timeout: 3000, polling: 10 })
@@ -184,7 +186,7 @@ try {
     const [ra, rb] = await Promise.all([burst(a, 'A'), burst(b, 'B')])
     // What matters: no two successful saves from the same base. Each success has its own generation, 1…50.
     const gens = [...ra.generations, ...rb.generations].sort((x, y) => x - y)
-    check('carrera: ningún guardado correcto sobre la misma base (generaciones 1…50, sin repetir)', gens.length === 50 && gens.every((g, i) => g === i + 1), `A ${ra.generations.length}, B ${rb.generations.length}`)
+    check('carrera: ningún guardado correcto sobre la misma base (generaciones 1…50, sin repetir)', gens.length === 50 && gens.every((g, i) => g === i + 1), `A ${ra.generations.length}, B ${rb.generations.length}`, { A: ra.generations, B: rb.generations, conflicts: ra.conflicts + rb.conflicts })
     // Then read only once BOTH tabs see the last generation (explicit sync, not a fixed wait).
     const [sa, sb] = [await seesGeneration(a, 50), await seesGeneration(b, 50)]
     check('sincronización: las dos pestañas ven la generación 50 antes de leer', sa.ok && sb.ok, `A esperó ${sa.ms} ms, B ${sb.ms} ms${sa.ok && sb.ok ? '' : ` (vieron ${sa.saw ?? 50}/${sb.saw ?? 50})`}`)
@@ -198,21 +200,35 @@ try {
   {
     const { context, open } = await fresh()
     const [a, b] = [await open(), await open()]
-    await a.evaluate(() => {
-      navigator.locks.request('elyum:projects:v1', () => new Promise(() => {}))
-    })
+    // P2-R1.3 · Explicit signal (Codex): the evaluate resolves only once A is INSIDE the lock callback.
+    const held = (page) =>
+      page.evaluate(
+        () =>
+          new Promise((acquired) => {
+            navigator.locks.request('elyum:projects:v1', () => {
+              acquired(true)
+              return new Promise(() => {})
+            })
+          }),
+      )
+    const queue = (page) => page.evaluate(async () => (await navigator.locks.query()).pending?.filter((l) => l.name === 'elyum:projects:v1').length ?? 0)
+    const aHeld = await held(a)
     const pending = b.evaluate(() => window.p3.session.change((d) => d))
-    await b.waitForTimeout(500)
+    // And B's save is really waiting for it (queued), not done already.
+    await b.waitForFunction(async () => ((await navigator.locks.query()).pending ?? []).some((l) => l.name === 'elyum:projects:v1'), null, { timeout: 3000, polling: 10 })
+    const queued = await queue(b)
+    const storedWhileHeld = await stored(b)
+    check('bloqueo retenido por A (señal de adquisición) y el guardado de B en cola, sin escribir', aHeld === true && queued >= 1 && storedWhileHeld === null, `en cola ${queued}`)
     await a.close()
     const r = await pending
     check('una pestaña cerrada libera el bloqueo y la otra guarda', r.ok === true, JSON.stringify(r))
     const c = await open()
-    await c.evaluate(() => {
-      navigator.locks.request('elyum:projects:v1', () => new Promise(() => {}))
-    })
+    const cHeld = await held(c)
+    check('señal: la pestaña C tiene el bloqueo antes de que D intente guardar', cHeld === true)
+    const beforeD = await stored(c)
     const d = await open()
     const r2 = await d.evaluate(() => window.p3.session.change((x) => x))
-    check('bloqueo retenido demasiado tiempo: rechazo visible, nada escrito', r2.ok === false && r2.reason === 'bloqueo-no-disponible', r2.reason)
+    check('bloqueo retenido demasiado tiempo: rechazo visible, nada escrito', r2.ok === false && r2.reason === 'bloqueo-no-disponible' && (await stored(d)) === beforeD, r2.reason)
     await context.close()
   }
 

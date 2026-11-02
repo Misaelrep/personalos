@@ -130,7 +130,13 @@ export function RestoreView() {
   /** H02 · «He revisado» counts only for the exact selection it was ticked on; any change unticks it. */
   const [sureFor, setSureFor] = useState<string>()
   /** H03 · A damaged journal: what can be read from it, and whether the person saved it as it is. */
-  const [damage, setDamage] = useState<{ reason: string; before?: string; saved: boolean }>()
+  /**
+   * F04 · `delivered`: the exact text whose delivery was asked for (share completed or download started).
+   * `confirmed`: the person says they checked it is kept. Only both, for the text now in the journal, allow closing.
+   */
+  const [damage, setDamage] = useState<{ reason: string; before?: string; delivered?: string; via?: string; outcome?: string; confirmed: boolean }>()
+  /** Cuota · a failed close stays on screen until a close succeeds. */
+  const [closeError, setCloseError] = useState<string>()
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<RestoreResult>()
   const [note, setNote] = useState<string>()
@@ -143,9 +149,12 @@ export function RestoreView() {
     const st = await inspectJournal(e.storage)
     setJournal(st)
     if (st.kind === 'ilegible') {
-      const d = await diagnoseJournal(st.raw)
-      setDamage((prev) => ({ reason: st.reason, ...(d.before ? { before: d.before } : {}), saved: prev?.saved ?? false }))
+      const d = st.raw === null ? { reason: st.reason } : await diagnoseJournal(st.raw)
+      setDamage((prev) => ({ ...(prev?.delivered === st.raw && prev ? prev : { confirmed: false }), reason: st.reason, ...(d.before ? { before: d.before } : {}) }))
     } else setDamage(undefined)
+    if (st.kind === 'sin-escribir' || st.kind === 'escrita-sin-cerrar') {
+      if (st.closeError) setCloseError(st.closeError)
+    }
   }, [])
   useEffect(() => {
     void refresh()
@@ -219,7 +228,9 @@ export function RestoreView() {
   const settle = async () => {
     setBusy(true)
     try {
-      await settleJournal(env)
+      const r = await settleJournal(env)
+      if ((r.kind === 'sin-escribir' || r.kind === 'escrita-sin-cerrar') && r.closeError) setCloseError(r.closeError)
+      else if (r.kind === 'cerrada') setCloseError(undefined)
       await refresh()
     } finally {
       setBusy(false)
@@ -254,6 +265,11 @@ export function RestoreView() {
               Mientras no se resuelva, no se escribe nada en este almacén (tampoco desde otras pestañas o la app instalada).
             </span>
           </Banner>
+          {closeError && (
+            <Banner tone="error">
+              <span data-testid="journal-close-error">{closeError}</span>
+            </Banner>
+          )}
           {(journal.kind === 'sin-escribir' || journal.kind === 'escrita-sin-cerrar') && (
             <Button variant="choice" className="h-10 px-3 text-[12px]" disabled={busy} data-testid="journal-settle" onClick={settle}>
               Comprobarla otra vez y cerrarla
@@ -263,35 +279,55 @@ export function RestoreView() {
             <div data-testid="journal-damaged">
             <Card className="flex flex-col gap-2 px-4 py-4">
               <p className="text-[13px] text-ink-3">Diagnóstico: {damage.reason}. {damage.before ? 'El texto de antes sigue entero dentro del diario.' : 'No se puede extraer un texto de antes completo.'}</p>
-              <Button
-                variant="choice"
-                className="h-10 px-3 text-[12px]"
-                disabled={busy}
-                data-testid="journal-save-damaged"
-                onClick={async () => {
-                  await saveJsonFile(stampedName('elyum-prueba-diario-danado', now()), journal.raw)
-                  setDamage({ ...damage, saved: true })
-                }}
-              >
-                Guardar el diario tal cual
-              </Button>
-              <Button
-                variant="choice"
-                className="h-10 px-3 text-[12px]"
-                disabled={busy || !damage.saved}
-                data-testid="journal-close-damaged"
-                onClick={async () => {
-                  setBusy(true)
-                  try {
-                    await dismissJournal(env, { savedDamaged: true })
-                    await refresh()
-                  } finally {
-                    setBusy(false)
-                  }
-                }}
-              >
-                Lo he guardado: cerrarlo
-              </Button>
+              {journal.raw === null ? (
+                <p className="text-[13px] text-[#b5531a]">El diario no se ha podido leer: no se puede guardar ni cerrar desde aquí. No se ha tocado.</p>
+              ) : (
+                <>
+                  <Button
+                    variant="choice"
+                    className="h-10 px-3 text-[12px]"
+                    disabled={busy}
+                    data-testid="journal-save-damaged"
+                    onClick={async () => {
+                      const raw = journal.raw!
+                      const r = await saveJsonFile(stampedName('elyum-prueba-diario-danado', now()), raw)
+                      if (r.status === 'entregado') setDamage({ ...damage, delivered: raw, via: r.via, confirmed: false, outcome: r.via === 'compartir' ? 'Se ha enviado por la hoja de compartir.' : 'Se ha pedido la descarga.' })
+                      else setDamage({ ...damage, delivered: undefined, confirmed: false, outcome: r.status === 'cancelado' ? 'Cancelado: no se ha guardado nada.' : `No se pudo guardar: ${r.message}` })
+                    }}
+                  >
+                    Guardar el diario tal cual
+                  </Button>
+                  {damage.outcome && (
+                    <p className="text-[13px] text-ink-3" data-testid="journal-save-outcome" data-delivered={damage.delivered === journal.raw ? '1' : '0'}>
+                      {damage.outcome}
+                    </p>
+                  )}
+                  {damage.delivered === journal.raw && (
+                    <label className="flex items-start gap-3 text-[14px] text-ink-2">
+                      <input type="checkbox" className="mt-0.5 size-5" checked={damage.confirmed} disabled={busy} data-testid="journal-damaged-confirm" onChange={(e) => setDamage({ ...damage, confirmed: e.target.checked })} />
+                      <span>He comprobado que el archivo está guardado (en Archivos o en Descargas). La app no puede comprobarlo por sí sola.</span>
+                    </label>
+                  )}
+                  <Button
+                    variant="choice"
+                    className="h-10 px-3 text-[12px]"
+                    disabled={busy || damage.delivered !== journal.raw || !damage.confirmed}
+                    data-testid="journal-close-damaged"
+                    onClick={async () => {
+                      setBusy(true)
+                      try {
+                        const r = await dismissJournal(env, { savedDamaged: true })
+                        setCloseError(r.ok ? undefined : r.message)
+                        await refresh()
+                      } finally {
+                        setBusy(false)
+                      }
+                    }}
+                  >
+                    Lo he guardado: cerrarlo
+                  </Button>
+                </>
+              )}
               <p className="text-[12.5px] text-ink-4">Al cerrarlo, su texto se conserva dentro del diario cerrado{damage.before ? ', y «Volver a lo de antes» queda disponible con vista previa' : ''}.</p>
             </Card>
             </div>
@@ -554,7 +590,8 @@ export function RestoreView() {
                 disabled={busy}
                 data-testid="journal-dismiss"
                 onClick={async () => {
-                  await dismissJournal(env)
+                  const r = await dismissJournal(env)
+                  setCloseError(r.ok ? undefined : r.message)
                   await refresh()
                 }}
               >

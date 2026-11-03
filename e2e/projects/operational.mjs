@@ -4,9 +4,12 @@ import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import { createServer } from 'vite'
 const { chromium } = createRequire(import.meta.url)('playwright')
-const server = await createServer({ server: { host: '127.0.0.1', port: 4333, strictPort: true }, logLevel: 'error' })
+// LAB_BASE: run the same checks through the temporary HTTPS access (operational-https.mjs starts the server and the TLS front).
+const external = process.env.LAB_BASE
+const server = external ? undefined : await createServer({ server: { host: '127.0.0.1', port: 4333, strictPort: true }, logLevel: 'error' })
+const tls = external ? { ignoreHTTPSErrors: true } : {} // the test's own self-signed certificate
 let browser
-const base = 'http://127.0.0.1:4333'
+const base = external ?? 'http://127.0.0.1:4333'
 const key = 'elyum:projects:v1:data'
 const journalKey = 'elyum:projects:v1:antes-de-recuperar'
 const labKey = 'elyum:lab:p2r1:run'
@@ -30,9 +33,9 @@ async function confirm(page) {
   await page.getByTestId('restore-result').waitFor()
 }
 try {
-  await server.listen()
-  browser = await chromium.launch()
-  const context = await browser.newContext({ serviceWorkers: 'block', acceptDownloads: true })
+  await server?.listen()
+  browser = await chromium.launch(process.env.LAB_RESOLVE ? { args: [`--host-resolver-rules=${process.env.LAB_RESOLVE}`, '--proxy-server=direct://'] } : {})
+  const context = await browser.newContext({ serviceWorkers: 'block', acceptDownloads: true, ...tls })
   const page = await open(context)
   check('seed: operational data key with six invented projects', (await stored(page)).data.projects.length === 6)
   const [download] = await Promise.all([page.waitForEvent('download'), page.getByTestId('lab-export').click()])
@@ -43,7 +46,7 @@ try {
   await page.getByTestId('lab-lose').click()
   await page.waitForFunction(k => JSON.parse(localStorage.getItem(k)).data.projects.length === 5, key)
   // A genuine export from a second disposable context is valid, but belongs to another run.
-  const foreignContext = await browser.newContext({ serviceWorkers: 'block' })
+  const foreignContext = await browser.newContext({ serviceWorkers: 'block', ...tls })
   const foreignPage = await open(foreignContext)
   const foreignText = await foreignPage.evaluate(async () => (await (await import('/src/features/projects/store/export.ts')).exportProjects(localStorage, new Date().toISOString())).text)
   const beforeForeign = await snapshot(page)
@@ -80,7 +83,7 @@ try {
   check('regular recovery route remains sandboxed', (await regular.getByTestId('target-note').innerText()).includes('almacén de prueba separado'))
   const keys = await page.evaluate(() => Object.keys(localStorage))
   check('only operational keys and the lab marker were created', keys.every(k => k === labKey || k === key || k === journalKey || /^elyum:projects:v1:prev:[123]$/.test(k)))
-  const protectedContext = await browser.newContext({ serviceWorkers: 'block' })
+  const protectedContext = await browser.newContext({ serviceWorkers: 'block', ...tls })
   const protectedPage = await protectedContext.newPage()
   await protectedPage.goto(base + '/e2e/projects/operational.html')
   await protectedPage.evaluate(() => localStorage.setItem('personal-os:synthetic-sentinel', 'untouched'))
@@ -93,5 +96,5 @@ try {
   console.log(`${checks.length}/${checks.length} operational-key checks passed`)
 } finally {
   await browser?.close()
-  await server.close()
+  await server?.close()
 }

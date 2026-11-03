@@ -10,6 +10,10 @@ import { saveJsonFile, stampedName } from '../ui/files'
 import { openOperationalLab } from './operationalLab'
 import '../../../styles/index.css'
 
+/** Set only by e2e/projects/lab-server.mjs (temporary HTTPS access from a phone). Absent in a normal `npm run dev`. */
+declare const __ELYUM_LAB_HOST__: string | undefined
+const labHost = typeof __ELYUM_LAB_HOST__ === 'string' ? __ELYUM_LAB_HOST__ : undefined
+
 type Lab = Awaited<ReturnType<typeof openOperationalLab>>
 function LabView({ lab }: { lab: Lab }) {
   const session = useMemo(() => new ProjectsSession(createStore(lab.target.createEnv()), () => new Date().toISOString()), [lab])
@@ -71,10 +75,11 @@ function Entry() {
     {lab ? <LabView lab={lab} /> : <>
       <h1>Prueba sintética de recuperación operativa</h1>
       <p>Abre un perfil de navegador desechable y un puerto local nuevo. El origen debe estar vacío. Aquí se crean seis proyectos inventados; no cargues dossiers ni copias personales.</p>
+      <p data-testid="lab-capabilities">Conexión segura: {window.isSecureContext ? 'sí' : 'no'} · Web Locks: {'locks' in navigator ? 'disponible' : 'no disponible'} · Dirección: {window.location.hostname}</p>
       <button disabled={busy} data-testid="lab-start" onClick={async () => {
         setBusy(true)
         try {
-          const result = await openOperationalLab({ dev: import.meta.env.DEV, location: window.location, storage: window.localStorage, locks: (navigator as Navigator & { locks?: Locks }).locks, now: () => new Date().toISOString(), random: () => crypto.randomUUID() })
+          const result = await openOperationalLab({ dev: import.meta.env.DEV, location: window.location, labHost, storage: window.localStorage, locks: (navigator as Navigator & { locks?: Locks }).locks, now: () => new Date().toISOString(), random: () => crypto.randomUUID() })
           setLab(result)
         } catch (e) { setError(e instanceof Error ? e.message : String(e)) } finally { setBusy(false) }
       }}>Iniciar o reabrir el laboratorio sintético</button>

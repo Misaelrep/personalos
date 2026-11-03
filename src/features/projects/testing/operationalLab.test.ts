@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { LAB_KEY, LAB_PATH, openOperationalLab, type LabOptions, type LabStorage } from './operationalLab'
+import { labHostProblem } from './labHost'
 import { createStore, DATA_KEY, PREV_KEYS, type Locks } from '../store/store'
 import { exportProjects } from '../store/export'
 import { dismissJournal, inspectJournal, JOURNAL_KEY, journalAsCopy, performRestore, planRestore, readBackup, settleJournal } from '../store/restore'
@@ -117,5 +118,49 @@ describe('operational-key lab: only a disposable synthetic origin', () => {
     expect(await dismissJournal(env, { reviewed: a, savedDamaged: true })).toMatchObject({ ok: false, reason: 'diario-cambiado' })
     expect(o.storage.snapshot()).toBe(before)
     expect(await createStore(env).pending()).toMatch(/dañado/)
+  })
+})
+
+describe('temporary HTTPS access from a phone: exactly one configured hostname', () => {
+  const host = 'laboratorio-proyectos.test'
+  const at = <T extends LabOptions>(o: T, hostname: string, protocol: string, labHost?: string): T => {
+    o.location = { hostname, pathname: LAB_PATH, protocol }
+    o.labHost = labHost
+    return o
+  }
+  it('opens over HTTPS on the configured hostname, on the dedicated page, with Web Locks and an empty origin', async () => {
+    const o = at(options(), host, 'https:', host)
+    const lab = await openOperationalLab(o)
+    expect((await load(lab.target.createEnv())).data.projects).toHaveLength(6)
+  })
+  for (const [name, change] of [
+    ['another hostname', (o: ReturnType<typeof options>) => at(o, 'otro.test', 'https:', host)],
+    ['the configured hostname over plain HTTP', (o: ReturnType<typeof options>) => at(o, host, 'http:', host)],
+    ['the hostname with no hostname configured', (o: ReturnType<typeof options>) => at(o, host, 'https:')],
+    ['the configured hostname outside development', (o: ReturnType<typeof options>) => Object.assign(at(o, host, 'https:', host), { dev: false })],
+    ['the configured hostname on another page', (o: ReturnType<typeof options>) => Object.assign(at(o, host, 'https:', host), { location: { hostname: host, pathname: '/proyectos.html', protocol: 'https:' } })],
+    ['the configured hostname without Web Locks', (o: ReturnType<typeof options>) => Object.assign(at(o, host, 'https:', host), { locks: undefined })],
+    ['ELYUM’s domain, even if configured', (o: ReturnType<typeof options>) => at(o, 'elyum.vercel.app', 'https:', 'elyum.vercel.app')],
+    ['a LAN IP address, even if configured', (o: ReturnType<typeof options>) => at(o, '192.168.1.20', 'https:', '192.168.1.20')],
+  ] as const)
+    it(`refuses ${name} without writing`, async () => {
+      const o = options()
+      change(o)
+      const before = o.storage.snapshot()
+      await expect(openOperationalLab(o)).rejects.toThrow()
+      expect(o.storage.snapshot()).toBe(before)
+    })
+  it('the configured hostname still needs an empty origin', async () => {
+    const o = at(options(), host, 'https:', host)
+    o.storage.setItem('personal-os:day:synthetic-sentinel', 'x')
+    const before = o.storage.snapshot()
+    await expect(openOperationalLab(o)).rejects.toThrow('no está vacío')
+    expect(o.storage.snapshot()).toBe(before)
+  })
+  it('only concrete hostnames are accepted as the extra one', () => {
+    expect(labHostProblem(host)).toBeUndefined()
+    expect(labHostProblem('abc-def-123.trycloudflare.com')).toBeUndefined()
+    for (const bad of [undefined, '', '*', '*.trycloudflare.com', 'Lab.Test', 'lab.test:443', 'https://lab.test', 'lab.test/x', 'localhost', '127.0.0.1', '192.168.1.20', 'elyum.vercel.app', 'personalos-abc-elyum.vercel.app', 'mi-elyum.example.com', 'proyecto.vercel.app', 'sinpunto'])
+      expect(labHostProblem(bad), String(bad)).toBeDefined()
   })
 })

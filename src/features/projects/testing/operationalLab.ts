@@ -4,6 +4,7 @@ import { syntheticSix } from '../ui/sandbox'
 import type { RestoreTarget } from '../ui/RestoreView'
 import { createStore, DATA_KEY, LOCK_NAME, PREV_KEYS, type KeyValue, type Locks } from '../store/store'
 import { JOURNAL_KEY } from '../store/journal'
+import { labLocationAllowed } from './labHost'
 
 export const LAB_KEY = 'elyum:lab:p2r1:run'
 export const LAB_PATH = '/e2e/projects/operational.html'
@@ -13,15 +14,17 @@ type LabData = ProjectsData & { syntheticRecoveryLab?: string }
 export interface LabStorage extends KeyValue { readonly length: number; key(index: number): string | null }
 export interface LabOptions {
   dev: boolean
-  location: { hostname: string; pathname: string }
+  location: { hostname: string; pathname: string; protocol?: string }
+  /** The one extra hostname for temporary HTTPS access from a phone; only the lab server sets it. */
+  labHost?: string
   storage: LabStorage
   locks: Locks | undefined
   now(): string
   random(): string
 }
 function locationAllowed(o: LabOptions) {
-  if (!o.dev || !['localhost', '127.0.0.1', '[::1]'].includes(o.location.hostname) || o.location.pathname !== LAB_PATH)
-    throw new Error('El laboratorio solo abre en desarrollo local y en su página de prueba dedicada.')
+  if (!o.dev || !labLocationAllowed(o.location, o.labHost) || o.location.pathname !== LAB_PATH)
+    throw new Error('El laboratorio solo abre en desarrollo, en este equipo o en el acceso temporal HTTPS configurado, y en su página de prueba dedicada.')
 }
 function knownKeys(storage: LabStorage) {
   for (let i = 0; i < storage.length; i++) {

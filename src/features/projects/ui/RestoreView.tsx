@@ -13,6 +13,7 @@ import {
   prefixedStorage,
   readBackup,
   settleJournal,
+  type Backup,
   type BackupRead,
   type JournalStatus,
   type RestoreEnv,
@@ -120,7 +121,14 @@ function UnitRow({ u, checked, disabled, onToggle }: { u: RestoreUnit; checked: 
   )
 }
 
-export function RestoreView() {
+/** Only the development lab supplies a different destination. The regular route remains sandboxed. */
+export interface RestoreTarget {
+  createEnv(): RestoreEnv
+  accepts(backup: Backup): boolean
+  onRefresh?(): void
+}
+
+export function RestoreView({ target }: { target?: RestoreTarget } = {}) {
   const [sandbox, setSandbox] = useState<Loaded>()
   const [journal, setJournal] = useState<JournalStatus>()
   const [source, setSource] = useState<{ name: string; read: BackupRead }>()
@@ -140,10 +148,11 @@ export function RestoreView() {
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<RestoreResult>()
   const [note, setNote] = useState<string>()
-  const env = sandboxEnv()
+  const getEnv = target?.createEnv ?? sandboxEnv
+  const env = getEnv()
 
   const refresh = useCallback(async () => {
-    const e = sandboxEnv()
+    const e = getEnv()
     setSandbox(await createStore(e).load())
     // H04 · Found on opening, never closed on its own: the person resolves it explicitly.
     const st = await inspectJournal(e.storage)
@@ -155,7 +164,8 @@ export function RestoreView() {
     if (st.kind === 'sin-escribir' || st.kind === 'escrita-sin-cerrar') {
       if (st.closeError) setCloseError(st.closeError)
     }
-  }, [])
+    target?.onRefresh?.()
+  }, [getEnv, target])
   useEffect(() => {
     void refresh()
   }, [refresh])
@@ -170,7 +180,9 @@ export function RestoreView() {
     setResult(undefined)
     setNote(undefined)
     resetChoice()
-    const read = await readBackup(text)
+    let read = await readBackup(text)
+    if (read.ok && target && !target.accepts(read.backup))
+      read = { ok: false, problem: 'no-es-copia', message: 'Este laboratorio solo acepta copias sintéticas generadas en este mismo perfil de prueba.', details: [] }
     setSource({ name, read })
     setPlan(undefined)
     if (!read.ok) return
@@ -239,14 +251,14 @@ export function RestoreView() {
 
   return (
     <>
-      <TopBar back="#/exportar" backLabel="Exportar" />
+      {!target && <TopBar back="#/exportar" backLabel="Exportar" />}
       <Title kicker={<Label>Recuperar</Label>} sub="Desde una copia hecha en Exportar. Primero ves qué cambiaría; nada se escribe sin tu confirmación, y lo que había queda guardado.">
         Recuperar desde una copia
       </Title>
 
       <Banner tone="info">
         <span data-testid="target-note">
-          Destino: <strong>almacén de prueba separado</strong>. Esta versión no toca los datos de PROYECTOS de este dispositivo; eso llegará tras la auditoría independiente y tu prueba física.
+          {target ? <>Destino: <strong>claves operativas de PROYECTOS, en este perfil sintético desechable</strong>. La recuperación y su diario usan el mismo almacenamiento.</> : <>Destino: <strong>almacén de prueba separado</strong>. Esta versión no toca los datos de PROYECTOS de este dispositivo; eso llegará tras la auditoría independiente y tu prueba física.</>}
         </span>
       </Banner>
 
@@ -337,7 +349,7 @@ export function RestoreView() {
         </div>
       )}
 
-      <Section label="Almacén de prueba">
+      {target ? <Section label="Almacén operativo sintético"><StoreLine loaded={sandbox} /></Section> : <Section label="Almacén de prueba">
         <Card className="flex flex-col gap-3 px-4 py-4">
           <StoreLine loaded={sandbox} />
           <div className="flex flex-col gap-2">
@@ -404,7 +416,7 @@ export function RestoreView() {
           )}
           <p className="text-[12.5px] leading-[1.5] text-ink-4">Estos botones solo escriben claves elyum:prueba-p2r1:*. «Copiar aquí PROYECTOS» solo lee tus datos de PROYECTOS.</p>
         </Card>
-      </Section>
+      </Section>}
 
       <Section label="1 · Elegir la copia">
         <Card className="flex flex-col gap-3 px-4 py-4">
@@ -496,7 +508,7 @@ export function RestoreView() {
                   <span>He revisado lo que cambia. Lo de antes queda en el diario para volver atrás.</span>
                 </label>
                 <Button onClick={confirm} disabled={busy || !sure || !!open} data-testid="restore-confirm" className="w-full">
-                  {busy ? 'Recuperando…' : 'Recuperar en el almacén de prueba'}
+                  {busy ? 'Recuperando…' : target ? 'Recuperar en el perfil sintético' : 'Recuperar en el almacén de prueba'}
                 </Button>
                 {open && <p className="text-[12.5px] text-[#b5531a]">Primero revisa la recuperación sin cerrar de abajo.</p>}
               </>

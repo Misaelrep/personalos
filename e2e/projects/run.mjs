@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 // P3 · Adversarial tests in a real browser (Chromium via Playwright), synthetic data only.
 //   node e2e/projects/run.mjs
+//   P3_LOG=/some/file.jsonl   one line per check (name, result, detail, time), appended (P2-R1.2)
 // Starts Vite in development, opens the P3 harness in real tabs that share one
 // origin (same localStorage, same Web Locks) and checks: concurrent tabs, races,
 // a held lock, a closed tab, a full storage, corrupt data, no Web Locks, the
 // import flow (preview, cancel, confirm, re-import, conflict) and the export.
 import { createRequire } from 'node:module'
-import { writeFileSync, mkdtempSync } from 'node:fs'
+import { appendFileSync, writeFileSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createServer } from 'vite'
@@ -23,9 +24,26 @@ const PORT = 4327
 const URL = `http://localhost:${PORT}/e2e/projects/harness.html`
 const DATA_KEY = 'elyum:projects:v1:data'
 const results = []
-const check = (name, ok, detail = '') => {
+const RUN = new Date().toISOString()
+const t0 = Date.now()
+const check = (name, ok, detail = '', extra) => {
   results.push({ name, ok, detail })
   console.log(`${ok ? '✓' : '✗'} ${name}${detail ? ` — ${detail}` : ''}`)
+  if (process.env.P3_LOG) appendFileSync(process.env.P3_LOG, JSON.stringify({ run: RUN, n: results.length, name, ok, detail, ms: Date.now() - t0, ...(extra ? { extra } : {}) }) + '\n')
+}
+/**
+ * P2-R1.2 · Explicit synchronisation between tabs. localStorage reaches the other tabs of the origin
+ * asynchronously (audit H5: a read right after the other tab's last save can see the generation before).
+ * Wait until `page` sees `generation` in storage, and say how long it took; never read before that.
+ */
+async function seesGeneration(page, generation, timeout = 5000) {
+  const start = Date.now()
+  try {
+    await page.waitForFunction(([k, g]) => JSON.parse(localStorage.getItem(k) ?? '{"generation":0}').generation === g, [DATA_KEY, generation], { timeout, polling: 10 })
+    return { ok: true, ms: Date.now() - start }
+  } catch {
+    return { ok: false, ms: Date.now() - start, saw: await page.evaluate((k) => JSON.parse(localStorage.getItem(k) ?? '{"generation":0}').generation, DATA_KEY) }
+  }
 }
 
 const server = await createServer({ server: { port: PORT, strictPort: true }, logLevel: 'error' })
@@ -121,12 +139,22 @@ try {
     await a.click('#confirm')
     await a.waitForFunction(() => document.querySelector('#status').textContent.includes('generación 1'))
     const before = await stored(a)
-    const r = await b.evaluate(async () => {
+    // P2-R1.3 · NO wait here (Codex): B tries at once, as a stale tab would. What B's storage showed right
+    // before is logged. If B's write were accepted on generation 0 that would be a real lost update (audit R1),
+    // and this check fails: the test does not hide it.
+    const { r, sawBefore } = await b.evaluate(async (k) => {
+      const sawBefore = JSON.parse(localStorage.getItem(k) ?? '{"generation":0}').generation
       const { session, ops } = window.p3
-      return session.change((d) => ops.setWeekLimits(d, '2026-10-26', { wipLimit: 3 }, { now: new Date().toISOString() }))
-    })
-    check('pestaña desactualizada: conflicto, no escribe', r.ok === false && r.reason === 'conflicto' && (await stored(a)) === before, r.reason)
-    check('la otra pestaña recibe el aviso de cambio', (await b.textContent('#status')).includes('otra pestaña guardó cambios'))
+      const r = await session.change((d) => ops.setWeekLimits(d, '2026-10-26', { wipLimit: 3 }, { now: new Date().toISOString() }))
+      return { r, sawBefore }
+    }, DATA_KEY)
+    check('pestaña desactualizada (sin espera): conflicto, no escribe', r.ok === false && r.reason === 'conflicto' && (await stored(a)) === before, `${r.reason ?? 'ok'}; B veía la generación ${sawBefore} justo antes`, { sawBefore, accepted: r.ok ? r.generation : null })
+    // The `storage` event is asynchronous too: wait for it explicitly instead of reading at once.
+    const notified = await b
+      .waitForFunction(() => document.querySelector('#status').textContent.includes('otra pestaña guardó cambios'), null, { timeout: 3000, polling: 10 })
+      .then(() => true)
+      .catch(() => false)
+    check('la otra pestaña recibe el aviso de cambio', notified, notified ? '' : await b.textContent('#status'))
     await b.evaluate(() => window.p3.reopen())
     check('tras recargar, la pestaña ve los datos nuevos', (await b.textContent('#status')).includes('tareas 6'))
     await context.close()
@@ -140,21 +168,31 @@ try {
       page.evaluate(async (tag) => {
         const { session } = window.p3
         let conflicts = 0
+        const generations = []
         for (let i = 0; i < 25; i++) {
           for (;;) {
             const r = await session.change((d) => ({ ...d, history: [...d.history, { at: new Date().toISOString(), by: 'usuario', entity: 'week', id: tag, field: `n${i}` }] }))
-            if (r.ok) break
+            if (r.ok) {
+              generations.push(r.generation)
+              break
+            }
             if (r.reason !== 'conflicto') throw new Error(r.message)
             conflicts++
             await session.open()
           }
         }
-        return conflicts
+        return { conflicts, generations }
       }, tag)
-    const [ca, cb] = await Promise.all([burst(a, 'A'), burst(b, 'B')])
+    const [ra, rb] = await Promise.all([burst(a, 'A'), burst(b, 'B')])
+    // What matters: no two successful saves from the same base. Each success has its own generation, 1…50.
+    const gens = [...ra.generations, ...rb.generations].sort((x, y) => x - y)
+    check('carrera: ningún guardado correcto sobre la misma base (generaciones 1…50, sin repetir)', gens.length === 50 && gens.every((g, i) => g === i + 1), `A ${ra.generations.length}, B ${rb.generations.length}`, { A: ra.generations, B: rb.generations, conflicts: ra.conflicts + rb.conflicts })
+    // Then read only once BOTH tabs see the last generation (explicit sync, not a fixed wait).
+    const [sa, sb] = [await seesGeneration(a, 50), await seesGeneration(b, 50)]
+    check('sincronización: las dos pestañas ven la generación 50 antes de leer', sa.ok && sb.ok, `A esperó ${sa.ms} ms, B ${sb.ms} ms${sa.ok && sb.ok ? '' : ` (vieron ${sa.saw ?? 50}/${sb.saw ?? 50})`}`)
     const final = await a.evaluate(async () => (await window.p3.session.open(), window.p3.session.state))
     const ids = final.data.history.map((h) => `${h.id}${h.field}`)
-    check('carrera entre dos pestañas: 50 cambios, ninguno perdido', final.generation === 50 && new Set(ids).size === 50, `generación ${final.generation}, conflictos detectados ${ca + cb}`)
+    check('carrera entre dos pestañas: 50 cambios, ninguno perdido', final.generation === 50 && new Set(ids).size === 50, `generación ${final.generation}, conflictos detectados ${ra.conflicts + rb.conflicts}`)
     await context.close()
   }
 
@@ -162,21 +200,35 @@ try {
   {
     const { context, open } = await fresh()
     const [a, b] = [await open(), await open()]
-    await a.evaluate(() => {
-      navigator.locks.request('elyum:projects:v1', () => new Promise(() => {}))
-    })
+    // P2-R1.3 · Explicit signal (Codex): the evaluate resolves only once A is INSIDE the lock callback.
+    const held = (page) =>
+      page.evaluate(
+        () =>
+          new Promise((acquired) => {
+            navigator.locks.request('elyum:projects:v1', () => {
+              acquired(true)
+              return new Promise(() => {})
+            })
+          }),
+      )
+    const queue = (page) => page.evaluate(async () => (await navigator.locks.query()).pending?.filter((l) => l.name === 'elyum:projects:v1').length ?? 0)
+    const aHeld = await held(a)
     const pending = b.evaluate(() => window.p3.session.change((d) => d))
-    await b.waitForTimeout(500)
+    // And B's save is really waiting for it (queued), not done already.
+    await b.waitForFunction(async () => ((await navigator.locks.query()).pending ?? []).some((l) => l.name === 'elyum:projects:v1'), null, { timeout: 3000, polling: 10 })
+    const queued = await queue(b)
+    const storedWhileHeld = await stored(b)
+    check('bloqueo retenido por A (señal de adquisición) y el guardado de B en cola, sin escribir', aHeld === true && queued >= 1 && storedWhileHeld === null, `en cola ${queued}`)
     await a.close()
     const r = await pending
     check('una pestaña cerrada libera el bloqueo y la otra guarda', r.ok === true, JSON.stringify(r))
     const c = await open()
-    await c.evaluate(() => {
-      navigator.locks.request('elyum:projects:v1', () => new Promise(() => {}))
-    })
+    const cHeld = await held(c)
+    check('señal: la pestaña C tiene el bloqueo antes de que D intente guardar', cHeld === true)
+    const beforeD = await stored(c)
     const d = await open()
     const r2 = await d.evaluate(() => window.p3.session.change((x) => x))
-    check('bloqueo retenido demasiado tiempo: rechazo visible, nada escrito', r2.ok === false && r2.reason === 'bloqueo-no-disponible', r2.reason)
+    check('bloqueo retenido demasiado tiempo: rechazo visible, nada escrito', r2.ok === false && r2.reason === 'bloqueo-no-disponible' && (await stored(d)) === beforeD, r2.reason)
     await context.close()
   }
 

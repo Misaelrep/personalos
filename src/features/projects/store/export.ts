@@ -5,8 +5,7 @@ import { DATA_KEY, readEnvelope, type KeyValue } from './store'
 
 /**
  * P3 · A file copy of PROYECTOS that can be checked without trusting it.
- * Exporting reads only. Restoring from a file is NOT here: it needs its own
- * authorization and tests (P2-R1).
+ * Exporting reads only. Restoring from a file is in `restore.ts` (P2-R1).
  *
  * The file keeps the stored text byte for byte (`stored`), so even data this
  * version cannot read is exported whole; when it can be read, the file also
@@ -36,6 +35,8 @@ export interface ExportFile {
   /** What the stored value holds, when this version could read it. */
   summary?: ExportSummary
   readable: boolean
+  /** P2-R1: set when the copy comes from the separate test store, not from PROYECTOS itself. */
+  origin?: 'prueba-p2r1'
 }
 
 const summarize = (generation: number, savedAt: string, d: ProjectsData): ExportSummary => ({
@@ -48,7 +49,7 @@ const summarize = (generation: number, savedAt: string, d: ProjectsData): Export
   history: d.history.length,
 })
 
-export async function exportProjects(storage: Pick<KeyValue, 'getItem'>, now: string): Promise<{ text: string; file: ExportFile }> {
+export async function exportProjects(storage: Pick<KeyValue, 'getItem'>, now: string, origin?: ExportFile['origin']): Promise<{ text: string; file: ExportFile }> {
   const stored = storage.getItem(DATA_KEY)
   const loaded = await readEnvelope(stored)
   const file: ExportFile = {
@@ -59,6 +60,7 @@ export async function exportProjects(storage: Pick<KeyValue, 'getItem'>, now: st
     storedSha256: stored === null ? null : await sha256Hex(stored),
     readable: loaded.kind === 'ok' || loaded.kind === 'vacio',
     ...(loaded.kind === 'ok' ? { summary: summarize(loaded.generation, loaded.savedAt, loaded.data) } : {}),
+    ...(origin ? { origin } : {}),
   }
   return { text: JSON.stringify(file, null, 2), file }
 }

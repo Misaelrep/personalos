@@ -7,6 +7,7 @@ import { Banner, RowLink } from './parts'
 import { ProjectView } from './ProjectView'
 import { TaskView } from './TaskView'
 import { NewProjectView } from './NewProjectView'
+import { RestoreView } from './RestoreView'
 import { ReviewView } from './ReviewView'
 import { useProjects } from './useProjects'
 import { WriteProvider } from './write'
@@ -22,6 +23,7 @@ import { WriteProvider } from './write'
  *   #/importar  #/exportar  #/prueba-iphone
  *   #/semana           REVISIÓN SEMANAL (P4b)
  *   #/nuevo-proyecto   NUEVO PROYECTO (P4b)
+ *   #/recuperar        RECUPERAR desde una copia, en un almacén de prueba (P2-R1)
  */
 
 type Route =
@@ -33,6 +35,7 @@ type Route =
   | { kind: 'prueba' }
   | { kind: 'semana' }
   | { kind: 'nuevo-proyecto' }
+  | { kind: 'recuperar' }
 
 export function parseRoute(hash: string): Route {
   const [, a, b] = hash.replace(/^#/, '').split('/')
@@ -43,6 +46,7 @@ export function parseRoute(hash: string): Route {
   if (a === 'prueba-iphone') return { kind: 'prueba' }
   if (a === 'semana') return { kind: 'semana' }
   if (a === 'nuevo-proyecto') return { kind: 'nuevo-proyecto' }
+  if (a === 'recuperar') return { kind: 'recuperar' }
   return { kind: 'inicio' }
 }
 
@@ -86,7 +90,9 @@ export function ProjectsApp({ embedded = false }: { embedded?: boolean }) {
   let body
   if (!s) body = <p className="py-20 text-center text-[14px] text-ink-3">Abriendo PROYECTOS…</p>
   else if (route.kind === 'prueba') body = <LocksCheckView />
-  else if (route.kind === 'exportar') body = <ExportView />
+  else if (route.kind === 'exportar') body = <ExportView embedded={embedded} />
+  // Recuperar is a test tool (separate test store) until its operational integration is approved: not inside ELYUM.
+  else if (route.kind === 'recuperar' && !embedded) body = <RestoreView />
   else if (s.status !== 'listo')
     body = (
       <div className="flex flex-col gap-3 pt-6">
@@ -124,12 +130,18 @@ export function ProjectsApp({ embedded = false }: { embedded?: boolean }) {
             <p className="text-[15px] text-ink">Exportar una copia</p>
             <p className="text-[12.5px] text-ink-3">Generarla y verificarla</p>
           </RowLink>
-          {/* The iPhone check is a test tool: on the test page only, not in ELYUM's menu. */}
+          {/* Test tools: on the test page only, not in ELYUM's menu. Recuperar still writes only its separate test store. */}
           {!embedded && (
-            <RowLink href="#/prueba-iphone" testId="go-check">
-              <p className="text-[15px] text-ink">Prueba del iPhone</p>
-              <p className="text-[12.5px] text-ink-3">Web Locks y persistencia, con datos sintéticos</p>
-            </RowLink>
+            <>
+              <RowLink href="#/recuperar" testId="go-restore">
+                <p className="text-[15px] text-ink">Recuperar desde una copia</p>
+                <p className="text-[12.5px] text-ink-3">En un almacén de prueba separado; con vista previa</p>
+              </RowLink>
+              <RowLink href="#/prueba-iphone" testId="go-check">
+                <p className="text-[15px] text-ink">Prueba del iPhone</p>
+                <p className="text-[12.5px] text-ink-3">Web Locks y persistencia, con datos sintéticos</p>
+              </RowLink>
+            </>
           )}
         </div>
       </>
@@ -144,6 +156,13 @@ export function ProjectsApp({ embedded = false }: { embedded?: boolean }) {
       {s?.status === 'listo' && !s.writable && route.kind !== 'prueba' && (
         <div className="mt-2">
           <Banner tone="warn">Solo lectura en este navegador: {s.readOnlyReason ?? 'no ofrece Web Locks'}. Puedes consultar y exportar; no se guarda nada.</Banner>
+        </div>
+      )}
+      {s?.status === 'listo' && s.pendingRecovery && route.kind !== 'recuperar' && (
+        <div className="mt-2" data-testid="pending-recovery">
+          <Banner tone="warn">
+            {s.pendingRecovery} Mientras tanto PROYECTOS no guarda cambios en este almacén: puedes consultar y exportar. Recuperar sobre el almacén operativo aún no está habilitado, así que aquí no se ha tocado nada.
+          </Banner>
         </div>
       )}
       {p.notice && (

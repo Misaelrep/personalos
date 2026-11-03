@@ -429,7 +429,7 @@ export function ImportView({ p, embedded = false }: { p: Projects; embedded?: bo
                   </div>
                 )}
                 <div className="flex flex-col gap-2">
-                  <Button data-testid="confirm" disabled={!plan.ok || !s.writable || busy || needsLinkChoice || preview?.baseGeneration !== s.generation} onClick={confirm} className="w-full">
+                  <Button data-testid="confirm" disabled={!plan.ok || !s.writable || !!s.pendingRecovery || busy || needsLinkChoice || preview?.baseGeneration !== s.generation} onClick={confirm} className="w-full">
                     {plan.creating ? `Crear «${target.kind === 'nuevo' ? target.name : ''}» e importar` : 'Confirmar importación'}
                   </Button>
                   <Button variant="quiet" onClick={reset} data-testid="cancel">

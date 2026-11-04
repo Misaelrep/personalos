@@ -78,9 +78,10 @@ try {
   await confirm(page)
   check('another tab causes conflict without changing any key', await page.getByTestId('restore-result').getAttribute('data-reason') === 'conflicto' && beforeConflict === await snapshot(page))
   const regular = await context.newPage()
-  await regular.goto(base + '/proyectos.html#/recuperar')
+  // P2-R1.4 (expectation changed on purpose): the test store moved to #/recuperar-prueba; #/recuperar is PROYECTOS itself.
+  await regular.goto(base + '/proyectos.html#/recuperar-prueba')
   await regular.getByTestId('target-note').waitFor()
-  check('regular recovery route remains sandboxed', (await regular.getByTestId('target-note').innerText()).includes('almacén de prueba separado'))
+  check('the test-store recovery route (#/recuperar-prueba) remains sandboxed', (await regular.getByTestId('target-note').innerText()).includes('almacén de prueba separado'))
   const keys = await page.evaluate(() => Object.keys(localStorage))
   check('only operational keys and the lab marker were created', keys.every(k => k === labKey || k === key || k === journalKey || /^elyum:projects:v1:prev:[123]$/.test(k)))
   const protectedContext = await browser.newContext({ serviceWorkers: 'block', ...tls })

@@ -11,7 +11,7 @@ import { Banner, Card, Field, Mono, Section, Title, TopBar } from './parts'
 /**
  * P4a · EXPORTAR: a copy of exactly what is stored, checked right after it is
  * made, and a way to check a copy saved earlier. Recovering from a copy is
- * on its own screen (P2-R1, #/recuperar).
+ * on its own screen (P2-R1, #/recuperar; inside ELYUM since P2-R1.4).
  */
 
 const now = () => new Date().toISOString()
@@ -37,7 +37,8 @@ function VerificationLines({ v }: { v: Verification }) {
   )
 }
 
-export function ExportView({ embedded = false }: { embedded?: boolean } = {}) {
+// `embedded` is kept for the callers; since P2-R1.4 the screen is the same inside ELYUM and on the test page.
+export function ExportView(_props: { embedded?: boolean } = {}) {
   const [made, setMade] = useState<{ text: string; file: ExportFile; check: Verification; name: string }>()
   const [checked, setChecked] = useState<{ name: string; check: Verification; current: boolean }>()
   const [error, setError] = useState<string>()
@@ -136,18 +137,11 @@ export function ExportView({ embedded = false }: { embedded?: boolean } = {}) {
             </div>
           )}
           <p className="text-[12.5px] leading-[1.5] text-ink-4">
-            {/* Inside ELYUM, Recuperar is not offered until its operational integration is approved. */}
-            {embedded ? (
-              'Verificar no cambia nada. Recuperar desde una copia todavía no está disponible dentro de ELYUM.'
-            ) : (
-              <>
-                Verificar no cambia nada. Para recuperar datos desde una copia, usa{' '}
-                <a href="#/recuperar" className="text-electric" data-testid="go-restore-from-export">
-                  Recuperar
-                </a>{' '}
-                (por ahora, en un almacén de prueba separado).
-              </>
-            )}
+            Verificar no cambia nada. Para recuperar datos desde una copia, usa{' '}
+            <a href="#/recuperar" className="text-electric" data-testid="go-restore-from-export">
+              Recuperar
+            </a>
+            : primero verás qué cambiaría.
           </p>
         </Card>
       </Section>

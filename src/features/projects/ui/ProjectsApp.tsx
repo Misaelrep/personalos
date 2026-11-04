@@ -161,6 +161,8 @@ export function ProjectsApp({ embedded = false, test }: { embedded?: boolean; te
           {/* Test tools: on the test page only (its kit), never in ELYUM's menu or build. */}
           {test && !embedded && test.menu}
         </div>
+        {/* SOLO PRUEBA DE ACTUALIZACIÓN (rama prueba/actualizacion-pwa): nunca va a main ni al PR #4. */}
+        <p data-testid="update-mark" className="mt-6 text-center text-[12px] text-ink-4">Versión de prueba B · actualización aplicada</p>
       </>
     )
 

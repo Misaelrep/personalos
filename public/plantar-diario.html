@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex" />
+<title>Prueba · plantar diario dañado</title>
+<style>
+  body { font: 16px/1.5 -apple-system, system-ui, sans-serif; margin: 0; padding: 24px 16px; background: #F7F9FC; color: #1d2430; }
+  h1 { font-size: 20px; margin: 0 0 8px; }
+  .box { background: #fff; border: 1px solid #dfe4ec; border-radius: 14px; padding: 14px; margin: 14px 0; }
+  code { font-size: 13px; word-break: break-all; }
+  button, a.btn { display: block; width: 100%; box-sizing: border-box; padding: 14px; margin-top: 10px; border-radius: 999px; border: 1px solid #c9d1dc; background: #fff; font-size: 16px; color: #1d2430; text-align: center; text-decoration: none; }
+  button.primary { background: #1d2430; color: #fff; border-color: #1d2430; }
+  button:disabled { opacity: .4; }
+  .warn { color: #b5531a; }
+</style>
+</head>
+<body>
+  <!-- SOLO PRUEBA (rama prueba/actualizacion-pwa): nunca va a main ni al PR #4. -->
+  <h1>Prueba · plantar un diario dañado</h1>
+  <p>Solo para la prueba física del iPhone, con datos inventados. Escribe <strong>una sola clave</strong> de este navegador y en esta dirección. No toca nada más.</p>
+  <div class="box">
+    <div>Clave: <code id="key"></code></div>
+    <div style="margin-top:8px">Valor que se escribirá (un diario cortado a propósito):</div>
+    <div><code id="value"></code></div>
+  </div>
+  <div class="box">
+    <div>Ahora en esa clave:</div>
+    <div><code id="now"></code></div>
+  </div>
+  <p id="msg"></p>
+  <button class="primary" id="plant">Plantar el diario dañado</button>
+  <a class="btn" href="/?entry=none&amp;section=proyectos">Abrir ELYUM · Proyectos</a>
+<script>
+  var KEY = 'elyum:projects:v1:antes-de-recuperar'
+  var VALUE = '{"format":"elyum-projects-restore/1","state":"en-cu'
+  var $ = function (id) { return document.getElementById(id) }
+  $('key').textContent = KEY
+  $('value').textContent = VALUE
+  function show() {
+    var v = null
+    try { v = localStorage.getItem(KEY) } catch (e) { $('msg').textContent = 'No se puede leer el almacenamiento: ' + e; return }
+    $('now').textContent = v === null ? '(vacía)' : v
+    var planted = v === VALUE
+    $('plant').disabled = v !== null
+    $('msg').className = v !== null && !planted ? 'warn' : ''
+    $('msg').textContent = planted ? 'Plantado. Abre ELYUM: debe avisar de una recuperación sin resolver.'
+      : v !== null ? 'La clave ya tiene otro valor. No se sobrescribe: avisa antes de seguir.' : ''
+  }
+  $('plant').onclick = function () {
+    try {
+      if (localStorage.getItem(KEY) !== null) return show()
+      localStorage.setItem(KEY, VALUE)
+    } catch (e) { $('msg').textContent = 'No se pudo escribir: ' + e }
+    show()
+  }
+  show()
+</script>
+</body>
+</html>

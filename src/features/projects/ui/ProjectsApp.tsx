@@ -1,13 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { isStandalone } from '../../../pwa/standalone'
 import { ExportView } from './ExportView'
-import { ImportView } from './ImportView'
-import { LocksCheckView } from './LocksCheckView'
+import { ImportView, type SyntheticDossier } from './ImportView'
 import { Overview } from './Overview'
 import { Banner, RowLink } from './parts'
 import { ProjectView } from './ProjectView'
 import { TaskView } from './TaskView'
 import { NewProjectView } from './NewProjectView'
 import { RestoreView } from './RestoreView'
+import { operationalTarget } from './restoreTarget'
 import { ReviewView } from './ReviewView'
 import { useProjects } from './useProjects'
 import { WriteProvider } from './write'
@@ -23,7 +24,8 @@ import { WriteProvider } from './write'
  *   #/importar  #/exportar  #/prueba-iphone
  *   #/semana           REVISIÓN SEMANAL (P4b)
  *   #/nuevo-proyecto   NUEVO PROYECTO (P4b)
- *   #/recuperar        RECUPERAR desde una copia, en un almacén de prueba (P2-R1)
+ *   #/recuperar        RECUPERAR desde una copia, sobre PROYECTOS (P2-R1.4)
+ *   #/recuperar-prueba RECUPERAR en el almacén de prueba separado: solo en la página de prueba
  */
 
 type Route =
@@ -36,6 +38,7 @@ type Route =
   | { kind: 'semana' }
   | { kind: 'nuevo-proyecto' }
   | { kind: 'recuperar' }
+  | { kind: 'recuperar-prueba' }
 
 export function parseRoute(hash: string): Route {
   const [, a, b] = hash.replace(/^#/, '').split('/')
@@ -47,6 +50,7 @@ export function parseRoute(hash: string): Route {
   if (a === 'semana') return { kind: 'semana' }
   if (a === 'nuevo-proyecto') return { kind: 'nuevo-proyecto' }
   if (a === 'recuperar') return { kind: 'recuperar' }
+  if (a === 'recuperar-prueba') return { kind: 'recuperar-prueba' }
   return { kind: 'inicio' }
 }
 
@@ -82,17 +86,37 @@ function ModePill({ writable, reason }: { writable: boolean; reason?: string }) 
  * atmosphere is behind), no «prueba» label or build stamp, room for the
  * bottom navigation. Same screens, same store.
  */
-export function ProjectsApp({ embedded = false }: { embedded?: boolean }) {
+/**
+ * P2-R1.4 · What only the test page has (`ui/testKit.tsx`, passed by `ui/main.tsx`). ELYUM passes
+ * nothing, so its build does not include any of it.
+ */
+export interface TestKit {
+  label: string
+  synthetic: readonly SyntheticDossier[]
+  route(kind: 'prueba' | 'recuperar-prueba'): ReactNode
+  menu: ReactNode
+}
+
+export function ProjectsApp({ embedded = false, test }: { embedded?: boolean; test?: TestKit }) {
   const p = useProjects()
   const route = useRoute()
   const s = p.state
+  // P2-R1.4 · One destination for Recuperar: the same storage and locks as this PROYECTOS. Refreshes it when done.
+  const reload = p.reload
+  const restoreTarget = useMemo(
+    () => operationalTarget({ where: typeof window !== 'undefined' && isStandalone(window) ? 'en esta app instalada' : 'en este navegador', onRefresh: () => void reload() }),
+    [reload],
+  )
 
   let body
   if (!s) body = <p className="py-20 text-center text-[14px] text-ink-3">Abriendo PROYECTOS…</p>
-  else if (route.kind === 'prueba') body = <LocksCheckView />
+  // Test page only: without the kit (ELYUM) these routes fall through to PROYECTOS.
+  else if (route.kind === 'prueba' && test) body = test.route('prueba')
   else if (route.kind === 'exportar') body = <ExportView embedded={embedded} />
-  // Recuperar is a test tool (separate test store) until its operational integration is approved: not inside ELYUM.
-  else if (route.kind === 'recuperar' && !embedded) body = <RestoreView />
+  // Before the «unreadable» check: Recuperar explains itself why it does not write over unreadable data (D4).
+  else if (route.kind === 'recuperar') body = <RestoreView target={restoreTarget} />
+  // The separate test store and its tools: test page only, never inside ELYUM.
+  else if (route.kind === 'recuperar-prueba' && test && !embedded) body = test.route('recuperar-prueba')
   else if (s.status !== 'listo')
     body = (
       <div className="flex flex-col gap-3 pt-6">
@@ -104,7 +128,7 @@ export function ProjectsApp({ embedded = false }: { embedded?: boolean }) {
         </a>
       </div>
     )
-  else if (route.kind === 'importar') body = <ImportView p={p} embedded={embedded} />
+  else if (route.kind === 'importar') body = <ImportView p={p} {...(test && !embedded ? { synthetic: test.synthetic } : {})} />
   else if (route.kind === 'proyecto') body = <ProjectView data={s.data} projectId={route.id} />
   else if (route.kind === 'tarea') body = <TaskView data={s.data} taskId={route.id} />
   else if (route.kind === 'semana') body = <ReviewView data={s.data} />
@@ -130,19 +154,12 @@ export function ProjectsApp({ embedded = false }: { embedded?: boolean }) {
             <p className="text-[15px] text-ink">Exportar una copia</p>
             <p className="text-[12.5px] text-ink-3">Generarla y verificarla</p>
           </RowLink>
-          {/* Test tools: on the test page only, not in ELYUM's menu. Recuperar still writes only its separate test store. */}
-          {!embedded && (
-            <>
-              <RowLink href="#/recuperar" testId="go-restore">
-                <p className="text-[15px] text-ink">Recuperar desde una copia</p>
-                <p className="text-[12.5px] text-ink-3">En un almacén de prueba separado; con vista previa</p>
-              </RowLink>
-              <RowLink href="#/prueba-iphone" testId="go-check">
-                <p className="text-[15px] text-ink">Prueba del iPhone</p>
-                <p className="text-[12.5px] text-ink-3">Web Locks y persistencia, con datos sintéticos</p>
-              </RowLink>
-            </>
-          )}
+          <RowLink href="#/recuperar" testId="go-restore">
+            <p className="text-[15px] text-ink">Recuperar desde una copia</p>
+            <p className="text-[12.5px] text-ink-3">Con vista previa; nada se escribe sin confirmar y lo de antes queda guardado</p>
+          </RowLink>
+          {/* Test tools: on the test page only (its kit), never in ELYUM's menu or build. */}
+          {test && !embedded && test.menu}
         </div>
       </>
     )
@@ -150,7 +167,7 @@ export function ProjectsApp({ embedded = false }: { embedded?: boolean }) {
   const inner = (
     <>
       <div className="flex items-center justify-between gap-3 pt-1 pb-1">
-        <span className="text-[11px] tracking-[0.08em] text-ink-4 uppercase">{embedded ? 'Proyectos' : 'Prueba · datos sintéticos'}</span>
+        <span className="text-[11px] tracking-[0.08em] text-ink-4 uppercase">{embedded || !test ? 'Proyectos' : test.label}</span>
         {s?.status === 'listo' && <ModePill writable={s.writable} reason={s.readOnlyReason} />}
       </div>
       {s?.status === 'listo' && !s.writable && route.kind !== 'prueba' && (
@@ -158,10 +175,13 @@ export function ProjectsApp({ embedded = false }: { embedded?: boolean }) {
           <Banner tone="warn">Solo lectura en este navegador: {s.readOnlyReason ?? 'no ofrece Web Locks'}. Puedes consultar y exportar; no se guarda nada.</Banner>
         </div>
       )}
-      {s?.status === 'listo' && s.pendingRecovery && route.kind !== 'recuperar' && (
+      {s?.status === 'listo' && s.pendingRecovery && route.kind !== 'recuperar' && route.kind !== 'recuperar-prueba' && (
         <div className="mt-2" data-testid="pending-recovery">
           <Banner tone="warn">
-            {s.pendingRecovery} Mientras tanto PROYECTOS no guarda cambios en este almacén: puedes consultar y exportar. Recuperar sobre el almacén operativo aún no está habilitado, así que aquí no se ha tocado nada.
+            {s.pendingRecovery} Mientras tanto PROYECTOS no guarda cambios: puedes consultar y exportar.{' '}
+            <a href="#/recuperar" className="text-electric underline" data-testid="pending-recovery-go">
+              Resolverla en Recuperar
+            </a>
           </Banner>
         </div>
       )}

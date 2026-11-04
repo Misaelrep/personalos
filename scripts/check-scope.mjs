@@ -23,6 +23,9 @@ const ALLOWED = {
   p2r1: ['src/features/projects/', 'e2e/projects/', ...SHARED],
   // P2-R1.2 · Correcciones H01–H04 de la auditoría de P2-R1: mismo alcance que P2-R1.
   p2r12: ['src/features/projects/', 'e2e/projects/', ...SHARED],
+  // P2-R1.4 · Recuperar dentro de PROYECTOS sobre su almacén operativo: solo la interfaz y sus pruebas. El motor
+  // (store/*.ts) no cambia: se comprueba aparte. Más la página de estado de la wiki.
+  p2r14: ['src/features/projects/', 'e2e/projects/', '02-DOCS/wiki/proyectos/estado.md', ...SHARED],
 }
 // Never, in any package of PROYECTOS.
 const FORBIDDEN = ['src/features/learn/', 'src/data/routine/', 'src/state/', 'src/domain/', 'src/features/focus/', 'src/features/week/', 'src/features/today/', 'src/features/dayscape/', 'src/features/entry/']

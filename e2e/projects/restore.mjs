@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // P2-R1 · Recovering PROYECTOS from an exported copy, in a real browser (Chromium via Playwright, iPhone-sized).
-// Synthetic data only, and only into the separate test store (elyum:prueba-p2r1:*).
+// Synthetic data only, and only into the separate test store (elyum:prueba-p2r1:*), at #/recuperar-prueba (P2-R1.4).
 //   node e2e/projects/restore.mjs
 //   P2R1_SHOTS=/some/dir   where screenshots go (default: a temp dir)
 // A real recovery: export → lose a project and change another → recover the lost one → check by reading
@@ -111,7 +111,9 @@ try {
   const mainBefore = await notSandbox(page)
 
   // ── 1 · The test store ─────────────────────────────────────────────────────
-  await page.getByTestId('go-restore-from-export').click()
+  // P2-R1.4: the test store has its own route (#/recuperar-prueba); Exportar now links to Recuperar on PROYECTOS itself.
+  check('Exportar links to Recuperar on PROYECTOS itself', (await page.getByTestId('go-restore-from-export').getAttribute('href')) === '#/recuperar')
+  await go(page, '#/recuperar-prueba')
   await page.waitForSelector('[data-testid="target-note"]')
   check('the screen says the target is the separate test store', (await page.getByTestId('target-note').innerText()).includes('almacén de prueba separado'))
   check('test store starts empty', (await page.getByTestId('sandbox-state').innerText()).includes('Vacío'))
@@ -210,7 +212,7 @@ try {
   // ── 7 · Another tab writes after the preview ───────────────────────────────
   await pick(page, 'copia-prueba.json', sandboxCopy)
   await page.waitForSelector('[data-testid="restore-plan"]')
-  const other = await open('#/recuperar')
+  const other = await open('#/recuperar-prueba')
   await other.waitForSelector('[data-testid="sandbox-state"]')
   await sandboxAction(other, 'sandbox-change')
   const genOther = (await sandbox(page)).generation
@@ -514,7 +516,7 @@ try {
     const ro = await fresh(() => {
       delete Navigator.prototype.locks
     })
-    const p = await ro.open('#/recuperar')
+    const p = await ro.open('#/recuperar-prueba')
     await p.waitForSelector('[data-testid="sandbox-state"]')
     await p.getByTestId('sandbox-fill').click()
     await p.getByTestId('sandbox-note').waitFor()

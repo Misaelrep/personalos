@@ -58,14 +58,25 @@ try {
   check('inside ELYUM, Importar asks for a file only', (await page.getByTestId('file-input').count()) === 1 && (await page.getByTestId('synthetic').count()) === 0)
   await page.evaluate(() => (window.location.hash = '#/'))
   await page.waitForTimeout(300)
-  // P2-R1 integration: Recuperar (still a test tool on its separate store) is not offered or reachable inside ELYUM.
-  check('inside ELYUM, Recuperar is not offered', (await page.getByTestId('go-restore').count()) === 0)
+  // P2-R1.4 (expectations changed on purpose): Recuperar is offered inside ELYUM, on PROYECTOS' own store,
+  // without the test store or its tools. Before P2-R1.4 these three checks asserted the opposite.
+  check('inside ELYUM, Recuperar is offered in the menu, and the test-store route is not', (await page.getByTestId('go-restore').count()) === 1 && (await page.getByTestId('go-restore-test').count()) === 0)
   await page.evaluate(() => (window.location.hash = '#/recuperar'))
+  await page.getByTestId('target-note').waitFor()
+  check(
+    'inside ELYUM, #/recuperar opens Recuperar on PROYECTOS itself, without test-store tools',
+    (await page.getByTestId('target-note').innerText()).includes('tus datos de PROYECTOS') && (await page.getByTestId('restore-input').count()) === 1 && (await page.getByTestId('sandbox-fill').count()) === 0 && (await page.getByTestId('sandbox-clear').count()) === 0,
+  )
+  await page.evaluate(() => (window.location.hash = '#/recuperar-prueba'))
   await page.waitForTimeout(300)
-  check('inside ELYUM, #/recuperar does not open the Recuperar screen', (await page.getByTestId('target-note').count()) === 0 && (await page.getByTestId('restore-input').count()) === 0)
+  check('inside ELYUM, #/recuperar-prueba does not open the test store', (await page.getByTestId('target-note').count()) === 0 && (await page.getByTestId('sandbox-fill').count()) === 0)
+  // P2-R1.4: the iPhone check is no longer in ELYUM's build; its route falls through to PROYECTOS (before, it opened).
+  await page.evaluate(() => (window.location.hash = '#/prueba-iphone'))
+  await page.waitForTimeout(300)
+  check('inside ELYUM, #/prueba-iphone does not open the iPhone check', (await page.getByTestId('run-check').count()) === 0)
   await page.evaluate(() => (window.location.hash = '#/exportar'))
   await page.waitForTimeout(300)
-  check('inside ELYUM, Exportar does not link to Recuperar', (await page.getByTestId('go-restore-from-export').count()) === 0)
+  check('inside ELYUM, Exportar links to Recuperar', (await page.getByTestId('go-restore-from-export').getAttribute('href')) === '#/recuperar')
   await page.evaluate(() => (window.location.hash = '#/'))
   await page.waitForTimeout(300)
   await page.screenshot({ path: join(SHOTS, '22-p4c-proyectos.png') })

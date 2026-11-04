@@ -29,6 +29,7 @@ PROYECTOS es un módulo de ELYUM (PWA en React + TypeScript + Vite) para seguir 
 | P4b operaciones | `proyectos/p4b-operaciones` | `ccae16e` | Aprobado en iPhone |
 | P2-R1 recuperación desde copia | `proyectos/p2r1-recuperacion` | `8c7ea4c` | Aprobado en iPhone; fuera de producción |
 | P4c navegación (main + P1–P4b + barra) | `proyectos/p4c-navegacion` | `5e3cc1e` | Listo, sin merge |
+| P2-R1.4 Recuperar dentro de PROYECTOS | `proyectos/recuperar-operativo` | ver PR en borrador | En revisión; sin merge |
 
 Ramas que no se usan: `proyectos/p2-copias` (no apta), `proyectos/p4c-preparacion` (sustituida), `proyectos/p2r1-1-duplicados` (F1 sobre una base antigua, no aplicada).
 
@@ -44,7 +45,13 @@ Ramas que no se usan: `proyectos/p2-copias` (no apta), `proyectos/p4c-preparacio
 - No inventar estados, prioridades, responsables ni aprobaciones: conservar el texto de origen y usar «sin decidir».
 - Sin auditorías generales de ELYUM: solo de lo que toca PROYECTOS.
 
-## Pendientes
+## Estado a 04/11/2026
+
+- En producción (`main` = `77656f9`): P4c (PROYECTOS en el menú de ELYUM) y P2-R1 (motor de Recuperar y bloqueo por diario sobre las claves reales). Recuperar no se ofrecía dentro de ELYUM.
+- `proyectos/recuperar-operativo` (P2-R1.4) abre Recuperar dentro de PROYECTOS sobre su propio almacén, sin tocar el motor. Ver `docs/proyectos/P2R1-4-recuperar-operativo.md`. Respaldo: `respaldo/main-antes-de-recuperar` = `77656f9`.
+- Importar los proyectos reales sigue sin autorizar.
+
+## Pendientes (lista histórica; ver el estado de arriba)
 
 1. Corregir los hallazgos de la auditoría independiente de P2-R1 (`8c7ea4c`): H1 requisitos rotos que se escriben y avisos descartados; H2 la casilla «He revisado» no se reinicia al cambiar la selección; H3 el diario guarda el estado anterior completo (~5× los datos); H4 `inspectJournal` decide «sin escribir» solo por la generación; H5 test de P3 intermitente (defecto del test).
 2. Rehacer F1 sobre `8c7ea4c`: avisar, en vez de bloquear por nombre, cuando una copia es anterior a un reinicio.

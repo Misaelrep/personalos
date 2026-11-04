@@ -93,9 +93,10 @@ try {
   check('the configured hostname over plain HTTP: refused, nothing written', (await plain.evaluate(() => localStorage.length)) === 0 && (await plain.getByTestId('lab-capabilities').innerText()).includes('Web Locks: no disponible'))
 
   const full = await (await browser.newContext({ serviceWorkers: 'block', ignoreHTTPSErrors: true })).newPage()
-  await full.goto(`https://${HOST}:${TLS_PORT}/proyectos.html#/recuperar`)
+  // P2-R1.4 (expectation changed on purpose): the test store moved to #/recuperar-prueba.
+  await full.goto(`https://${HOST}:${TLS_PORT}/proyectos.html#/recuperar-prueba`)
   await full.getByTestId('target-note').waitFor()
-  check('the regular Recuperar page over the same access stays on its separate test store', (await full.getByTestId('target-note').innerText()).includes('almacén de prueba separado'))
+  check('the test-store Recuperar page over the same access stays on its separate test store', (await full.getByTestId('target-note').innerText()).includes('almacén de prueba separado'))
 } catch (e) {
   failed = true
   console.log('✗ run stopped —', e.message)

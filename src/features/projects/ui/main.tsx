@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { keepStorageWhenInstalled } from '../../../pwa/standalone'
 import '../../../styles/index.css'
 import { ProjectsApp } from './ProjectsApp'
+import { createTestKit } from './testKit'
 
 // P4a · Entry of the PROYECTOS test page. The app's own entry (src/main.tsx) does not know it exists.
 
@@ -13,6 +14,6 @@ keepStorageWhenInstalled()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ProjectsApp />
+    <ProjectsApp test={createTestKit()} />
   </StrictMode>,
 )

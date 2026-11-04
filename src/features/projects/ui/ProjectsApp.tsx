@@ -1,16 +1,14 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { isStandalone } from '../../../pwa/standalone'
 import { ExportView } from './ExportView'
-import { ImportView } from './ImportView'
-import { LocksCheckView } from './LocksCheckView'
+import { ImportView, type SyntheticDossier } from './ImportView'
 import { Overview } from './Overview'
 import { Banner, RowLink } from './parts'
 import { ProjectView } from './ProjectView'
 import { TaskView } from './TaskView'
 import { NewProjectView } from './NewProjectView'
 import { RestoreView } from './RestoreView'
-import { RestoreSandboxTools } from './RestoreSandboxTools'
-import { operationalTarget, sandboxTarget } from './restoreTarget'
+import { operationalTarget } from './restoreTarget'
 import { ReviewView } from './ReviewView'
 import { useProjects } from './useProjects'
 import { WriteProvider } from './write'
@@ -88,7 +86,18 @@ function ModePill({ writable, reason }: { writable: boolean; reason?: string }) 
  * atmosphere is behind), no «prueba» label or build stamp, room for the
  * bottom navigation. Same screens, same store.
  */
-export function ProjectsApp({ embedded = false }: { embedded?: boolean }) {
+/**
+ * P2-R1.4 · What only the test page has (`ui/testKit.tsx`, passed by `ui/main.tsx`). ELYUM passes
+ * nothing, so its build does not include any of it.
+ */
+export interface TestKit {
+  label: string
+  synthetic: readonly SyntheticDossier[]
+  route(kind: 'prueba' | 'recuperar-prueba'): ReactNode
+  menu: ReactNode
+}
+
+export function ProjectsApp({ embedded = false, test }: { embedded?: boolean; test?: TestKit }) {
   const p = useProjects()
   const route = useRoute()
   const s = p.state
@@ -98,16 +107,16 @@ export function ProjectsApp({ embedded = false }: { embedded?: boolean }) {
     () => operationalTarget({ where: typeof window !== 'undefined' && isStandalone(window) ? 'en esta app instalada' : 'en este navegador', onRefresh: () => void reload() }),
     [reload],
   )
-  const testTarget = useMemo(() => sandboxTarget(), [])
 
   let body
   if (!s) body = <p className="py-20 text-center text-[14px] text-ink-3">Abriendo PROYECTOS…</p>
-  else if (route.kind === 'prueba') body = <LocksCheckView />
+  // Test page only: without the kit (ELYUM) these routes fall through to PROYECTOS.
+  else if (route.kind === 'prueba' && test) body = test.route('prueba')
   else if (route.kind === 'exportar') body = <ExportView embedded={embedded} />
   // Before the «unreadable» check: Recuperar explains itself why it does not write over unreadable data (D4).
   else if (route.kind === 'recuperar') body = <RestoreView target={restoreTarget} />
   // The separate test store and its tools: test page only, never inside ELYUM.
-  else if (route.kind === 'recuperar-prueba' && !embedded) body = <RestoreView target={testTarget} tools={(ctx) => <RestoreSandboxTools ctx={ctx} />} />
+  else if (route.kind === 'recuperar-prueba' && test && !embedded) body = test.route('recuperar-prueba')
   else if (s.status !== 'listo')
     body = (
       <div className="flex flex-col gap-3 pt-6">
@@ -119,7 +128,7 @@ export function ProjectsApp({ embedded = false }: { embedded?: boolean }) {
         </a>
       </div>
     )
-  else if (route.kind === 'importar') body = <ImportView p={p} embedded={embedded} />
+  else if (route.kind === 'importar') body = <ImportView p={p} {...(test && !embedded ? { synthetic: test.synthetic } : {})} />
   else if (route.kind === 'proyecto') body = <ProjectView data={s.data} projectId={route.id} />
   else if (route.kind === 'tarea') body = <TaskView data={s.data} taskId={route.id} />
   else if (route.kind === 'semana') body = <ReviewView data={s.data} />
@@ -149,19 +158,8 @@ export function ProjectsApp({ embedded = false }: { embedded?: boolean }) {
             <p className="text-[15px] text-ink">Recuperar desde una copia</p>
             <p className="text-[12.5px] text-ink-3">Con vista previa; nada se escribe sin confirmar y lo de antes queda guardado</p>
           </RowLink>
-          {/* Test tools: on the test page only, never in ELYUM's menu. */}
-          {!embedded && (
-            <>
-              <RowLink href="#/recuperar-prueba" testId="go-restore-test">
-                <p className="text-[15px] text-ink">Recuperar en el almacén de prueba</p>
-                <p className="text-[12.5px] text-ink-3">Almacén separado con herramientas sintéticas</p>
-              </RowLink>
-              <RowLink href="#/prueba-iphone" testId="go-check">
-                <p className="text-[15px] text-ink">Prueba del iPhone</p>
-                <p className="text-[12.5px] text-ink-3">Web Locks y persistencia, con datos sintéticos</p>
-              </RowLink>
-            </>
-          )}
+          {/* Test tools: on the test page only (its kit), never in ELYUM's menu or build. */}
+          {test && !embedded && test.menu}
         </div>
       </>
     )
@@ -169,7 +167,7 @@ export function ProjectsApp({ embedded = false }: { embedded?: boolean }) {
   const inner = (
     <>
       <div className="flex items-center justify-between gap-3 pt-1 pb-1">
-        <span className="text-[11px] tracking-[0.08em] text-ink-4 uppercase">{embedded ? 'Proyectos' : 'Prueba · datos sintéticos'}</span>
+        <span className="text-[11px] tracking-[0.08em] text-ink-4 uppercase">{embedded || !test ? 'Proyectos' : test.label}</span>
         {s?.status === 'listo' && <ModePill writable={s.writable} reason={s.readOnlyReason} />}
       </div>
       {s?.status === 'listo' && !s.writable && route.kind !== 'prueba' && (

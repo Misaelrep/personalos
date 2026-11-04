@@ -70,6 +70,10 @@ try {
   await page.evaluate(() => (window.location.hash = '#/recuperar-prueba'))
   await page.waitForTimeout(300)
   check('inside ELYUM, #/recuperar-prueba does not open the test store', (await page.getByTestId('target-note').count()) === 0 && (await page.getByTestId('sandbox-fill').count()) === 0)
+  // P2-R1.4: the iPhone check is no longer in ELYUM's build; its route falls through to PROYECTOS (before, it opened).
+  await page.evaluate(() => (window.location.hash = '#/prueba-iphone'))
+  await page.waitForTimeout(300)
+  check('inside ELYUM, #/prueba-iphone does not open the iPhone check', (await page.getByTestId('run-check').count()) === 0)
   await page.evaluate(() => (window.location.hash = '#/exportar'))
   await page.waitForTimeout(300)
   check('inside ELYUM, Exportar links to Recuperar', (await page.getByTestId('go-restore-from-export').getAttribute('href')) === '#/recuperar')

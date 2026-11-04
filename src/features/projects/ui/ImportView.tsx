@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from 'react'
 import { Button } from '../../../components/ui/Button'
 import { Label } from '../../../components/ui/Label'
 import { APPROVAL_STATES, WORK_CLASSES, type ApprovalState, type ProjectsData, type WorkClass } from '../domain/types'
-import { SYNTHETIC_DOSSIER, SYNTHETIC_DOSSIER_NAME, SYNTHETIC_DOSSIER_V2, SYNTHETIC_DOSSIER_V2_NAME, SYNTHETIC_TALLER, SYNTHETIC_TALLER_NAME } from '../import/fixtures'
 import type { DossierField, ImportDecisions, PlanItem, Resolutions } from '../import/plan'
 import type { DossierBundle } from '../import/bundle'
 import { similarProjects } from '../domain/operations'
@@ -25,8 +24,11 @@ const KINDS: PlanItem['kind'][] = ['conflicto', 'cambiada', 'nueva', 'igual']
 
 type Target = { kind: 'existente'; projectId: string } | { kind: 'nuevo'; name: string }
 
-const encoder = new TextEncoder()
-const synthetic = (name: string, text: string): DossierFile => ({ name, bytes: encoder.encode(text) })
+/** A synthetic dossier offered as a button. Only the test page passes them (`ui/testKit.tsx`). */
+export interface SyntheticDossier {
+  label: string
+  file: DossierFile
+}
 
 /**
  * The target suggested on screen (the person can change it before confirming):
@@ -43,8 +45,11 @@ function defaultTarget(data: ProjectsData, bundle: DossierBundle): { target: Tar
   return { target: { kind: 'nuevo', name: (bundle.project.name ?? bundle.dossier.name.replace(/\.md$/i, '')).replace(/^dossier operativo\s*[—–-]\s*/i, '') } }
 }
 
-/** `embedded` (P4c): inside ELYUM the synthetic test dossiers are not offered; they stay on the test page. */
-export function ImportView({ p, embedded = false }: { p: Projects; embedded?: boolean }) {
+/**
+ * Inside ELYUM the synthetic test dossiers are not offered (P4c). P2-R1.4: they are not even in its
+ * build; the test page passes them in `synthetic`.
+ */
+export function ImportView({ p, synthetic }: { p: Projects; synthetic?: readonly SyntheticDossier[] }) {
   const s = p.state
   const [file, setFile] = useState<DossierFile>()
   const [readError, setReadError] = useState<string>()
@@ -183,18 +188,14 @@ export function ImportView({ p, embedded = false }: { p: Projects; embedded?: bo
                   }}
                 />
               </label>
-              {!embedded && (
+              {synthetic && synthetic.length > 0 && (
                 <div className="flex flex-wrap gap-2 border-t border-[var(--line)] pt-3" data-testid="synthetic">
                   <span className="w-full text-[12.5px] text-ink-3">Datos sintéticos para probar:</span>
-                  <Button variant="choice" className="h-10 min-w-0 px-4 text-[11.5px]" onClick={() => choose(synthetic(SYNTHETIC_DOSSIER_NAME, SYNTHETIC_DOSSIER))}>
-                    Huerto v1
-                  </Button>
-                  <Button variant="choice" className="h-10 min-w-0 px-4 text-[11.5px]" onClick={() => choose(synthetic(SYNTHETIC_DOSSIER_V2_NAME, SYNTHETIC_DOSSIER_V2))}>
-                    Huerto v2 · cambios
-                  </Button>
-                  <Button variant="choice" className="h-10 min-w-0 px-4 text-[11.5px]" onClick={() => choose(synthetic(SYNTHETIC_TALLER_NAME, SYNTHETIC_TALLER))}>
-                    Taller
-                  </Button>
+                  {synthetic.map((d) => (
+                    <Button key={d.label} variant="choice" className="h-10 min-w-0 px-4 text-[11.5px]" onClick={() => choose(d.file)}>
+                      {d.label}
+                    </Button>
+                  ))}
                 </div>
               )}
             </Card>

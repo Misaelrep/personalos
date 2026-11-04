@@ -1,6 +1,6 @@
 import { sha256Hex } from '../import/sha256'
 import { assessJournal, JOURNAL_KEY } from '../store/journal'
-import { prefixedStorage, RESTORE_LOCK, type Backup, type RestoreEnv } from '../store/restore'
+import { RESTORE_LOCK, type Backup, type RestoreEnv } from '../store/restore'
 import { DATA_KEY, LOCK_NAME, PREV_KEYS, type KeyValue, type Locks } from '../store/store'
 import type { RestoreTarget } from './RestoreView'
 
@@ -13,7 +13,8 @@ import type { RestoreTarget } from './RestoreView'
  *              `navigator.locks` — the same keys and lock names the section
  *              uses (`browserStore`). Only inside ELYUM and on the test page.
  *   prueba     the separate test store (`elyum:prueba-p2r1:*`), only on the
- *              test page of the previews (`#/recuperar-prueba`).
+ *              test page of the previews (`#/recuperar-prueba`). Built in
+ *              `testTargets.ts`, which only the test page imports.
  *
  * The synthetic lab (`testing/operationalLab.ts`) builds its own target and
  * keeps its own rule (only copies of its own synthetic session). That rule is
@@ -78,12 +79,12 @@ export async function currentCopyGate(copy: CurrentCopy | undefined, currentRaw:
   return { ok: true }
 }
 
-const locksOf = (): Locks | undefined => {
+export const locksOf = (): Locks | undefined => {
   const nav = typeof navigator !== 'undefined' ? (navigator as Navigator & { locks?: Locks }) : undefined
   return nav?.locks && typeof nav.locks.request === 'function' ? nav.locks : undefined
 }
 
-const now = () => new Date().toISOString()
+export const now = () => new Date().toISOString()
 
 export function operationalTarget(o: { storage?: KeyValue; locks?: Locks; where: string; onRefresh?: () => void; writer?: string }): RestoreTarget {
   const writer = o.writer ?? `recuperar:${Math.random().toString(36).slice(2, 8)}`
@@ -97,16 +98,5 @@ export function operationalTarget(o: { storage?: KeyValue; locks?: Locks; where:
     filePrefix: 'elyum-proyectos',
     back: '#/',
     ...(o.onRefresh ? { onRefresh: o.onRefresh } : {}),
-  }
-}
-
-export function sandboxTarget(): RestoreTarget {
-  const writer = `recuperar-prueba:${Math.random().toString(36).slice(2, 8)}`
-  return {
-    kind: 'prueba',
-    createEnv: (): RestoreEnv => ({ storage: prefixedStorage(window.localStorage), locks: locksOf(), now, writer }),
-    accepts: () => true,
-    filePrefix: 'elyum-prueba',
-    back: '#/exportar',
   }
 }

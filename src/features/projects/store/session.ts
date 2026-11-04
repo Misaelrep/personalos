@@ -17,7 +17,7 @@ export function emptyProjectsData(): ProjectsData {
 }
 
 export type SessionState =
-  | { status: 'listo'; data: ProjectsData; generation: number; writable: boolean; readOnlyReason?: string; warnings: string[] }
+  | { status: 'listo'; data: ProjectsData; generation: number; writable: boolean; readOnlyReason?: string; warnings: string[]; pendingRecovery?: string }
   | { status: 'ilegible' | 'version-futura'; reason: string; raw: string }
 
 export interface PreviewedImport {
@@ -37,17 +37,19 @@ export class ProjectsSession {
     private random?: () => string,
   ) {}
 
-  private fromLoaded(l: Loaded): SessionState {
+  private fromLoaded(l: Loaded, pending: string | undefined): SessionState {
     const writable = this.store.mode === 'escritura'
     const ro = this.store.readOnlyReason ? { readOnlyReason: this.store.readOnlyReason } : {}
-    if (l.kind === 'vacio') return { status: 'listo', data: emptyProjectsData(), generation: 0, writable, ...ro, warnings: [] }
-    if (l.kind === 'ok') return { status: 'listo', data: l.data, generation: l.generation, writable, ...ro, warnings: l.warnings }
+    // P2-R1.2 · H04: an unresolved recovery is found on opening; the store refuses writes until it is resolved.
+    const pr = pending ? { pendingRecovery: pending } : {}
+    if (l.kind === 'vacio') return { status: 'listo', data: emptyProjectsData(), generation: 0, writable, ...ro, warnings: [], ...pr }
+    if (l.kind === 'ok') return { status: 'listo', data: l.data, generation: l.generation, writable, ...ro, warnings: l.warnings, ...pr }
     if (l.kind === 'ilegible') return { status: 'ilegible', reason: l.reason, raw: l.raw }
     return { status: 'version-futura', reason: `formato ${l.format}`, raw: l.raw }
   }
 
   async open(): Promise<SessionState> {
-    this.state = this.fromLoaded(await this.store.load())
+    this.state = this.fromLoaded(await this.store.load(), await this.store.pending())
     return this.state
   }
 
@@ -56,6 +58,9 @@ export class ProjectsSession {
     const s = this.state
     if (!s || s.status !== 'listo') return this.fail({ ok: false, reason: 'almacen-ilegible', message: 'PROYECTOS no está abierto con datos legibles.' })
     if (!s.writable) return this.fail({ ok: false, reason: 'solo-lectura', message: s.readOnlyReason ?? 'Solo lectura.' })
+    // The store checks again inside its lock: this only avoids computing a change that cannot be saved.
+    const pending = await this.store.pending()
+    if (pending) return this.fail({ ok: false, reason: 'recuperacion-pendiente', message: pending })
     const next = fn(s.data)
     return this.saveAt(next, s.generation)
   }
@@ -89,6 +94,8 @@ export class ProjectsSession {
     const s = this.state
     if (!s || s.status !== 'listo') return this.fail({ ok: false, reason: 'almacen-ilegible', message: 'PROYECTOS no está abierto con datos legibles.' })
     if (!s.writable) return this.fail({ ok: false, reason: 'solo-lectura', message: s.readOnlyReason ?? 'Solo lectura.' })
+    const pending = await this.store.pending()
+    if (pending) return this.fail({ ok: false, reason: 'recuperacion-pendiente', message: pending })
     if (s.generation !== p.baseGeneration)
       return this.fail({ ok: false, reason: 'conflicto', message: 'Los datos cambiaron después de la vista previa. Vuelve a generarla.', storedGeneration: s.generation })
     let next: ProjectsData

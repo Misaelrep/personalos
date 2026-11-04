@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { isStandalone } from '../../../pwa/standalone'
 import { ProjectsSession, type SessionState } from '../store/session'
+import { JOURNAL_KEY } from '../store/journal'
 import { browserStore, DATA_KEY, type ProjectsStore } from '../store/store'
 
 /**
@@ -39,6 +40,8 @@ export function useProjects(): Projects {
   useEffect(() => {
     void reload()
     const onStorage = (e: StorageEvent) => {
+      // P2-R1.2 · H04: a recovery journal appearing or closing elsewhere changes whether this tab may write.
+      if (e.key === JOURNAL_KEY) return void reload()
       if (e.key !== DATA_KEY) return
       setNotice('Otra pestaña guardó cambios. PROYECTOS se ha vuelto a leer.')
       void reload()

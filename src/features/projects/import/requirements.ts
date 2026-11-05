@@ -13,6 +13,10 @@ import { importedId } from '../domain/ids'
  *   "AAA-03 + material"       cumulative, task + condition
  *   "AAA-01..06 según parte"  conditional range: one condition, not expanded
  *   "M03–M05"                 explicit range (en/em dash, same prefix): M03, M04, M05 (shown as `reading`)
+ *   "AAA-01/06"               same as "AAA-01,06" (a slash instead of a comma)
+ *   "OBS-01–02"               explicit range whose end gives only the number: OBS-01, OBS-02
+ *   "001", "003–009", "1,4"   bare numbers: read as the dossier's ID with that number, only when every
+ *                             ID of the dossier has the same letters and width (shown as `reading`)
  *   "Ninguna para lanzar"     no requirement: «none» for a one-word purpose, nothing else (kept in the original row)
  *   anything else             external condition
  *
@@ -35,22 +39,54 @@ const noneFor = (text: string) => NONE_FOR.test(text)
 export type KnownIds = ReadonlySet<string> | undefined
 
 const isTask = (text: string, known: KnownIds) => ID.test(text) && (!known || known.has(text))
-const part = (text: string, known: KnownIds): RequirementOption => (isTask(text, known) ? { kind: 'tarea', taskId: importedId(text) } : { kind: 'condicion', literal: text, state: 'por-verificar' })
 
-/** "AAA-02,03,05" → ["AAA-02","AAA-03","AAA-05"], or null if it is not that shape. */
+/**
+ * A bare number («001») → the dossier's ID with that number, only when it cannot mean anything else:
+ * every ID of the dossier has the same letters and the same number of digits (POS-001…POS-044), the
+ * number has that many digits, and that ID exists. Otherwise null.
+ */
+export function resolveNumber(text: string, known: KnownIds): string | null {
+  if (!known || known.size === 0 || !/^\d+$/.test(text)) return null
+  const shapes = new Set([...known].map((id) => { const m = /^([A-Za-zÀ-ÿ]+[-_.]?)(\d+)$/.exec(id); return m ? `${m[1]}|${m[2].length}` : '' }))
+  if (shapes.size !== 1) return null
+  const [prefix, width] = [...shapes][0].split('|')
+  if (!prefix || Number(width) !== text.length) return null
+  const id = `${prefix}${text}`
+  return known.has(id) ? id : null
+}
+
+const resolve = (text: string, known: KnownIds) => resolveNumber(text, known) ?? text
+const part = (text: string, known: KnownIds): RequirementOption => {
+  const id = resolve(text, known)
+  return isTask(id, known) ? { kind: 'tarea', taskId: importedId(id) } : { kind: 'condicion', literal: text, state: 'por-verificar' }
+}
+
+/** "AAA-02,03,05" or "AAA-02/05" → ["AAA-02","AAA-03","AAA-05"], or null if it is not that shape. */
 export function expandAbbreviation(text: string): string[] | null {
-  const m = /^([A-Za-zÀ-ÿ]{2,}[-_.]?)(\d+)((?:\s*,\s*\d+)+)$/.exec(text.trim())
+  const m = /^([A-Za-zÀ-ÿ]{2,}[-_.]?)(\d+)((?:\s*,\s*\d+)+|(?:\s*\/\s*\d+)+)$/.exec(text.trim())
   if (!m) return null
   const width = m[2].length
-  const rest = m[3].split(',').map((x) => x.trim()).filter(Boolean)
+  const rest = m[3].split(/[,/]/).map((x) => x.trim()).filter(Boolean)
   if (rest.some((x) => x.length !== width)) return null
   return [m[2], ...rest].map((n) => `${m[1]}${n}`)
 }
 
-/** "M03–M05" → ["M03","M04","M05"]: an en/em dash between two IDs with the same prefix and width, or null. */
-export function expandRange(text: string): string[] | null {
-  const m = /^([A-Za-zÀ-ÿ]{1,}[-_.]?)(\d+)\s*[–—]\s*([A-Za-zÀ-ÿ]{1,}[-_.]?)(\d+)$/.exec(text.trim())
-  if (!m || m[1] !== m[3] || m[2].length !== m[4].length) return null
+/**
+ * "M03–M05" → ["M03","M04","M05"]: an en/em dash between two IDs with the same prefix and width, or null.
+ * The end may give only the number ("OBS-01–02"). With the dossier's IDs, both ends may be bare numbers
+ * ("003–009"): the prefix is the one of the single ID that has the first number.
+ */
+export function expandRange(text: string, known?: KnownIds): string[] | null {
+  const m = /^([A-Za-zÀ-ÿ]{1,}[-_.]?)?(\d+)\s*[–—]\s*([A-Za-zÀ-ÿ]{1,}[-_.]?)?(\d+)$/.exec(text.trim())
+  if (!m || m[2].length !== m[4].length) return null
+  let prefix = m[1]
+  if (prefix === undefined) {
+    if (m[3] !== undefined) return null
+    const first = resolveNumber(m[2], known)
+    if (!first) return null
+    prefix = first.slice(0, -m[2].length)
+  } else if (m[3] !== undefined && m[3] !== prefix) return null
+  m[1] = prefix
   const a = Number(m[2])
   const b = Number(m[4])
   if (!(b > a) || b - a > 50) return null
@@ -69,7 +105,7 @@ export function readRequirements(literal: string | undefined, known?: KnownIds):
   if (alternatives.length > 1) return [{ ...base, kind: 'alternativa', mode: 'alguna', options: alternatives.map((a) => part(a.trim(), known)) }]
 
   // A range or abbreviation is expanded only when every ID it names exists; otherwise it stays one condition, as written.
-  for (const ids of [expandRange(text), expandAbbreviation(text)])
+  for (const ids of [expandRange(text, known), expandAbbreviation(text)])
     if (ids) {
       if (ids.every((id) => isTask(id, known))) return [{ ...base, kind: 'tarea', mode: 'todas', options: ids.map((id) => part(id, known)), reading: `${text} → ${ids.join(', ')}` }]
       return [{ ...base, kind: 'externo', mode: 'todas', options: [{ kind: 'condicion', literal: text, state: 'por-verificar' }] }]
@@ -81,5 +117,8 @@ export function readRequirements(literal: string | undefined, known?: KnownIds):
   const kind = tasks === options.length ? 'tarea' : tasks === 0 ? 'externo' : 'mixto'
   // Commas inside a plain condition ("acceso, permisos") are kept as ONE condition.
   if (kind === 'externo') return [{ ...base, kind, mode: 'todas', options: [{ kind: 'condicion', literal: text, state: 'por-verificar' }] }]
-  return [{ ...base, kind, mode: 'todas', options }]
+  // A bare number read as an ID is shown as a reading («029,038 → POS-029, POS-038»).
+  const read = pieces.map((p, i) => (options[i].kind === 'tarea' ? resolve(p, known) : p))
+  const reading = read.some((r, i) => r !== pieces[i]) ? { reading: `${text} → ${read.join(', ')}` } : {}
+  return [{ ...base, kind, mode: 'todas', options, ...reading }]
 }

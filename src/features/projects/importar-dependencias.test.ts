@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { applyImport, planImport, type ImportDecisions } from './import/plan'
 import { readDossierFile } from './import/readers'
-import { expandRange, readRequirements } from './import/requirements'
+import { expandRange, readRequirements, resolveNumber } from './import/requirements'
 import { SYNTHETIC_DOSSIER } from './import/fixtures'
 import { validateProjectsData } from './domain/schema'
 import { emptyProjectsData } from './store/session'
@@ -71,6 +71,50 @@ describe('lectura de dependencias · IDs de una letra y rangos', () => {
     expect(readRequirements('Ninguna para empezar o permiso', known('A1'))[0]).toMatchObject({ kind: 'alternativa' })
     expect(readRequirements('Ninguna para la fase 2', known('A1'))[0]).toMatchObject({ kind: 'externo' })
     expect(readRequirements('Ninguna salvo permiso', known('A1'))[0]).toMatchObject({ kind: 'externo' })
+  })
+})
+
+describe('lectura de dependencias · abreviaturas resueltas contra el mismo dossier', () => {
+  const uniform = known('TAR-001', 'TAR-002', 'TAR-003', 'TAR-004', 'TAR-005')
+
+  it('número suelto: solo si todas las tareas tienen las mismas letras y cifras', () => {
+    expect(resolveNumber('002', uniform)).toBe('TAR-002')
+    expect(readRequirements('002', uniform)[0]).toMatchObject({ kind: 'tarea', reading: '002 → TAR-002', options: [{ kind: 'tarea', taskId: 'src:TAR-002' }] })
+    // Not an ID of the dossier, another width, prefixes mixed or no dossier: a condition, never a link.
+    expect(readRequirements('009', uniform)[0]).toMatchObject({ kind: 'externo', options: [{ kind: 'condicion', literal: '009' }] })
+    expect(readRequirements('2', uniform)[0]).toMatchObject({ kind: 'externo' })
+    expect(readRequirements('01', known('AAA-01', 'BBB-01'))[0]).toMatchObject({ kind: 'externo' })
+    expect(readRequirements('1', known('A1', 'B1', 'A2'))[0]).toMatchObject({ kind: 'externo' })
+    expect(readRequirements('001')[0]).toMatchObject({ kind: 'externo' })
+  })
+
+  it('lista de números sueltos', () => {
+    expect(readRequirements('002,004', uniform)[0]).toMatchObject({ kind: 'tarea', reading: '002,004 → TAR-002, TAR-004', options: [{ taskId: 'src:TAR-002' }, { taskId: 'src:TAR-004' }] })
+    expect(readRequirements('002,009', uniform)[0]).toMatchObject({ kind: 'mixto', options: [{ kind: 'tarea', taskId: 'src:TAR-002' }, { kind: 'condicion', literal: '009' }] })
+  })
+
+  it('rango de números sueltos', () => {
+    expect(readRequirements('002–004', uniform)[0]).toMatchObject({ kind: 'tarea', reading: '002–004 → TAR-002, TAR-003, TAR-004', options: [{ taskId: 'src:TAR-002' }, { taskId: 'src:TAR-003' }, { taskId: 'src:TAR-004' }] })
+    expect(readRequirements('004–009', uniform)[0]).toMatchObject({ kind: 'externo', options: [{ kind: 'condicion', literal: '004–009' }] })
+    expect(expandRange('002–004')).toBeNull()
+    expect(expandRange('002-004', uniform)).toBeNull()
+    expect(expandRange('002–TAR-004', uniform)).toBeNull()
+  })
+
+  it('rango con el final abreviado', () => {
+    expect(expandRange('TAR-001–003')).toEqual(['TAR-001', 'TAR-002', 'TAR-003'])
+    expect(readRequirements('TAR-001–003', uniform)[0]).toMatchObject({ kind: 'tarea', reading: 'TAR-001–003 → TAR-001, TAR-002, TAR-003' })
+    expect(expandRange('TAR-001–03')).toBeNull()
+  })
+
+  it('barra en lugar de coma', () => {
+    expect(readRequirements('TAR-001/004', uniform)[0]).toMatchObject({ kind: 'tarea', reading: 'TAR-001/004 → TAR-001, TAR-004', options: [{ taskId: 'src:TAR-001' }, { taskId: 'src:TAR-004' }] })
+    expect(readRequirements('TAR-001/009', uniform)[0]).toMatchObject({ kind: 'externo', options: [{ kind: 'condicion', literal: 'TAR-001/009' }] })
+    expect(readRequirements('TAR-001/04', uniform)[0]).toMatchObject({ kind: 'externo' })
+  })
+
+  it('el texto original se conserva siempre', () => {
+    for (const lit of ['002', '002,004', '002–004', 'TAR-001–003', 'TAR-001/004']) expect(readRequirements(lit, uniform)[0].literal).toBe(lit)
   })
 })
 

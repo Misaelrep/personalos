@@ -54,7 +54,16 @@ describe('lectura de dependencias · IDs de una letra y rangos', () => {
     expect(readRequirements('Permiso del vecino', known('A1'))[0]).toMatchObject({ kind: 'externo', options: [{ kind: 'condicion', literal: 'Permiso del vecino' }] })
     expect(readRequirements('Ninguna', known('A1'))).toEqual([])
     expect(readRequirements('—', known('A1'))).toEqual([])
-    expect(readRequirements('Ninguna para empezar', known('A1'))[0]).toMatchObject({ kind: 'externo', options: [{ literal: 'Ninguna para empezar' }] })
+  })
+
+  it('«Ninguna para …» no crea un requisito; lo que añade algo más sigue siendo condición', () => {
+    expect(readRequirements('Ninguna para empezar', known('A1'))).toEqual([])
+    expect(readRequirements('ninguno para la prueba', known('A1'))).toEqual([])
+    expect(readRequirements('Ninguna para empezar + A1', known('A1'))[0]).toMatchObject({ kind: 'mixto' })
+    expect(readRequirements('Ninguna para empezar, salvo permiso', known('A1'))[0]).toMatchObject({ kind: 'externo' })
+    expect(readRequirements('Ninguna para empezar o permiso', known('A1'))[0]).toMatchObject({ kind: 'alternativa' })
+    expect(readRequirements('Ninguna para la fase 2', known('A1'))[0]).toMatchObject({ kind: 'externo' })
+    expect(readRequirements('Ninguna salvo permiso', known('A1'))[0]).toMatchObject({ kind: 'externo' })
   })
 })
 
@@ -69,6 +78,7 @@ const ONE_LETTER = `# DOSSIER DE EJECUCIÓN — JARDÍN INVENTADO
 | M04 | Siembra | Sembrar | Pendiente | Semillas en tierra | M02–M03 | 1 h | No | Semillas en tierra | Inventada |
 | M05 | Registro | Anotar el crecimiento | Pendiente | Hoja | M04 + regla | 15 min | Sí | Una fila por semana | Inventada |
 | M06 | Cierre | Revisar con el vecino | Pendiente | Notas | M09 | 30 min | No | Notas escritas | Inventada |
+| M07 | Cierre | Pensar en el año que viene | Pendiente | Nota | Ninguna para empezar | 10 min | No | Una nota | Inventada |
 `
 
 async function importText(data: ProjectsData, text: string, name: string) {
@@ -88,6 +98,8 @@ describe('importación · dependencias explícitas sin enlaces rotos', () => {
     expect(t('M04').requirements?.[0]).toMatchObject({ kind: 'tarea', reading: 'M02–M03 → M02, M03' })
     expect(t('M05').requirements?.[0]).toMatchObject({ kind: 'mixto', options: [{ kind: 'tarea', taskId: 'src:M04' }, { kind: 'condicion', literal: 'regla' }] })
     expect(t('M06').requirements?.[0]).toMatchObject({ kind: 'externo', options: [{ kind: 'condicion', literal: 'M09', state: 'por-verificar' }] })
+    expect(t('M07').requirements ?? []).toEqual([])
+    expect(t('M07').origin?.raw).toContain('Ninguna para empezar')
     expect(plan.items.find((i) => i.sourceId === 'M04')?.readings).toEqual(['M02–M03 → M02, M03'])
     // dependsOn stays empty: the dossier's dependencies live in `requirements`, as for every imported dossier.
     expect(data.tasks.every((x) => x.dependsOn.length === 0)).toBe(true)
@@ -109,6 +121,6 @@ describe('importación · dependencias explícitas sin enlaces rotos', () => {
     const r = await readDossierFile({ name: 'JARDIN_INVENTADO.md', bytes: new TextEncoder().encode(ONE_LETTER) })
     if (!r.ok) throw new Error(r.error)
     const plan = planImport(first.data, r.bundle, { target: { projectId: first.plan.projectId } }, { now: '2026-11-05T00:00:02-06:00' })
-    expect(plan.counts).toMatchObject({ new: 0, changed: 0, conflicts: 0, unchanged: 6 })
+    expect(plan.counts).toMatchObject({ new: 0, changed: 0, conflicts: 0, unchanged: 7 })
   })
 })

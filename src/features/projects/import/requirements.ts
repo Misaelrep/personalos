@@ -13,6 +13,7 @@ import { importedId } from '../domain/ids'
  *   "AAA-03 + material"       cumulative, task + condition
  *   "AAA-01..06 según parte"  conditional range: one condition, not expanded
  *   "M03–M05"                 explicit range (en/em dash, same prefix): M03, M04, M05 (shown as `reading`)
+ *   "Ninguna para lanzar"     no requirement: «none» with a purpose, nothing else (kept in the original row)
  *   anything else             external condition
  *
  * IDs may have one letter (M01, A2) or more (PUB-02). When the importer passes
@@ -23,6 +24,9 @@ import { importedId } from '../domain/ids'
 
 const ID = /^[A-Za-zÀ-ÿ]{1,}[-_.]?\d+(?:[.-]\d+)*[A-Za-z]?$/
 const EMPTY = /^(?:—|-|–|n\/a|ninguna?|no aplica)?$/i
+/** «Ninguna para lanzar»: says there is none, for a purpose. Only that: any «o», «+», «,», «;», «y» or digit keeps it a condition. */
+const NONE_FOR = /^ningun[oa]s?\s+para\s+[^\d,;+|]+$/i
+const noneFor = (text: string) => NONE_FOR.test(text) && !/\s(?:o|y)\s/i.test(text)
 
 /** The IDs of the dossier being read. Absent: any ID-shaped text is a task (unit use). */
 export type KnownIds = ReadonlySet<string> | undefined
@@ -52,7 +56,7 @@ export function expandRange(text: string): string[] | null {
 
 export function readRequirements(literal: string | undefined, known?: KnownIds): Requirement[] {
   const text = (literal ?? '').trim()
-  if (EMPTY.test(text)) return []
+  if (EMPTY.test(text) || noneFor(text)) return []
   const base = { id: 'r1', literal: literal! }
 
   if (/\.\.|…/.test(text) || /\bseg[uú]n\b/i.test(text))

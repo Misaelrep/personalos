@@ -3,7 +3,10 @@ import { parseEstimate, parseSourceRefs } from '../domain/literals'
 import { validateProjectsData } from '../domain/schema'
 import type { ApprovalState, DossierReference, DossierSource, HistoryEntry, ImportRecord, Origin, Project, ProjectRule, ProjectsData, Task, Vocabulary, WorkClass } from '../domain/types'
 import { bundleIssues, type DossierBundle, type DraftTask } from './bundle'
-import { readRequirements } from './requirements'
+import { readRequirements, type KnownIds } from './requirements'
+
+/** The original IDs of a dossier: the only tasks its dependencies may link to (never a task that does not exist). */
+const knownIds = (bundle: DossierBundle): KnownIds => new Set(bundle.tasks.map((t) => t.sourceId))
 
 /**
  * P3 · From a bundle to a reviewed import. Two steps, both pure:
@@ -150,10 +153,11 @@ export function planImport(data: ProjectsData, bundle: DossierBundle, decisions:
 
   const items: PlanItem[] = []
   const byId = new Map(data.tasks.map((t) => [t.id, t]))
+  const dossierIds = knownIds(bundle)
   for (const d of bundle.tasks) {
     const taskId = importedId(d.sourceId)
     const existing = byId.get(taskId)
-    const readings = readRequirements(d.dependencyLiteral).flatMap((r) => (r.reading ? [r.reading] : []))
+    const readings = readRequirements(d.dependencyLiteral, dossierIds).flatMap((r) => (r.reading ? [r.reading] : []))
     if (existing && existing.projectId !== projectId) {
       errors.push(`${d.sourceId}: ese ID original ya pertenece a otro proyecto (no se renombra; hay que resolverlo en el origen)`)
       continue
@@ -223,6 +227,7 @@ export class ImportError extends Error {
 export function applyImport(data: ProjectsData, plan: ImportPlan, decisions: ImportDecisions, ctx: Ctx, resolutions: Resolutions = {}): ProjectsData {
   if (!plan.ok) throw new ImportError(`La importación tiene errores: ${plan.errors.join('; ')}`)
   const b = plan.bundle
+  const dossierIds = knownIds(b)
   const history: HistoryEntry[] = []
   const log = (e: Omit<HistoryEntry, 'at' | 'by'>) => history.push({ at: ctx.now, by: 'importación', ...e })
   const origin = (place: { section: string; line: number; raw: string }, snapshot?: Record<string, unknown>): Origin => ({
@@ -296,7 +301,7 @@ export function applyImport(data: ProjectsData, plan: ImportPlan, decisions: Imp
         ...(values.estimate !== undefined ? { estimate: values.estimate as Task['estimate'] } : {}),
         ...(d.delegationLiteral !== undefined ? { delegation: { literal: d.delegationLiteral, candidates: [] } } : {}),
         ...(values.sourceRefs !== undefined ? { sourceRefs: values.sourceRefs as Task['sourceRefs'] } : {}),
-        ...(d.dependencyLiteral !== undefined ? { requirements: readRequirements(d.dependencyLiteral) } : {}),
+        ...(d.dependencyLiteral !== undefined ? { requirements: readRequirements(d.dependencyLiteral, dossierIds) } : {}),
         origin: origin(d.place, snapshot),
         ...(values.extra !== undefined ? { extra: values.extra as Record<string, unknown> } : {}),
         createdAt: ctx.now,
@@ -313,7 +318,7 @@ export function applyImport(data: ProjectsData, plan: ImportPlan, decisions: Imp
         log({ entity: 'task', id: item.taskId, field: c.field, from: c.current, to: c.current, note: `conflicto: el dossier dice ${json(c.incoming)}; se mantiene ELYUM` })
         continue
       }
-      t = setField(t, c.field, d, values)
+      t = setField(t, c.field, d, values, dossierIds)
       log({ entity: 'task', id: item.taskId, field: c.field, from: c.current, to: c.incoming, ...(c.conflict ? { note: 'conflicto: se usa el dossier' } : {}) })
     }
     t.origin = origin(d.place, snapshot)
@@ -359,7 +364,7 @@ export function applyImport(data: ProjectsData, plan: ImportPlan, decisions: Imp
   return next
 }
 
-function setField(t: Task, f: DossierField, d: DraftTask, v: Record<DossierField, unknown>): Task {
+function setField(t: Task, f: DossierField, d: DraftTask, v: Record<DossierField, unknown>, known: KnownIds): Task {
   const without = <K extends keyof Task>(k: K, value: Task[K] | undefined): Task => {
     const copy = { ...t }
     if (value === undefined) delete copy[k]
@@ -384,7 +389,7 @@ function setField(t: Task, f: DossierField, d: DraftTask, v: Record<DossierField
     case 'sourceRefs':
       return without('sourceRefs', v.sourceRefs as Task['sourceRefs'])
     case 'requirements':
-      return without('requirements', d.dependencyLiteral === undefined ? undefined : readRequirements(d.dependencyLiteral))
+      return without('requirements', d.dependencyLiteral === undefined ? undefined : readRequirements(d.dependencyLiteral, known))
     case 'approvalOriginal':
       return { ...t, approval: { ...t.approval, ...(d.approvalLiteral !== undefined ? { original: { ...t.approval.original, literal: d.approvalLiteral } } : {}) } }
     case 'priority':

@@ -2,7 +2,7 @@
 type: estado
 title: PROYECTOS — estado y reglas
 topic: proyectos
-timestamp: 2026-11-02
+timestamp: 2026-11-06
 ---
 
 # PROYECTOS — estado y reglas
@@ -17,21 +17,23 @@ PROYECTOS es un módulo de ELYUM (PWA en React + TypeScript + Vite) para seguir 
 - Pruebas: Vitest (`src/**/*.test.ts`) y e2e con Playwright/Chromium en `e2e/projects/`. `scripts/check-scope.mjs` comprueba que cada paquete solo toca sus archivos.
 - Validación final de cada paquete: prueba física del dueño en su iPhone.
 
-## Ramas (ninguna fusionada en `main`)
+## Qué hay en `main` (06/11/2026, `main` = `7a52221`)
 
-`main` = `62be277` y **todavía no contiene código de PROYECTOS**.
+Todo PROYECTOS ya está en `main`, fusionado por pull requests:
 
-| Paquete | Rama | Commit | Estado |
-|---|---|---|---|
-| P1.1 modelo | `proyectos/p1-1-modelo` | `f786f80` | Aprobado |
-| P3 almacén e importación | `proyectos/p3-almacen` | `441b200` | Aprobado (alcance limitado) |
-| P4a pantallas | `proyectos/p4a-pantallas` | `04d5927` | Aprobado en iPhone |
-| P4b operaciones | `proyectos/p4b-operaciones` | `ccae16e` | Aprobado en iPhone |
-| P2-R1 recuperación desde copia | `proyectos/p2r1-recuperacion` | `8c7ea4c` | Aprobado en iPhone; fuera de producción |
-| P4c navegación (main + P1–P4b + barra) | `proyectos/p4c-navegacion` | `5e3cc1e` | Listo, sin merge |
-| P2-R1.4 Recuperar dentro de PROYECTOS | `proyectos/recuperar-operativo` | ver PR en borrador | En revisión; sin merge |
+| PR | Rama | Qué trae |
+|---|---|---|
+| #1 | `proyectos/rsc-harness` | Kit rsc para Claude y Codex (`02-DOCS/`, `.claude/`, `AGENTS.md`) |
+| #2 | `proyectos/p4c-navegacion` | P1.1 + P3 + P4a + P4b + P4c: PROYECTOS como sección de ELYUM |
+| #3 | `proyectos/p2r1-integracion` | P2-R1 con sus correcciones (P2-R1.2 H01–H04, P2-R1.3 F01–F04, P2-R1.3.1 R13-01) |
+| #4 | `proyectos/recuperar-operativo` | P2-R1.4: Recuperar dentro de PROYECTOS; herramientas de prueba fuera del build de producción |
+| #5 | `proyectos/importar-dependencias` | Dependencias explícitas al importar (IDs de una letra, rangos, «Ninguna para») |
 
-Ramas que no se usan: `proyectos/p2-copias` (no apta), `proyectos/p4c-preparacion` (sustituida), `proyectos/p2r1-1-duplicados` (F1 sobre una base antigua, no aplicada).
+**Abierto:** #6 `proyectos/importar-abreviaturas` (dependencias abreviadas), en borrador y sin merge.
+
+Detalle de cada paquete en `docs/proyectos/`. Respaldo anterior a Recuperar: `respaldo/main-antes-de-recuperar` = `77656f9`.
+
+Ramas que no se usan: `proyectos/p2-copias` (no apta), `proyectos/p4c-preparacion` (sustituida), `proyectos/p2r1-1-duplicados` (F1 sobre una base antigua, no aplicada). Las ramas de paquete ya fusionadas (`p1-1-modelo`, `p3-almacen`, `p4a-pantallas`, `p4b-operaciones`, `p2r1-recuperacion`) son solo historia.
 
 ## Reglas
 
@@ -45,18 +47,9 @@ Ramas que no se usan: `proyectos/p2-copias` (no apta), `proyectos/p4c-preparacio
 - No inventar estados, prioridades, responsables ni aprobaciones: conservar el texto de origen y usar «sin decidir».
 - Sin auditorías generales de ELYUM: solo de lo que toca PROYECTOS.
 
-## Estado a 04/11/2026
+## Pendientes
 
-- En producción (`main` = `77656f9`): P4c (PROYECTOS en el menú de ELYUM) y P2-R1 (motor de Recuperar y bloqueo por diario sobre las claves reales). Recuperar no se ofrecía dentro de ELYUM.
-- `proyectos/recuperar-operativo` (P2-R1.4) abre Recuperar dentro de PROYECTOS sobre su propio almacén, sin tocar el motor. Ver `docs/proyectos/P2R1-4-recuperar-operativo.md`. Respaldo: `respaldo/main-antes-de-recuperar` = `77656f9`.
-- Importar los proyectos reales sigue sin autorizar.
-
-## Pendientes (lista histórica; ver el estado de arriba)
-
-1. Corregir los hallazgos de la auditoría independiente de P2-R1 (`8c7ea4c`): H1 requisitos rotos que se escriben y avisos descartados; H2 la casilla «He revisado» no se reinicia al cambiar la selección; H3 el diario guarda el estado anterior completo (~5× los datos); H4 `inspectJournal` decide «sin escribir» solo por la generación; H5 test de P3 intermitente (defecto del test).
-2. Rehacer F1 sobre `8c7ea4c`: avisar, en vez de bloquear por nombre, cuando una copia es anterior a un reinicio.
-3. P2-R1.2: activar el destino real (`elyum:projects:v1:*`) con una prueba mínima con datos sintéticos.
-4. Elegir un solo sitio de datos en iOS (recomendado: la app instalada; Safari no comparte almacenamiento con ella).
-5. Con autorización: importar los proyectos reales uno a uno, exportando después de cada uno.
-6. Con autorización: merge de P4c y del resto en `main`. Antes, ocultar las herramientas de prueba en modo `embedded`.
-7. P2-E (`4509355`) choca con `main` en `App.tsx` y `sections.ts`: se resuelve aparte.
+- Revisar y decidir el PR #6.
+- Importar los proyectos reales sigue requiriendo autorización por proyecto, y hay que exportar después de cada importación. Los dossiers reales nunca entran al repo.
+- P2-E (`4509355`) choca con `main` en `App.tsx` y `sections.ts`: se resuelve aparte.
+- Antes de dar por cerrado cualquier pendiente antiguo (F1 sobre una copia anterior al reinicio, un solo sitio de datos en iOS), compruébalo en `docs/proyectos/` y con el dueño.

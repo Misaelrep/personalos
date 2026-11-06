@@ -96,3 +96,5 @@ dist
 .codex/agents/refuter-correctness.toml
 .codex/agents/refuter-security.toml
 .codex/agents/refuter-tests.toml
+.claude/skills/asdd
+.codex/rsc/asdd

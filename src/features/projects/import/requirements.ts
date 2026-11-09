@@ -13,7 +13,7 @@ import { importedId } from '../domain/ids'
  *   "AAA-03 + material"       cumulative, task + condition
  *   "AAA-01..06 según parte"  conditional range: one condition, not expanded
  *   "M03–M05"                 explicit range (en/em dash, same prefix): M03, M04, M05 (shown as `reading`)
- *   "AAA-01/06"               same as "AAA-01,06" (a slash instead of a comma)
+ *   "AAA-01/06"               slash: meaning unknown (and? or?), kept as one condition with its text
  *   "OBS-01–02"               explicit range whose end gives only the number: OBS-01, OBS-02
  *   "001", "003–009", "1,4"   bare numbers: read as the dossier's ID with that number, only when every
  *                             ID of the dossier has the same letters and width (shown as `reading`)
@@ -61,12 +61,12 @@ const part = (text: string, known: KnownIds): RequirementOption => {
   return isTask(id, known) ? { kind: 'tarea', taskId: importedId(id) } : { kind: 'condicion', literal: text, state: 'por-verificar' }
 }
 
-/** "AAA-02,03,05" or "AAA-02/05" → ["AAA-02","AAA-03","AAA-05"], or null if it is not that shape. */
+/** "AAA-02,03,05" → ["AAA-02","AAA-03","AAA-05"], or null if it is not that shape. */
 export function expandAbbreviation(text: string): string[] | null {
-  const m = /^([A-Za-zÀ-ÿ]{2,}[-_.]?)(\d+)((?:\s*,\s*\d+)+|(?:\s*\/\s*\d+)+)$/.exec(text.trim())
+  const m = /^([A-Za-zÀ-ÿ]{2,}[-_.]?)(\d+)((?:\s*,\s*\d+)+)$/.exec(text.trim())
   if (!m) return null
   const width = m[2].length
-  const rest = m[3].split(/[,/]/).map((x) => x.trim()).filter(Boolean)
+  const rest = m[3].split(',').map((x) => x.trim()).filter(Boolean)
   if (rest.some((x) => x.length !== width)) return null
   return [m[2], ...rest].map((n) => `${m[1]}${n}`)
 }

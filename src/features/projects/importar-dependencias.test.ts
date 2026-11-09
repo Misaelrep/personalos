@@ -107,8 +107,14 @@ describe('lectura de dependencias · abreviaturas resueltas contra el mismo doss
     expect(expandRange('TAR-001–03')).toBeNull()
   })
 
-  it('barra en lugar de coma', () => {
-    expect(readRequirements('TAR-001/004', uniform)[0]).toMatchObject({ kind: 'tarea', reading: 'TAR-001/004 → TAR-001, TAR-004', options: [{ taskId: 'src:TAR-001' }, { taskId: 'src:TAR-004' }] })
+  it('la barra no se interpreta: queda como una condición con su texto', () => {
+    for (const lit of ['TAR-001/004', 'TAR-001 / 004', 'TAR-001/002/004']) {
+      const r = readRequirements(lit, uniform)
+      expect(r).toHaveLength(1)
+      expect(r[0]).toMatchObject({ kind: 'externo', literal: lit, options: [{ kind: 'condicion', literal: lit, state: 'por-verificar' }] })
+      expect(r[0].reading).toBeUndefined()
+      expect(r[0].options.some((o) => o.kind === 'tarea')).toBe(false)
+    }
     expect(readRequirements('TAR-001/009', uniform)[0]).toMatchObject({ kind: 'externo', options: [{ kind: 'condicion', literal: 'TAR-001/009' }] })
     expect(readRequirements('TAR-001/04', uniform)[0]).toMatchObject({ kind: 'externo' })
   })

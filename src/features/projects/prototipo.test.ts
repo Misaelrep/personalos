@@ -9,6 +9,7 @@ import { continueHere, decisionsOf, nextInProject, planned } from './prototipo/d
 import { MONTHS, applyProposals, approve, checkPlan, exampleSprint, grokReview, monthOf, projectsOfPillar, proposeChanges, proposeStrategy } from './prototipo/plan'
 import { INITIAL } from './prototipo/store'
 import { exampleText } from './prototipo/update'
+import { mapHref, mapPathOf, projectMap, resultsOfTasks, taskNode } from './prototipo/mapa-modelo'
 
 /* PROTOTYPE · The 90-day plan over the six INVENTED projects. Nothing here touches storage. */
 
@@ -153,5 +154,57 @@ describe('what the screens show', () => {
     expect(ds.every((d) => !d.text.includes('qué significa'))).toBe(true)
     const next = nextInProject(data, byName('Huerto comunitario').id, s, '2026-12-10')
     expect(next && stageOf(data, next)).not.toBe('bloqueada')
+  })
+})
+
+describe('smart project map', () => {
+  const huerto = byName('Huerto comunitario')
+  const web = byName('Web de la tienda')
+  it('two structures: results over blocks, and blocks alone when no result was proposed', () => {
+    const m = projectMap(data, huerto.id)
+    expect(m.noResults).toBe(false)
+    expect(m.results.length).toBeGreaterThanOrEqual(3)
+    expect(m.results.length).toBeLessThanOrEqual(5)
+    const w = projectMap(data, web.id)
+    expect(w.noResults).toBe(true)
+    expect(w.results).toEqual([])
+    // No invented link: without results, no block contributes to anything.
+    expect(w.blocks.every((b) => b.results.length === 0)).toBe(true)
+  })
+  it('is many-to-many and every task sits in exactly one block', () => {
+    const m = projectMap(data, huerto.id)
+    expect(m.blocks.find((b) => b.id === 'agua')!.results).toEqual(['agua', 'cosecha'])
+    expect(m.results.find((r) => r.id === 'vecinos')!.blocks).toEqual(['personas', 'espacio'])
+    const ids = m.blocks.flatMap((b) => b.tasks.map((t) => t.id))
+    expect(new Set(ids).size).toBe(ids.length)
+    expect(ids.length).toBe(data.tasks.filter((t) => t.projectId === huerto.id).length)
+    for (const r of m.results) expect(r.done).toBeLessThanOrEqual(r.total)
+  })
+  it('a task reaches its results through its block, and the map opens at it', () => {
+    const m = projectMap(data, huerto.id)
+    const t = m.blocks.find((b) => b.id === 'agua')!.tasks[0]
+    expect(resultsOfTasks(data, [t.id]).map((r) => r.id).sort()).toEqual(['agua', 'cosecha'])
+    expect(mapPathOf(data, t.id)).toEqual({ projectId: huerto.id, resultId: 'agua', blockId: 'agua' })
+    expect(mapHref(huerto.id, 'agua', 'agua', t.id)).toBe(`#/mapa/${encodeURIComponent(huerto.id)}/agua/agua/${encodeURIComponent(t.id)}`)
+    const wt = data.tasks.find((x) => x.projectId === web.id)!
+    expect(resultsOfTasks(data, [wt.id])).toEqual([])
+  })
+  it('dependencies shown are the confirmed ones, both ways', () => {
+    const index = indexTasks(data)
+    for (const t of data.tasks.filter((x) => x.projectId === huerto.id)) {
+      const node = taskNode(data, t, index)
+      for (const w of node.unlocks) expect(taskNode(data, w, index).waitsFor.map((x) => x.id).concat(explain(data, w).causes.flatMap((c) => (c.kind === 'espera' ? c.tasks.map((x) => x.id) : [])))).toContain(t.id)
+    }
+  })
+  it('an update said from a task touches only that task, and reading the map writes nothing', () => {
+    const before = JSON.stringify(data)
+    const t = projectMap(data, huerto.id).blocks[0].tasks.find((x) => !isClosed(data, x))!
+    const props = proposeChanges(data, exampleText(data, { projectId: huerto.id, taskIds: [t.id] }), { projectId: huerto.id, taskIds: [t.id] })
+    expect(props.flatMap((p) => p.taskIds)).toEqual([t.id])
+    for (const p of data.projects) projectMap(data, p.id)
+    expect(JSON.stringify(data)).toBe(before)
+  })
+  it('orientation texts never carry amounts, dates or names of people', () => {
+    for (const p of data.projects) for (const b of projectMap(data, p.id).blocks) expect(b.implies).not.toMatch(/\d|€|\$/)
   })
 })

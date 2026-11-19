@@ -5,7 +5,7 @@ import { Segmented, go } from './kit'
 import { ProjectPage, ProjectsView, PlanView, TaskPage } from './screens'
 import { DATES, ProtoProvider, SCENARIOS, useNotice, useProto } from './store'
 import { UpdatePage } from './update'
-import { AreaPage, MapPage } from './mapa'
+import { SmartMap } from './mapa'
 import { Moment, Part } from './wizard'
 
 /**
@@ -16,14 +16,14 @@ import { Moment, Part } from './wizard'
 
 document.querySelectorAll('link[rel="manifest"]').forEach((l) => l.remove())
 
-type Route = { kind: 'plan' } | { kind: 'proyectos' } | { kind: 'proyecto'; id: string } | { kind: 'tarea'; id: string } | { kind: 'actualizar'; id?: string } | { kind: 'momento'; n: number } | { kind: 'paso'; n: number } | { kind: 'mapa'; id: string; area?: string }
+type Route = { kind: 'plan' } | { kind: 'proyectos' } | { kind: 'proyecto'; id: string } | { kind: 'tarea'; id: string } | { kind: 'actualizar'; id?: string } | { kind: 'momento'; n: number } | { kind: 'paso'; n: number } | { kind: 'mapa'; id: string; result?: string; block?: string; task?: string }
 
 export function route(hash: string): Route {
   const h = hash.replace(/^#/, '')
   const m = h.match(/^\/(proyecto|tarea)\/(.+)$/)
   if (m) return { kind: m[1] as 'proyecto' | 'tarea', id: decodeURIComponent(m[2]) }
-  const map = h.match(/^\/mapa\/([^/]+)(?:\/([^/]+))?$/)
-  if (map) return { kind: 'mapa', id: decodeURIComponent(map[1]), ...(map[2] ? { area: map[2] } : {}) }
+  const map = h.match(/^\/mapa\/([^/]+)(?:\/([^/]+))?(?:\/([^/]+))?(?:\/([^/]+))?$/)
+  if (map) return { kind: 'mapa', id: decodeURIComponent(map[1]), ...(map[2] ? { result: map[2] } : {}), ...(map[3] ? { block: map[3] } : {}), ...(map[4] ? { task: decodeURIComponent(map[4]) } : {}) }
   const up = h.match(/^\/actualizar(?:\/(.+))?$/)
   if (up) return { kind: 'actualizar', ...(up[1] ? { id: decodeURIComponent(up[1]) } : {}) }
   const p = h.match(/^\/plan\/paso\/(\d)$/)
@@ -134,7 +134,7 @@ function App() {
     ) : r.kind === 'actualizar' ? (
       <UpdatePage key={r.id ?? 'todo'} {...(r.id ? { projectId: r.id } : {})} />
     ) : r.kind === 'mapa' ? (
-      r.area ? <AreaPage key={r.area} projectId={r.id} areaId={r.area} /> : <MapPage projectId={r.id} />
+      <SmartMap key={r.id} projectId={r.id} {...(r.result ? { resultId: r.result } : {})} {...(r.block ? { blockId: r.block } : {})} {...(r.task ? { taskId: r.task } : {})} />
     ) : r.kind === 'momento' ? (
       <Moment key={r.n} n={r.n} />
     ) : r.kind === 'paso' ? (

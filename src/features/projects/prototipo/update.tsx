@@ -5,6 +5,7 @@ import { waitersOf } from '../ui/attention'
 import { areasOf } from './areas'
 import { AiTag, Back, H1, Primary, Secondary, TextLink, go } from './kit'
 import { Situation } from './mapa'
+import { resultsOfTasks } from './mapa-modelo'
 import { applyProposals, proposeChanges, type ChangeKind, type Proposal } from './plan'
 import { useProto } from './store'
 
@@ -22,11 +23,14 @@ const FOLLOW_UP = /^(revisar|documentar|cerrar)\b/i
 export interface Scope {
   projectId?: string
   areaId?: string
+  /** Tasks of one map node (a result, or a single task). */
+  taskIds?: string[]
 }
 
 export function exampleText(data: ProjectsData, scope: Scope = {}): string {
   if (scope.projectId) {
-    const pool = scope.areaId ? (areasOf(data, scope.projectId).find((a) => a.id === scope.areaId)?.tasks ?? []) : data.tasks.filter((t) => t.projectId === scope.projectId)
+    const pool = scope.taskIds ? data.tasks.filter((t) => scope.taskIds!.includes(t.id)) : scope.areaId ? (areasOf(data, scope.projectId).find((a) => a.id === scope.areaId)?.tasks ?? []) : data.tasks.filter((t) => t.projectId === scope.projectId)
+    if (scope.taskIds?.length === 1 && pool[0]) return `Ya terminé ${low(pool[0].title)}.`
     const open = pool.filter((t) => !isClosed(data, t) && !FOLLOW_UP.test(t.title))
     return [open[0] && `Terminé de ${low(open[0].title)}.`, open[1] && `Para ${low(open[1].title)} ahora necesito la ayuda de un vecino.`].filter(Boolean).join('\n')
   }
@@ -168,6 +172,7 @@ export function UpdateFlow({ onDone, inWizard, scope = {}, doneLabel }: { onDone
                             <span className="text-ink">{taskName(id, mixed)}</span>
                           </label>
                         ))}
+                        <Impact taskIds={p.taskIds} />
                         {freed.length > 0 && (k === 'hecha' || k === 'descartada') && (
                           <p className="mt-1.5 text-ink-3">
                             {k === 'hecha' ? `Además, ${freed.length === 1 ? '1 tarea dejará' : `${freed.length} tareas dejarán`} de esperarlas.` : `${freed.length === 1 ? '1 tarea las esperaba' : `${freed.length} tareas las esperaban`}: tendrás que decidir qué pasa con ${freed.length === 1 ? 'ella' : 'ellas'}.`}
@@ -211,6 +216,23 @@ export function UpdateFlow({ onDone, inWizard, scope = {}, doneLabel }: { onDone
         <Secondary onClick={() => setProps(null)}>Volver a escribir</Secondary>
       </div>
     </div>
+  )
+}
+
+/** Which key results of the map these tasks feed: so a change is seen against what it serves. */
+function Impact({ taskIds }: { taskIds: string[] }) {
+  const { s } = useProto()
+  const rs = resultsOfTasks(s.data, taskIds)
+  if (!rs.length) return null
+  return (
+    <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-ink-3" data-testid="proposal-results">
+      Resultados que tocan:
+      {rs.map((r) => (
+        <span key={r.id + r.name} className="inline-flex h-6 items-center rounded-full bg-[color-mix(in_srgb,var(--color-electric)_12%,transparent)] px-2 text-[11.5px] text-electric">
+          {r.name}
+        </span>
+      ))}
+    </p>
   )
 }
 

@@ -9,10 +9,11 @@ import { explain } from '../ui/attention'
 import { STAGE_LABEL } from '../ui/labels'
 import { byRef, stageOf, trackOf } from '../ui/view'
 import { approved, continueHere, decisionsOf, needs, nextInProject, pillarsOf, planned } from './derive'
-import { Back, Box, H1, Kicker, KindTag, More, Primary, Row, Secondary, Segmented, TextLink, go } from './kit'
+import { AiTag, Back, Box, H1, Kicker, KindTag, LocalTag, More, Primary, Row, Secondary, Segmented, TextLink, go } from './kit'
+import { blockOfTask, impliesOf, mapHref, mapPathOf, projectMap, resultsOfTasks, taskNode } from './mapa-modelo'
 import { KIND_LABEL, MONTHS, SPRINT, daysUntil, kindOf, monthOf, type Month } from './plan'
 import { GrokList } from './wizard'
-import { areasOf } from './areas'
+import { MapIcon } from './iconos'
 import { shortDate, useProto } from './store'
 
 /** PROTOTYPE · The screens. Each has one primary action; the rest is a link or closed until opened. */
@@ -152,6 +153,9 @@ function ActivePlan() {
   )
 }
 
+const mapSummary = (m: ReturnType<typeof projectMap>) =>
+  m.noResults ? `${m.blocks.length} bloques de trabajo · por qué existe cada tarea` : `${m.results.length} resultados clave · ${m.blocks.length} bloques · por qué existe cada tarea`
+
 // ── Mis proyectos ───────────────────────────────────────────────────────────
 
 export function ProjectsView() {
@@ -162,8 +166,9 @@ export function ProjectsView() {
   const row = (p: (typeof s.data.projects)[number]) => {
     const pillars = pillarsOf(s.data, sp, p.id)
     return (
+      <div key={p.id} className="flex items-center gap-2 border-b border-[var(--line)] last:border-b-0 [&>div>a]:border-b-0">
+        <div className="min-w-0 flex-1">
       <Row
-        key={p.id}
         href={`#/proyecto/${encodeURIComponent(p.id)}`}
         title={p.name}
         testId="project-row"
@@ -174,6 +179,11 @@ export function ProjectsView() {
           </>
         }
       />
+        </div>
+        <a href={mapHref(p.id)} aria-label={`Mapa de ${p.name}`} data-testid="project-row-map" className="hit surface grid size-10 shrink-0 place-items-center rounded-full text-electric active:opacity-70">
+          <MapIcon name="diana" className="size-[18px]" />
+        </a>
+      </div>
     )
   }
   return (
@@ -267,7 +277,7 @@ export function ProjectPage({ id }: { id: string }) {
       )}
 
       <div className="mt-6">
-        <Row href={`#/mapa/${encodeURIComponent(p.id)}`} title="Mapa del proyecto" sub={`${areasOf(s.data, p.id).length} áreas de trabajo · consultar y actualizar por área`} testId="project-map" />
+        <Row href={mapHref(p.id)} title="Mapa del proyecto" sub={mapSummary(projectMap(s.data, p.id))} testId="project-map" />
         <More title="Todas las tareas" count={tasks.length} testId="project-all">
           {tasks.map((t) => {
             const st = stageOf(s.data, t)
@@ -316,6 +326,111 @@ const TRACK_TEXT = {
   executed: { si: 'Hecha', no: 'Todavía no', 'sin-decidir': 'Por aclarar' },
 }
 
+/** Free text the AI proposed: tagged, editable, kept only in memory. */
+function Editable({ value, onSave, testId }: { value: string; onSave: (v: string) => void; testId: string }) {
+  const [editing, setEditing] = useState(false)
+  const [text, setText] = useState(value)
+  if (!editing)
+    return (
+      <p className="mt-0.5 text-[14.5px] leading-[1.45] text-ink" data-testid={testId}>
+        {value}{' '}
+        <button type="button" data-testid={`${testId}-edit`} onClick={() => { setText(value); setEditing(true) }} className="hit text-[13px] text-electric">
+          Editar
+        </button>
+      </p>
+    )
+  return (
+    <div className="mt-1" data-testid={`${testId}-editor`}>
+      <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} className="w-full rounded-xl border border-[var(--line)] bg-transparent p-2 text-[14.5px] leading-[1.45] text-ink" />
+      <div className="mt-1 flex gap-4">
+        <button type="button" data-testid={`${testId}-save`} onClick={() => { onSave(text.trim() || value); setEditing(false) }} className="hit text-[14px] text-electric">
+          Guardar
+        </button>
+        <button type="button" onClick={() => setEditing(false)} className="hit text-[14px] text-ink-3">
+          Cancelar
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/** The six questions of a task, each with where its answer comes from: dossier, local calculation or simulated AI. */
+function TaskContext({ t, need }: { t: Task; need: string }) {
+  const { s, set } = useProto()
+  const m = projectMap(s.data, t.projectId)
+  const block = blockOfTask(m, t.id)
+  const results = resultsOfTasks(s.data, [t.id])
+  const node = taskNode(s.data, t)
+  const note = s.notes[t.id] ?? {}
+  const implies = note.implies ?? impliesOf(s.data, t.id)
+  const dossierResult = t.deliverable ?? t.acceptance[0]
+  const estimate = t.estimate?.literal ?? (t.estimateHours ? `${t.estimateHours} h` : undefined)
+  const save = (k: 'implies' | 'deliver') => (v: string) => set((x) => ({ ...x, notes: { ...x.notes, [t.id]: { ...x.notes[t.id], [k]: v } }, notice: 'Guardado solo en esta demostración.' }))
+  const Item = ({ k, children, testId }: { k: React.ReactNode; children: React.ReactNode; testId?: string }) => (
+    <div className="border-b border-[var(--line)] py-2.5 last:border-b-0" data-testid={testId}>
+      <p className="text-[12px] text-ink-3">{k}</p>
+      {children}
+    </div>
+  )
+  const P = ({ children }: { children: React.ReactNode }) => <p className="mt-0.5 text-[14.5px] leading-[1.45] text-ink">{children}</p>
+  return (
+    <Box className="mt-4" testId="task-card">
+      <Item k={<>Por qué importa{results.length ? <AiTag /> : <LocalTag />}</>} testId="ctx-why">
+        {results.length ? (
+          <P>
+            Ayuda a {results.length === 1 ? 'conseguir' : 'conseguir dos cosas:'} {results.map((r) => `«${r.name}»`).join(' y ')}
+            {block ? `, desde el bloque «${block.name}».` : '.'}
+          </P>
+        ) : (
+          <P>{block ? `Forma parte de «${block.name}». Este proyecto aún no tiene resultados propuestos, así que no se inventa a cuál contribuye.` : 'Sin bloque asignado.'}</P>
+        )}
+      </Item>
+      {implies && (
+        <Item k={<>Qué implica<AiTag /></>} testId="ctx-implies">
+          <Editable value={implies} onSave={save('implies')} testId="implies" />
+        </Item>
+      )}
+      <Item k={dossierResult ? 'Resultado a entregar · del dossier' : <>Resultado a entregar<AiTag /></>} testId="ctx-deliver">
+        {dossierResult ? (
+          <P>{dossierResult}</P>
+        ) : (
+          <Editable value={note.deliver ?? 'El dossier no lo dice. Propuesta: escribe aquí qué quedará hecho cuando la termines.'} onSave={save('deliver')} testId="deliver" />
+        )}
+      </Item>
+      <Item k={<>Qué necesito antes<LocalTag /></>} testId="ctx-before">
+        <P>{need}</P>
+        {node.waitsFor.length > 0 && (
+          <ul className="mt-1">
+            {node.waitsFor.map((w) => (
+              <li key={w.id}><TextLink href={`#/tarea/${encodeURIComponent(w.id)}`}>{w.title}</TextLink></li>
+            ))}
+          </ul>
+        )}
+      </Item>
+      <Item k={<>Qué permite después<LocalTag /></>} testId="ctx-after">
+        {node.unlocks.length ? (
+          <>
+            <P>{node.unlocks.length === 1 ? 'Esta tarea la espera:' : `La esperan ${node.unlocks.length} tareas:`}</P>
+            <ul className="mt-1">
+              {node.unlocks.map((w) => (
+                <li key={w.id}><TextLink href={`#/tarea/${encodeURIComponent(w.id)}`}>{w.title}</TextLink></li>
+              ))}
+            </ul>
+            <p className="mt-1 text-[12px] text-ink-4">Podrían avanzar; puede que tengan otros requisitos.</p>
+          </>
+        ) : (
+          <P>Ninguna tarea registrada la espera.</P>
+        )}
+      </Item>
+      {estimate && (
+        <Item k="Tiempo estimado · del dossier">
+          <P>{estimate}</P>
+        </Item>
+      )}
+    </Box>
+  )
+}
+
 export function TaskPage({ id }: { id: string }) {
   const { s, set, ctx } = useProto()
   const t = s.data.tasks.find((x) => x.id === id)
@@ -338,6 +453,9 @@ export function TaskPage({ id }: { id: string }) {
   })()
   const result = t.deliverable ?? t.acceptance[0]
   const estimate = t.estimate?.literal ?? (t.estimateHours ? `${t.estimateHours} h` : undefined)
+  const path = mapPathOf(s.data, t.id)
+  const fromMap = s.mapFrom?.endsWith(`/${encodeURIComponent(t.id)}`) ? s.mapFrom : undefined
+  const mapLink = path && !fromMap ? mapHref(path.projectId, path.resultId, path.blockId, t.id) : undefined
 
   let action: React.ReactNode = null
   if (stage === 'lista') {
@@ -412,13 +530,23 @@ export function TaskPage({ id }: { id: string }) {
 
   return (
     <div data-testid="task">
-      <Back href={`#/proyecto/${encodeURIComponent(p.id)}`} label={p.name} />
+      {fromMap ? <Back href={fromMap} label="Volver al mapa" /> : <Back href={`#/proyecto/${encodeURIComponent(p.id)}`} label={p.name} />}
       <div className="mt-1">
+        {stage !== 'cerrada' && <Kicker>Qué debo hacer</Kicker>}
         <H1>{t.title}</H1>
       </div>
+      {mapLink && (
+        <p className="mt-2">
+          <TextLink href={mapLink} testId="task-to-map">
+            Ver en el mapa del proyecto
+          </TextLink>
+        </p>
+      )}
       {stage === 'cerrada' && <p className="mt-2 text-[14px] text-ink-3">{wc === 'descartada' ? 'Descartada.' : 'Terminada y aprobada.'}</p>}
       {t.owner?.kind === 'agente' && stage !== 'cerrada' && <p className="mt-2 text-[13.5px] text-electric">Delegada a un agente.</p>}
-      {lines.length > 0 && (
+      {stage !== 'cerrada' && stage !== 'en-aprobacion' ? (
+        <TaskContext t={t} need={stage === 'lista' ? (wc === 'en-curso' ? 'Ya está en curso.' : 'Nada: puedes empezar ya.') : need ?? STAGE_LABEL[stage]} />
+      ) : lines.length > 0 && (
         <Box className="mt-4" testId={stage === 'en-aprobacion' ? 'task-review' : 'task-card'}>
           {lines.map(([k, v]) => (
             <div key={k} className="border-b border-[var(--line)] py-2 last:border-b-0">

@@ -20,9 +20,27 @@ export interface Proto {
   today: string
   /** Last thing done, shown once. */
   notice?: string
+  /** Projects whose map intro was already played (this session only). */
+  introSeen: string[]
+  /** Movement on the map: full, or reduced (no intro, instant transitions). */
+  motion: 'completo' | 'reducido'
+  /** The person's own edits of a task's orientation or expected result (they replace the AI proposal). */
+  notes: Record<string, { implies?: string; deliver?: string }>
+  /** Key results the person confirmed («projectId:resultId»). */
+  confirmed: string[]
+  /** The exact map point a task was opened from, to return to it. */
+  mapFrom?: string
 }
 
-const fresh = (): Proto => ({ data: INITIAL, sprint: null, today: TODAY })
+const prefersReduced = () => {
+  try {
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  } catch {
+    return false
+  }
+}
+
+const fresh = (): Proto => ({ data: INITIAL, sprint: null, today: TODAY, introSeen: [], motion: prefersReduced() ? 'reducido' : 'completo', notes: {}, confirmed: [] })
 
 interface Store {
   s: Proto
@@ -51,7 +69,7 @@ export function useProto(): Store {
 
 /** The scenarios the prototype controls offer. */
 export const SCENARIOS = {
-  'sin-plan': (s: Proto): Proto => ({ ...s, data: INITIAL, sprint: null, today: TODAY }),
+  'sin-plan': (s: Proto): Proto => ({ ...s, data: INITIAL, sprint: null, today: TODAY, notes: {}, confirmed: [] }),
   borrador: (s: Proto): Proto => ({ ...s, data: INITIAL, sprint: proposeStrategy(INITIAL, 6), today: TODAY }),
   'aprobado-antes': (s: Proto): Proto => ({ ...s, data: INITIAL, sprint: exampleSprint(INITIAL, `${TODAY}T09:00:00-06:00`), today: TODAY }),
   aprobado: (s: Proto): Proto => ({ ...s, data: INITIAL, sprint: exampleSprint(INITIAL, `${TODAY}T09:00:00-06:00`), today: s.today < '2026-12-01' ? '2026-12-10' : s.today }),

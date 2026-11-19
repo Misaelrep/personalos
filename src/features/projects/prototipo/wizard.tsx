@@ -3,6 +3,7 @@ import { indexTasks } from '../domain/derive'
 import { stageOf } from '../ui/view'
 import { AiTag, Box, H1, Kicker, KindTag, LocalTag, Primary, Secondary, Segmented, go } from './kit'
 import { Situation } from './mapa'
+import { mapHref } from './mapa-modelo'
 import {
   KIND_LABEL,
   MONTHS,
@@ -154,7 +155,13 @@ function Strategy({ sp, patch }: { sp: Sprint; patch: Patch }) {
               {p.name}
               {p.from === 'ia' && <AiTag />}
             </p>
-            <p className="mt-0.5 text-[12.5px] text-ink-3">De {projectsOfPillar(s.data, sp, p.id).map(name).join(', ') || 'ningún proyecto todavía'}</p>
+            <p className="mt-0.5 text-[12.5px] leading-[1.6] text-ink-3" data-testid="pillar-maps">
+              {projectsOfPillar(s.data, sp, p.id).length === 0
+                ? 'De ningún proyecto todavía'
+                : <>De {projectsOfPillar(s.data, sp, p.id).map((id, k) => (
+                    <span key={id}>{k > 0 && ', '}<a href={mapHref(id)} className="text-electric">{name(id)}</a></span>
+                  ))}{' '}· toca uno para ver su mapa</>}
+            </p>
             {MONTHS.map((m) => {
               const mine = acts.filter((a) => a.month === m.key)
               return (

@@ -382,11 +382,14 @@ function changeKindOf(sentence: string): ChangeKind {
 }
 
 /** Tasks a sentence talks about: an area it names, or the tasks that share most words with it. */
-function matchTasks(data: ProjectsData, sentence: string, scope: { projectId?: string; areaId?: string }): { ids: string[]; why: string } {
+function matchTasks(data: ProjectsData, sentence: string, scope: { projectId?: string; areaId?: string; taskIds?: string[] }): { ids: string[]; why: string } {
   const open = (t: Task) => !isClosed(data, t)
   const named = areaInSentence(data, sentence, scope.projectId)
   if (named) return { ids: named.area.tasks.filter(open).map((t) => t.id), why: `Hablas de «${named.area.name}»: son sus tareas abiertas.` }
   let pool = data.tasks.filter(open)
+  // Updating one task from the map: a sentence about it is about it.
+  if (scope.taskIds?.length === 1) return { ids: pool.filter((t) => t.id === scope.taskIds![0]).map((t) => t.id), why: 'Lo cuentas desde esta tarea en el mapa.' }
+  if (scope.taskIds) pool = pool.filter((t) => scope.taskIds!.includes(t.id))
   if (scope.projectId) pool = pool.filter((t) => t.projectId === scope.projectId)
   if (scope.areaId && scope.projectId) {
     const a = areasOf(data, scope.projectId).find((x) => x.id === scope.areaId)
@@ -396,7 +399,7 @@ function matchTasks(data: ProjectsData, sentence: string, scope: { projectId?: s
   const scored = pool.map((t) => ({ t, hits: words(t.title).filter((x) => w.has(x)) }))
   const best = Math.max(0, ...scored.map((x) => x.hits.length))
   // One shared word is enough inside an area; across all projects it takes two.
-  if (best < (scope.areaId ? 1 : 2)) return { ids: [], why: 'No encontré tareas con esas palabras.' }
+  if (best < (scope.areaId || scope.taskIds ? 1 : 2)) return { ids: [], why: 'No encontré tareas con esas palabras.' }
   const hits = scored.filter((x) => x.hits.length === best)
   return { ids: hits.map((x) => x.t.id), why: `Coinciden con ${[...new Set(hits.flatMap((x) => x.hits))].map((x) => `«${x}»`).join(', ')}.` }
 }
@@ -409,7 +412,7 @@ function bestProject(data: ProjectsData, sentence: string): string | undefined {
     .find((x) => x.n > 0)?.p.id
 }
 
-export function proposeChanges(data: ProjectsData, text: string, scope: { projectId?: string; areaId?: string } = {}): Proposal[] {
+export function proposeChanges(data: ProjectsData, text: string, scope: { projectId?: string; areaId?: string; taskIds?: string[] } = {}): Proposal[] {
   const sentences = text
     .split(/(?<=[.!?\n])\s+|\n+/)
     .map((s) => s.trim())

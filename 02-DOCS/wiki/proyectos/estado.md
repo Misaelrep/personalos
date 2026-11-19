@@ -2,7 +2,7 @@
 type: estado
 title: PROYECTOS — estado y reglas
 topic: proyectos
-timestamp: 2026-11-06
+timestamp: 2026-11-19
 ---
 
 # PROYECTOS — estado y reglas
@@ -17,7 +17,7 @@ PROYECTOS es un módulo de ELYUM (PWA en React + TypeScript + Vite) para seguir 
 - Pruebas: Vitest (`src/**/*.test.ts`) y e2e con Playwright/Chromium en `e2e/projects/`. `scripts/check-scope.mjs` comprueba que cada paquete solo toca sus archivos.
 - Validación final de cada paquete: prueba física del dueño en su iPhone.
 
-## Qué hay en `main` (06/11/2026, `main` = `7a52221`)
+## Qué hay en `main` (19/11/2026, `main` = `3579eb8`)
 
 Todo PROYECTOS ya está en `main`, fusionado por pull requests:
 
@@ -28,8 +28,9 @@ Todo PROYECTOS ya está en `main`, fusionado por pull requests:
 | #3 | `proyectos/p2r1-integracion` | P2-R1 con sus correcciones (P2-R1.2 H01–H04, P2-R1.3 F01–F04, P2-R1.3.1 R13-01) |
 | #4 | `proyectos/recuperar-operativo` | P2-R1.4: Recuperar dentro de PROYECTOS; herramientas de prueba fuera del build de producción |
 | #5 | `proyectos/importar-dependencias` | Dependencias explícitas al importar (IDs de una letra, rangos, «Ninguna para») |
+| #6 | `proyectos/importar-abreviaturas` | Dependencias abreviadas al importar (números sueltos, rango con final abreviado; la barra queda literal). Fusionado el 10/11/2026 en `3579eb8` |
 
-**Abierto:** #6 `proyectos/importar-abreviaturas` (dependencias abreviadas), en borrador y sin merge.
+**Abierto:** #7 `proyectos/rsc-4` (actualizar rsc a 4.0.5): mantenimiento aparte, sin merge hasta que se apruebe.
 
 Detalle de cada paquete en `docs/proyectos/`. Respaldo anterior a Recuperar: `respaldo/main-antes-de-recuperar` = `77656f9`.
 
@@ -49,7 +50,6 @@ Ramas que no se usan: `proyectos/p2-copias` (no apta), `proyectos/p4c-preparacio
 
 ## Pendientes
 
-- Revisar y decidir el PR #6.
 - Importar los proyectos reales sigue requiriendo autorización por proyecto, y hay que exportar después de cada importación. Los dossiers reales nunca entran al repo.
 - P2-E (`4509355`) choca con `main` en `App.tsx` y `sections.ts`: se resuelve aparte.
 - Antes de dar por cerrado cualquier pendiente antiguo (F1 sobre una copia anterior al reinicio, un solo sitio de datos en iOS), compruébalo en `docs/proyectos/` y con el dueño.

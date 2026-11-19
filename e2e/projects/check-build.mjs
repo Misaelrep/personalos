@@ -11,7 +11,7 @@ import { join, resolve } from 'node:path'
 
 const ROOT = resolve(new URL('../..', import.meta.url).pathname)
 // Text that only the test tools, the synthetic dossiers, the iPhone check or the lab contain.
-const MARKERS = ['Cargar datos sintéticos', 'Copiar aquí PROYECTOS', 'Borrar el almacén de prueba', 'HUERTO DE PRUEBA', 'TALLER DE PRUEBA', 'DOSSIER_SINTETICO', 'Huerto de prueba', 'Prueba del iPhone', 'elyum:prueba-p4a', 'elyum:prueba-p2r1:', 'Prueba · datos sintéticos', 'Laboratorio local', 'elyum:lab:p2r1', 'operational.html']
+const MARKERS = ['Cargar datos sintéticos', 'Copiar aquí PROYECTOS', 'Borrar el almacén de prueba', 'HUERTO DE PRUEBA', 'TALLER DE PRUEBA', 'DOSSIER_SINTETICO', 'Huerto de prueba', 'Prueba del iPhone', 'elyum:prueba-p4a', 'elyum:prueba-p2r1:', 'Prueba · datos sintéticos', 'Laboratorio local', 'elyum:lab:p2r1', 'operational.html', 'Demostración E1', 'Huerto comunitario']
 const results = []
 const check = (name, ok, detail = '') => {
   results.push(ok)
@@ -31,12 +31,16 @@ try {
   const prod = build('production')
   const pFiles = jsFiles(prod)
   check('production: no test page', !existsSync(join(prod, 'proyectos.html')))
+  check('production: no E1 demonstration page', !existsSync(join(prod, 'demo-e1.html')))
   const pHits = found(prod, pFiles)
   check(`production: none of the ${pFiles.length} JavaScript files holds test-only code`, pHits.length === 0, pHits.length ? pHits.join(', ') : pFiles.join(', '))
   check('production: ELYUM still has Recuperar on PROYECTOS', pFiles.some((f) => readFileSync(join(prod, 'assets', f), 'utf8').includes('tus datos de PROYECTOS')))
 
   const prev = build('preview')
   check('preview: the test page exists', existsSync(join(prev, 'proyectos.html')))
+  check('preview: the E1 demonstration page exists', existsSync(join(prev, 'demo-e1.html')))
+  const demo = found(prev, loadedBy(prev, 'demo-e1.html'))
+  check('preview: the demonstration carries its invented projects', demo.includes('Demostración E1') && demo.includes('Huerto comunitario'), demo.join(', '))
   const elyum = loadedBy(prev, 'index.html')
   const page = loadedBy(prev, 'proyectos.html')
   // In preview the engine (store/restore.ts, unchanged) sits in a chunk shared by both pages, with its

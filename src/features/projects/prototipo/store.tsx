@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import type { Ctx } from '../domain/ops'
 import type { ProjectsData } from '../domain/types'
 import DATOS from './datos-prototipo.json'
-import { emptySprint, exampleSprint, type Sprint } from './plan'
+import { exampleSprint, proposeStrategy, type Sprint } from './plan'
 
 /**
  * PROTOTYPE · Everything lives in this component's memory. No localStorage,
@@ -51,12 +51,10 @@ export function useProto(): Store {
 
 /** The scenarios the prototype controls offer. */
 export const SCENARIOS = {
-  'sin-plan': (s: Proto): Proto => ({ ...s, data: INITIAL, sprint: null }),
-  borrador: (s: Proto): Proto => {
-    const ex = exampleSprint(INITIAL, '')
-    return { ...s, data: INITIAL, sprint: { ...emptySprint(), step: 3, northStar: ex.northStar, northStarFrom: 'tuya' } }
-  },
-  aprobado: (s: Proto): Proto => ({ ...s, data: INITIAL, sprint: exampleSprint(INITIAL, `${s.today}T09:00:00-06:00`), today: s.today < '2026-12-01' ? '2026-12-10' : s.today }),
+  'sin-plan': (s: Proto): Proto => ({ ...s, data: INITIAL, sprint: null, today: TODAY }),
+  borrador: (s: Proto): Proto => ({ ...s, data: INITIAL, sprint: proposeStrategy(INITIAL, 6), today: TODAY }),
+  'aprobado-antes': (s: Proto): Proto => ({ ...s, data: INITIAL, sprint: exampleSprint(INITIAL, `${TODAY}T09:00:00-06:00`), today: TODAY }),
+  aprobado: (s: Proto): Proto => ({ ...s, data: INITIAL, sprint: exampleSprint(INITIAL, `${TODAY}T09:00:00-06:00`), today: s.today < '2026-12-01' ? '2026-12-10' : s.today }),
 }
 
 export const DATES = [

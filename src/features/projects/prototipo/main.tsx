@@ -5,7 +5,8 @@ import { Segmented, go } from './kit'
 import { ProjectPage, ProjectsView, PlanView, TaskPage } from './screens'
 import { DATES, ProtoProvider, SCENARIOS, useNotice, useProto } from './store'
 import { UpdatePage } from './update'
-import { Wizard } from './wizard'
+import { AreaPage, MapPage } from './mapa'
+import { Moment, Part } from './wizard'
 
 /**
  * PROTOTYPE · prototipo-90.html, built for Vercel previews only (vite.config.ts), never for production.
@@ -15,16 +16,21 @@ import { Wizard } from './wizard'
 
 document.querySelectorAll('link[rel="manifest"]').forEach((l) => l.remove())
 
-type Route = { kind: 'plan' } | { kind: 'proyectos' } | { kind: 'proyecto'; id: string } | { kind: 'tarea'; id: string } | { kind: 'actualizar' } | { kind: 'paso'; n: number }
+type Route = { kind: 'plan' } | { kind: 'proyectos' } | { kind: 'proyecto'; id: string } | { kind: 'tarea'; id: string } | { kind: 'actualizar'; id?: string } | { kind: 'momento'; n: number } | { kind: 'paso'; n: number } | { kind: 'mapa'; id: string; area?: string }
 
 export function route(hash: string): Route {
   const h = hash.replace(/^#/, '')
   const m = h.match(/^\/(proyecto|tarea)\/(.+)$/)
   if (m) return { kind: m[1] as 'proyecto' | 'tarea', id: decodeURIComponent(m[2]) }
+  const map = h.match(/^\/mapa\/([^/]+)(?:\/([^/]+))?$/)
+  if (map) return { kind: 'mapa', id: decodeURIComponent(map[1]), ...(map[2] ? { area: map[2] } : {}) }
+  const up = h.match(/^\/actualizar(?:\/(.+))?$/)
+  if (up) return { kind: 'actualizar', ...(up[1] ? { id: decodeURIComponent(up[1]) } : {}) }
   const p = h.match(/^\/plan\/paso\/(\d)$/)
   if (p) return { kind: 'paso', n: Number(p[1]) }
+  const mo = h.match(/^\/plan\/(\d)$/)
+  if (mo) return { kind: 'momento', n: Number(mo[1]) }
   if (h === '/proyectos') return { kind: 'proyectos' }
-  if (h === '/actualizar') return { kind: 'actualizar' }
   return { kind: 'plan' }
 }
 
@@ -87,7 +93,8 @@ function Controls() {
           [
             ['sin-plan', 'Sin plan'],
             ['borrador', 'Borrador a medias'],
-            ['aprobado', 'Plan aprobado'],
+            ['aprobado-antes', 'Aprobado, antes del 1 dic'],
+            ['aprobado', 'Plan en marcha'],
           ] as const
         ).map(([k, label]) => (
           <button
@@ -125,9 +132,14 @@ function App() {
     ) : r.kind === 'tarea' ? (
       <TaskPage id={r.id} />
     ) : r.kind === 'actualizar' ? (
-      <UpdatePage />
+      <UpdatePage key={r.id ?? 'todo'} {...(r.id ? { projectId: r.id } : {})} />
+    ) : r.kind === 'mapa' ? (
+      r.area ? <AreaPage key={r.area} projectId={r.id} areaId={r.area} /> : <MapPage projectId={r.id} />
+    ) : r.kind === 'momento' ? (
+      <Moment key={r.n} n={r.n} />
     ) : r.kind === 'paso' ? (
-      <Wizard step={r.n} />
+      // The six-step method stays: steps 1 and 6 are the first and last moments.
+      r.n === 1 ? <Moment key={1} n={1} /> : r.n === 6 ? <Moment key={3} n={3} /> : <Part key={r.n} step={r.n} />
     ) : (
       <PlanView />
     )

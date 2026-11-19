@@ -1,16 +1,18 @@
 import { useState } from 'react'
 import { changeStatus } from '../domain/operations'
-import { classifyStatus, decideApproval, setCondition, setOwner } from '../domain/ops'
+import { decideApproval, setCondition, setOwner } from '../domain/ops'
 import { displayRef } from '../domain/ids'
 import { isClosed } from '../domain/derive'
 import { workClassOf } from '../domain/vocabulary'
-import type { ProjectsData, Task, WorkClass } from '../domain/types'
+import type { ProjectsData, Task } from '../domain/types'
 import { explain } from '../ui/attention'
 import { STAGE_LABEL } from '../ui/labels'
 import { byRef, stageOf, trackOf } from '../ui/view'
 import { approved, continueHere, decisionsOf, needs, nextInProject, pillarsOf, planned } from './derive'
-import { AiTag, Back, Box, H1, Kicker, More, Primary, Row, Secondary, Segmented, TextLink, go } from './kit'
-import { MONTHS, SPRINT, daysUntil, monthOf, reviewPlan, type Month } from './plan'
+import { Back, Box, H1, Kicker, KindTag, More, Primary, Row, Secondary, Segmented, TextLink, go } from './kit'
+import { KIND_LABEL, MONTHS, SPRINT, daysUntil, kindOf, monthOf, type Month } from './plan'
+import { GrokList } from './wizard'
+import { areasOf } from './areas'
 import { shortDate, useProto } from './store'
 
 /** PROTOTYPE · The screens. Each has one primary action; the rest is a link or closed until opened. */
@@ -37,15 +39,15 @@ export function PlanView() {
           <H1>Todavía no hay un plan aprobado</H1>
         </div>
         <p className="mt-3 text-[15px] leading-[1.5] text-ink-2">
-          En seis pasos pones al día tus proyectos y eliges qué quieres conseguir, tres pilares y qué hacer cada mes. La IA propone; nada cuenta hasta que tú lo apruebas.
+          En tres momentos: pones al día tus proyectos, editas una propuesta completa de estrategia y la apruebas. La IA propone; nada cuenta hasta que tú lo apruebas.
         </p>
         <div className="mt-6">
           {sp ? (
-            <Primary testId="plan-continue" onClick={() => go(`#/plan/paso/${sp.step}`)}>
-              Continuar el borrador · paso {sp.step} de 6
+            <Primary testId="plan-continue" onClick={() => go(`#/plan/${sp.step}`)}>
+              Continuar el borrador · momento {sp.step} de 3
             </Primary>
           ) : (
-            <Primary testId="plan-start" onClick={() => go('#/plan/paso/1')}>
+            <Primary testId="plan-start" onClick={() => go('#/plan/1')}>
               Preparar el plan
             </Primary>
           )}
@@ -66,29 +68,49 @@ function ActivePlan() {
   const [month, setMonth] = useState<Month>(now.month)
   const here = continueHere(s.data, sp, s.today)
   const rows = planned(s.data, sp, month)
-  const obs = reviewPlan(s.data, sp)
   const startsIn = now.before ? daysUntil(s.today, SPRINT.start) : 0
+  // Before the start: what December needs from the person, so the first day is not lost.
+  const prep = now.before ? planned(s.data, sp, 'dic').filter((r) => kindOf(r.stage) === 'decision') : []
   return (
     <div data-testid="plan-active">
-      <Kicker>Plan de 90 días · {now.before ? `empieza en ${startsIn} días` : now.after ? 'terminado' : `${MONTHS.find((m) => m.key === now.month)!.label.toLowerCase()}, mes ${MONTHS.findIndex((m) => m.key === now.month) + 1} de 3`}</Kicker>
+      <Kicker>Plan de 90 días · {now.before ? `empieza el 1 de diciembre, en ${startsIn} días` : now.after ? 'terminado' : `${MONTHS.find((m) => m.key === now.month)!.label.toLowerCase()}, mes ${MONTHS.findIndex((m) => m.key === now.month) + 1} de 3`}</Kicker>
       <div className="mt-2" data-testid="north-star">
         <H1>{sp.northStar}</H1>
       </div>
 
-      {here && (
-        <Box tone="focus" className="mt-5" testId="continue-here">
-          <p className="text-[12px] text-ink-3">Continúa aquí</p>
-          <p className="mt-1 text-[16px] leading-[1.35] text-ink">{here.task.title}</p>
-          <p className="mt-0.5 text-[12.5px] text-ink-3">
-            {here.pillar.name}
-            {here.stage !== 'lista' && ` · ${STAGE_LABEL[here.stage].toLowerCase()}`}
+      {prep.length > 0 ? (
+        <Box tone="focus" className="mt-5" testId="before-start">
+          <p className="text-[12px] text-ink-3">Antes de empezar</p>
+          <p className="mt-1 text-[15px] leading-[1.4] text-ink">
+            {prep.length === 1 ? 'Una acción de diciembre necesita' : `${prep.length} acciones de diciembre necesitan`} antes una decisión tuya. Resolverlas ahora deja libre el primer día.
           </p>
+          <div className="mt-2">
+            {prep.slice(0, 3).map((r) => (
+              <Row key={r.action.id} href={`#/tarea/${encodeURIComponent(r.task.id)}`} title={r.task.title} sub={STAGE_LABEL[r.stage]} />
+            ))}
+          </div>
           <div className="mt-3">
-            <Primary testId="continue-open" onClick={() => go(`#/tarea/${encodeURIComponent(here.task.id)}`)}>
-              Abrir
+            <Primary testId="before-start-open" onClick={() => go(`#/tarea/${encodeURIComponent(prep[0].task.id)}`)}>
+              Resolver la primera
             </Primary>
           </div>
         </Box>
+      ) : (
+        here && (
+          <Box tone="focus" className="mt-5" testId="continue-here">
+            <p className="text-[12px] text-ink-3">{now.before ? 'Lo primero, el 1 de diciembre' : 'Continúa aquí'}</p>
+            <p className="mt-1 text-[16px] leading-[1.35] text-ink">{here.task.title}</p>
+            <p className="mt-1 flex flex-wrap items-center gap-2 text-[12.5px] text-ink-3">
+              {here.pillar.name}
+              <KindTag kind={kindOf(here.stage)} label={KIND_LABEL[kindOf(here.stage)]} />
+            </p>
+            <div className="mt-3">
+              <Primary testId="continue-open" onClick={() => go(`#/tarea/${encodeURIComponent(here.task.id)}`)}>
+                Abrir
+              </Primary>
+            </div>
+          </Box>
+        )
       )}
 
       <div className="mt-6">
@@ -107,10 +129,11 @@ function ActivePlan() {
               <p className="text-[15px] font-medium text-ink">{p.name}</p>
               <p className="mt-0.5 text-[13px] leading-[1.4] text-ink-3">Al final del mes: {p.results[month]}</p>
               <div className="mt-1">
-                {mine.map((r) => (
-                  <Row key={r.action.id} href={`#/tarea/${encodeURIComponent(r.task.id)}`} title={r.task.title} done={r.stage === 'cerrada'} sub={r.stage !== 'lista' && r.stage !== 'cerrada' ? STAGE_LABEL[r.stage] : undefined} testId="plan-action" />
-                ))}
-                {!mine.length && <p className="py-2 text-[13px] text-ink-4">Sin acciones este mes.</p>}
+                {mine.map((r) => {
+                  const k = kindOf(r.stage)
+                  return <Row key={r.action.id} href={`#/tarea/${encodeURIComponent(r.task.id)}`} title={r.task.title} done={k === 'terminada'} right={k !== 'terminada' ? <KindTag kind={k} label={KIND_LABEL[k]} /> : undefined} testId="plan-action" />
+                })}
+                {!mine.length && <p className="py-2 text-[13px] text-[#a86a00]">Sin acciones este mes: falta planificarlo.</p>}
               </div>
             </div>
           )
@@ -118,16 +141,8 @@ function ActivePlan() {
       </div>
 
       <div className="mt-4">
-        <More title="Observaciones de Grok" count={obs.length} testId="grok">
-          <p className="mb-2 text-[12px] text-ink-4">
-            Simuladas en este prototipo. Grok observa y sugiere; no cambia nada.
-          </p>
-          {obs.map((o, i) => (
-            <p key={i} className="py-1.5 text-[14px] leading-[1.45] text-ink-2">
-              {o.text}
-              <AiTag who="Grok" />
-            </p>
-          ))}
+        <More title="Grok, asesor opcional" testId="grok">
+          <GrokList sp={sp} />
         </More>
       </div>
       <p className="mt-6 text-center text-[13px] text-ink-4">
@@ -142,10 +157,10 @@ function ActivePlan() {
 export function ProjectsView() {
   const { s } = useProto()
   const sp = s.sprint
-  const inPlan = s.data.projects.filter((p) => pillarsOf(sp, p.id).length)
-  const outside = s.data.projects.filter((p) => !pillarsOf(sp, p.id).length)
+  const inPlan = s.data.projects.filter((p) => pillarsOf(s.data, sp, p.id).length)
+  const outside = s.data.projects.filter((p) => !pillarsOf(s.data, sp, p.id).length)
   const row = (p: (typeof s.data.projects)[number]) => {
-    const pillars = pillarsOf(sp, p.id)
+    const pillars = pillarsOf(s.data, sp, p.id)
     return (
       <Row
         key={p.id}
@@ -189,7 +204,7 @@ export function ProjectPage({ id }: { id: string }) {
   const p = s.data.projects.find((x) => x.id === id)
   if (!p) return <Muted>Ese proyecto no existe en el prototipo.</Muted>
   const sp = s.sprint
-  const pillars = pillarsOf(sp, p.id)
+  const pillars = pillarsOf(s.data, sp, p.id)
   const { month } = monthOf(s.today)
   const thisMonth = approved(sp) ? planned(s.data, sp, month).filter((r) => r.task.projectId === p.id) : []
   const decisions = decisionsOf(s.data, p.id, sp)
@@ -223,7 +238,7 @@ export function ProjectPage({ id }: { id: string }) {
             {thisMonth
               .filter((r) => r.task.id !== next?.id)
               .map((r) => (
-                <Row key={r.action.id} href={`#/tarea/${encodeURIComponent(r.task.id)}`} title={r.task.title} done={r.stage === 'cerrada'} sub={r.stage !== 'lista' && r.stage !== 'cerrada' ? STAGE_LABEL[r.stage] : undefined} />
+                <Row key={r.action.id} href={`#/tarea/${encodeURIComponent(r.task.id)}`} title={r.task.title} done={r.stage === 'cerrada'} right={r.stage !== 'cerrada' ? <KindTag kind={kindOf(r.stage)} label={KIND_LABEL[kindOf(r.stage)]} /> : undefined} />
               ))}
           </>
         ) : (
@@ -252,6 +267,7 @@ export function ProjectPage({ id }: { id: string }) {
       )}
 
       <div className="mt-6">
+        <Row href={`#/mapa/${encodeURIComponent(p.id)}`} title="Mapa del proyecto" sub={`${areasOf(s.data, p.id).length} áreas de trabajo · consultar y actualizar por área`} testId="project-map" />
         <More title="Todas las tareas" count={tasks.length} testId="project-all">
           {tasks.map((t) => {
             const st = stageOf(s.data, t)
@@ -288,11 +304,12 @@ export function ProjectPage({ id }: { id: string }) {
 
 // ── Una tarea ───────────────────────────────────────────────────────────────
 
-const CLASS_CHOICES: { value: WorkClass; label: string }[] = [
-  { value: 'pendiente', label: 'Sin empezar' },
-  { value: 'en-curso', label: 'En curso' },
-  { value: 'ejecutada', label: 'Hecha' },
-  { value: 'descartada', label: 'No se hará' },
+/** A concrete question about the work instead of «what does this dossier word mean». Answers set THIS task's status only. */
+const WORK_CHOICES: { value: string; label: string }[] = [
+  { value: 'Pendiente', label: 'Sin empezar' },
+  { value: 'En curso', label: 'Empezado' },
+  { value: 'Ejecutada', label: 'Terminado' },
+  { value: 'Descartada', label: 'No se hará' },
 ]
 
 const TRACK_TEXT = {
@@ -302,7 +319,7 @@ const TRACK_TEXT = {
 export function TaskPage({ id }: { id: string }) {
   const { s, set, ctx } = useProto()
   const t = s.data.tasks.find((x) => x.id === id)
-  const [cls, setCls] = useState<WorkClass>('pendiente')
+  const [answer, setAnswer] = useState('Pendiente')
   if (!t) return <Muted>Esa tarea no existe en el prototipo.</Muted>
   const p = s.data.projects.find((x) => x.id === t.projectId)!
   const ex = explain(s.data, t)
@@ -311,7 +328,6 @@ export function TaskPage({ id }: { id: string }) {
   const need = needs(s.data, t)
   const track = trackOf(s.data, t)
   const apply = (f: (d: ProjectsData) => ProjectsData, notice: string) => set((x) => ({ ...x, data: f(x.data), notice }))
-  const sameWord = s.data.tasks.filter((x) => x.projectId === t.projectId && x.status === t.status).length
   const waitFor = ex.causes.find((c) => c.kind === 'espera')
   const firstCheck = (() => {
     for (const r of t.requirements ?? []) {
@@ -354,13 +370,12 @@ export function TaskPage({ id }: { id: string }) {
   } else if (stage === 'por-clasificar') {
     action = (
       <div data-testid="task-classify">
-        <p className="mb-2 text-[13.5px] leading-[1.45] text-ink-2">
-          ¿Qué significa «{t.status}»? {sameWord > 1 ? `Se aplicará a las ${sameWord} tareas de este proyecto que la usan.` : 'Solo la usa esta tarea.'}
-        </p>
-        <Segmented value={cls} onChange={setCls} options={CLASS_CHOICES} />
+        <p className="mb-2 text-[15px] leading-[1.45] text-ink">¿En qué punto está este trabajo?</p>
+        <Segmented value={answer} onChange={setAnswer} options={WORK_CHOICES} />
+        <p className="mt-2 text-[12px] leading-[1.4] text-ink-4">En el dossier figura como «{t.status}». Tu respuesta cambia solo esta tarea; el dossier no se toca.</p>
         <div className="mt-3">
-          <Primary testId="task-classify-save" onClick={() => apply((d) => classifyStatus(d, p.dossier, t.status, cls, ctx()), `«${t.status}» aclarado${sameWord > 1 ? ` en ${sameWord} tareas` : ''}.`)}>
-            Aclarar
+          <Primary testId="task-classify-save" onClick={() => apply((d) => changeStatus(d, t.id, answer, ctx()), answer === 'Ejecutada' ? 'Anotada como hecha. Tu visto bueno es aparte.' : 'Anotado.')}>
+            Guardar
           </Primary>
         </div>
       </div>
@@ -385,8 +400,14 @@ export function TaskPage({ id }: { id: string }) {
   }
 
   const lines: [string, string][] = []
-  if (result) lines.push(['Resultado a entregar', result])
-  if (stage !== 'cerrada') lines.push(['Para empezar', stage === 'lista' ? (wc === 'en-curso' ? 'Ya está en curso.' : 'Nada: puedes empezar ya.') : need ?? STAGE_LABEL[stage]])
+  if (stage === 'en-aprobacion') {
+    // Everything needed to judge the work, in one place: what was due, when it counts as done, and the evidence.
+    if (t.deliverable) lines.push(['Entregable', t.deliverable])
+    if (t.acceptance.length) lines.push(['Queda hecho cuando', t.acceptance.join(' · ')])
+    lines.push(['Evidencia', t.evidence.length ? t.evidence.map((e) => e.label).join(' · ') : 'No hay evidencia registrada. Revisa el entregable directamente o devuélvela pidiendo una.'])
+    lines.push(['Situación', `Ejecución: hecha · Verificación: ${track.verified.state === 'sin-dato' ? 'sin dato' : track.verified.state} · Aprobación: pendiente de ti`])
+  } else if (result) lines.push(['Resultado a entregar', result])
+  if (stage !== 'cerrada' && stage !== 'en-aprobacion') lines.push(['Para empezar', stage === 'lista' ? (wc === 'en-curso' ? 'Ya está en curso.' : 'Nada: puedes empezar ya.') : need ?? STAGE_LABEL[stage]])
   if (estimate) lines.push(['Tiempo estimado', estimate])
 
   return (
@@ -398,7 +419,7 @@ export function TaskPage({ id }: { id: string }) {
       {stage === 'cerrada' && <p className="mt-2 text-[14px] text-ink-3">{wc === 'descartada' ? 'Descartada.' : 'Terminada y aprobada.'}</p>}
       {t.owner?.kind === 'agente' && stage !== 'cerrada' && <p className="mt-2 text-[13.5px] text-electric">Delegada a un agente.</p>}
       {lines.length > 0 && (
-        <Box className="mt-4" testId="task-card">
+        <Box className="mt-4" testId={stage === 'en-aprobacion' ? 'task-review' : 'task-card'}>
           {lines.map(([k, v]) => (
             <div key={k} className="border-b border-[var(--line)] py-2 last:border-b-0">
               <p className="text-[12px] text-ink-3">{k}</p>

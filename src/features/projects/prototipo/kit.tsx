@@ -106,9 +106,39 @@ export function More({ title, count, children, testId }: { title: string; count?
   )
 }
 
-/** Marks an AI suggestion so it is never read as a decision. */
+/** Marks a SIMULATED AI output so it is never read as a decision. */
 export function AiTag({ who = 'IA' }: { who?: string }) {
-  return <span className="ml-1.5 inline-flex h-5 items-center rounded-full bg-[color-mix(in_srgb,var(--color-violet)_16%,transparent)] px-2 align-middle text-[10.5px] font-medium tracking-[0.03em] text-[#6d4fd8]">Sugerencia · {who}</span>
+  return <span className="ml-1.5 inline-flex h-5 items-center rounded-full bg-[color-mix(in_srgb,var(--color-violet)_16%,transparent)] px-2 align-middle text-[10.5px] font-medium tracking-[0.03em] whitespace-nowrap text-[#6d4fd8]">{who === 'Grok' ? 'Simulación · Grok' : 'Sugerencia simulada · IA'}</span>
+}
+
+/** Marks a LOCAL CALCULATION: a fact of the data, computed on the device, not an AI opinion. */
+export function LocalTag() {
+  return <span className="ml-1.5 inline-flex h-5 items-center rounded-full bg-[var(--line)] px-2 align-middle text-[10.5px] font-medium tracking-[0.03em] whitespace-nowrap text-ink-3">Cálculo local</span>
+}
+
+const KIND_STYLE: Record<string, string> = {
+  ejecutable: 'bg-[color-mix(in_srgb,var(--color-electric)_14%,transparent)] text-electric',
+  decision: 'bg-[color-mix(in_srgb,#d98a00_16%,transparent)] text-[#a86a00]',
+  bloqueada: 'bg-[var(--line)] text-ink-3',
+  revision: 'bg-[color-mix(in_srgb,#1f9d6b_16%,transparent)] text-[#167a53]',
+  terminada: 'bg-transparent text-ink-4',
+}
+
+/** What a planned action is right now: can be done, needs a decision, blocked, waiting for review. */
+export function KindTag({ kind, label }: { kind: string; label: string }) {
+  return <span className={`inline-flex h-5 items-center rounded-full px-2 text-[10.5px] font-medium whitespace-nowrap ${KIND_STYLE[kind] ?? ''}`}>{label}</span>
+}
+
+/** Done / pending / to confirm, as one thin bar. */
+export function StateBar({ counts }: { counts: { terminado: number; pendiente: number; confirmar: number } }) {
+  const total = counts.terminado + counts.pendiente + counts.confirmar || 1
+  return (
+    <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-[var(--line)]" aria-hidden>
+      <span style={{ width: `${(counts.terminado / total) * 100}%` }} className="bg-ink-3" />
+      <span style={{ width: `${(counts.confirmar / total) * 100}%` }} className="bg-[#e0a43a]" />
+      <span style={{ width: `${(counts.pendiente / total) * 100}%` }} className="bg-[color-mix(in_srgb,var(--color-electric)_45%,transparent)]" />
+    </div>
+  )
 }
 
 export function Segmented<T extends string>({ value, options, onChange, testId }: { value: T; options: { value: T; label: ReactNode }[]; onChange: (v: T) => void; testId?: string }) {

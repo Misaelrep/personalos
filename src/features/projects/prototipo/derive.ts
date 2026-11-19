@@ -2,13 +2,14 @@ import { indexTasks, isClosed } from '../domain/derive'
 import type { ProjectsData, Task } from '../domain/types'
 import { causeText, explain, projectAttention, waitersOf } from '../ui/attention'
 import { stageOf, type Stage } from '../ui/view'
-import { MONTHS, candidateActions, monthOf, type Month, type Pillar, type PlanAction, type Sprint } from './plan'
+import { MONTHS, monthOf, projectsOfPillar, type Month, type Pillar, type PlanAction, type Sprint } from './plan'
 
 /** PROTOTYPE · What each screen shows, from the data and the plan. Pure. */
 
 export const approved = (s: Sprint | null): s is Sprint & { status: 'aprobado' } => s?.status === 'aprobado'
 
-export const pillarsOf = (s: Sprint | null, projectId: string): Pillar[] => (approved(s) ? s.pillars.filter((p) => p.projectIds.includes(projectId)) : [])
+/** Pillars of an approved plan with at least one action from this project. */
+export const pillarsOf = (data: ProjectsData, s: Sprint | null, projectId: string): Pillar[] => (approved(s) ? s.pillars.filter((p) => projectsOfPillar(data, s, p.id).includes(projectId)) : [])
 
 export interface PlannedTask {
   action: PlanAction
@@ -69,7 +70,7 @@ export function decisionsOf(data: ProjectsData, projectId: string, s: Sprint | n
   const out: (Decision & { weight: number })[] = [
     ...a.approvals.map((t) => ({ text: `Dar el visto bueno a «${t.title}»`, task: t, weight: 3 })),
     ...a.words.map((w) => ({
-      text: w.tasks.length === 1 ? `Aclarar qué significa «${w.literal}»` : `Aclarar qué significa «${w.literal}» (${w.tasks.length} tareas)`,
+      text: w.tasks.length === 1 ? `Decir en qué punto está «${w.tasks[0].title}»` : `Decir en qué punto están ${w.tasks.length} tareas marcadas «${w.literal}»`,
       task: w.tasks.find((t) => inPlan.has(t.id)) ?? w.tasks[0],
       weight: w.tasks.some((t) => inPlan.has(t.id)) ? 2 : w.waiting > 0 ? 1 : 0,
     })),
@@ -88,7 +89,7 @@ export function nextInProject(data: ProjectsData, projectId: string, s: Sprint |
     if (pick) return pick.task
   }
   const project = data.projects.find((p) => p.id === projectId)
-  return project ? (projectAttention(data, project).ready[0] ?? candidateActions(data, projectId, 1)[0]) : undefined
+  return project ? (projectAttention(data, project).ready[0] ?? data.tasks.find((t) => t.projectId === projectId && !['bloqueada', 'cerrada'].includes(stageOf(data, t)))) : undefined
 }
 
 /** What the person needs before starting, in one sentence (or none when nothing stops it). */

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Label } from '../../../components/ui/Label'
-import { STAGE_LABEL } from './labels'
+import { STAGE_CHIP, STAGE_LABEL } from './labels'
 import type { Stage } from './view'
 
 /** P4a · Small pieces shared by the PROYECTOS screens. ELYUM tokens only. */
@@ -52,8 +52,12 @@ export function Section({ label, count, children, aside }: { label: string; coun
   )
 }
 
-export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <div className={`surface rounded-[22px] ${className}`}>{children}</div>
+export function Card({ children, className = '', testId }: { children: ReactNode; className?: string; testId?: string }) {
+  return (
+    <div className={`surface rounded-[22px] ${className}`} data-testid={testId}>
+      {children}
+    </div>
+  )
 }
 
 /** One honest line where there is nothing to show. */
@@ -71,7 +75,7 @@ const STAGE_TONE: Record<Stage, string> = {
 }
 
 export function StageChip({ stage }: { stage: Stage }) {
-  return <span className={`inline-flex h-6 shrink-0 items-center rounded-full px-2.5 text-[11.5px] font-medium tracking-[0.02em] whitespace-nowrap ${STAGE_TONE[stage]}`}>{STAGE_LABEL[stage]}</span>
+  return <span className={`inline-flex h-6 shrink-0 items-center rounded-full px-2.5 text-[11.5px] font-medium tracking-[0.02em] whitespace-nowrap ${STAGE_TONE[stage]}`} title={STAGE_LABEL[stage]}>{STAGE_CHIP[stage]}</span>
 }
 
 export function Chip({ children, tone = 'plain' }: { children: ReactNode; tone?: 'plain' | 'muted' | 'warn' }) {

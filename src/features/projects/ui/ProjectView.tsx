@@ -1,13 +1,18 @@
 import { Inline } from './inline'
 import { Label } from '../../../components/ui/Label'
-import type { Blockers } from '../domain/derive'
+import { indexTasks, type Blockers } from '../domain/derive'
 import { displayRef } from '../domain/ids'
 import type { ProjectsData, Task } from '../domain/types'
 import { dateTime, REQUIREMENT_STATE_LABEL, shortHash, STAGE_HINT, STAGE_LABEL } from './labels'
 import { Card, Empty, Field, Mono, RowLink, Section, StageChip, Title, TopBar } from './parts'
+import { causeText, explain, projectAttention, situationText, waitersOf } from './attention'
 import { projectSummary, STAGES, stageOf } from './view'
 
-/** P4a · PROYECTO: objective, milestones, next actions, blockers and tasks. Read-only. */
+/**
+ * P4a · PROYECTO: objective, milestones, next actions, blockers and tasks. Read-only.
+ * E1: first the situation and what needs the person; then what can be done now; the
+ * rest (why tasks cannot move, rules, milestones, every task, origin) below.
+ */
 
 export const taskHref = (t: Task) => `#/tarea/${encodeURIComponent(t.id)}`
 
@@ -50,27 +55,117 @@ export function ProjectView({ data, projectId }: { data: ProjectsData; projectId
     )
   }
   const { project } = s
-  const notReady = [
-    s.stages['por-clasificar'] && `${s.stages['por-clasificar']} sin clasificar`,
-    s.stages.bloqueada && `${s.stages.bloqueada} bloqueadas`,
-    s.stages['por-verificar'] && `${s.stages['por-verificar']} por verificar`,
-  ].filter(Boolean)
+  const a = projectAttention(data, project)
+  const index = indexTasks(data)
+  const waiters = waitersOf(data, index)
+  const decide = a.words.length + a.checks.length + a.approvals.length
+  const ready = [...s.nextActions, ...s.candidates.filter((t) => !s.nextActions.includes(t))]
+  const cannotMove = s.blocked.map(({ task }) => ({ task, ex: explain(data, task, index, waiters) }))
 
   return (
     <>
       <TopBar back="#/" backLabel="Proyectos" />
-      <Title kicker={<Label>Proyecto</Label>} sub={project.objective !== undefined ? <Inline text={project.objective} /> : <span className="italic text-ink-4">El dossier no indica objetivo.</span>}>
+      <Title kicker={<Label>Proyecto</Label>} sub={project.objective?.trim() ? <Inline text={project.objective} /> : <span className="italic text-ink-4">Objetivo por definir</span>}>
         <Inline text={project.name} />
       </Title>
 
-      <div className="grid grid-cols-3 gap-2" data-testid="stage-strip">
-        {STAGES.map((st) => (
-          <div key={st} className="surface-quiet rounded-[16px] px-3 py-2.5">
-            <div className="tabular font-display text-[20px] leading-none text-ink">{s.stages[st]}</div>
-            <div className="mt-1 text-[11.5px] leading-tight text-ink-3">{STAGE_LABEL[st]}</div>
-          </div>
-        ))}
-      </div>
+      <Card className="px-4 py-3.5" testId="stage-strip">
+        <p className="text-[15px] font-medium leading-[1.4] text-ink">{situationText(a)}</p>
+        <p className="mt-1 text-[13px] leading-[1.45] text-ink-3">
+          {a.total === 0
+            ? 'Puedes crear tareas o importar su dossier.'
+            : [
+                `${a.closed} de ${a.total} cerradas`,
+                a.ready.length && `${a.ready.length} ${STAGE_LABEL.lista.toLowerCase()}`,
+                s.stages['por-clasificar'] && `${s.stages['por-clasificar']} con ${STAGE_LABEL['por-clasificar'].toLowerCase()}`,
+                s.stages['por-verificar'] && `${s.stages['por-verificar']} en las que ${STAGE_LABEL['por-verificar'].toLowerCase()}`,
+                s.stages.bloqueada && `${s.stages.bloqueada} no pueden avanzar todavía`,
+                s.stages['en-aprobacion'] && `${s.stages['en-aprobacion']} esperan tu visto bueno`,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+        </p>
+      </Card>
+
+      <Section label="Necesita tu decisión">
+        {decide === 0 ? (
+          <Empty>Nada en este proyecto espera una decisión tuya ahora.</Empty>
+        ) : (
+          <Card className="overflow-hidden" testId="project-decide">
+            {a.approvals.map((t) => (
+              <TaskLine key={t.id} t={t} data={data} note="Está hecha; falta tu visto bueno." />
+            ))}
+            {a.words.map((w) => (
+              <RowLink key={`w:${w.literal}`} href={taskHref(w.tasks[0])} testId="decide-word">
+                <p className="text-[15px] leading-[1.4] text-ink">
+                  Aclarar qué significa «<Inline text={w.literal} />»
+                </p>
+                <p className="mt-1 text-[13px] leading-[1.45] text-ink-3">
+                  {w.tasks.length === 1 ? 'Lo usa 1 tarea' : `Lo usan ${w.tasks.length} tareas`}
+                  {w.waiting > 0 && ` · ${w.waiting === 1 ? '1 tarea espera' : `${w.waiting} tareas esperan`} directamente por ellas`}. Se aclara una vez para todas.
+                </p>
+              </RowLink>
+            ))}
+            {a.checks.map((c) => (
+              <RowLink key={`c:${c.literal}`} href={taskHref(c.tasks[0])} testId="decide-check">
+                <p className="text-[15px] leading-[1.4] text-ink">
+                  Comprobar «<Inline text={c.literal} />»
+                </p>
+                <p className="mt-1 text-[13px] leading-[1.45] text-ink-3">
+                  {c.tasks.length === 1 ? 'Lo pide 1 tarea' : `Lo piden ${c.tasks.length} tareas`}. Nadie lo ha confirmado todavía.
+                </p>
+              </RowLink>
+            ))}
+          </Card>
+        )}
+      </Section>
+
+      <Section label="Se puede hacer ya" count={ready.length}>
+        {ready.length === 0 ? (
+          <Empty>
+            Ninguna todavía.
+            {decide > 0 ? ' Primero hace falta lo que está en «Necesita tu decisión».' : s.blocked.length ? ' Todas esperan a otras tareas o a algo que no se cumple (abajo).' : ''}
+          </Empty>
+        ) : (
+          <Card className="overflow-hidden" testId="project-ready">
+            {s.nextActions.map((t) => (
+              <TaskLine key={t.id} t={t} data={data} note={`Siguiente acción: ${t.nextAction}`} />
+            ))}
+            {s.candidates
+              .filter((t) => !s.nextActions.includes(t))
+              .map((t) => {
+                const n = waiters.get(t.id)?.length ?? 0
+                return <TaskLine key={t.id} t={t} data={data} note={[t.estimate?.literal && `Tiempo según el dossier: ${t.estimate.literal}`, n && `${n === 1 ? '1 tarea espera' : `${n} tareas esperan`} por ella`].filter(Boolean).join(' · ') || undefined} />
+              })}
+          </Card>
+        )}
+      </Section>
+
+      {s.agents.length > 0 && (
+        <Section label="Encargos a agentes" count={s.agents.length}>
+          <Card className="overflow-hidden">
+            {s.agents.map((t) => (
+              <TaskLine key={t.id} t={t} data={data} note={`${t.owner!.name}${t.nextAction ? ` · ${t.nextAction}` : ' · sin instrucción escrita'}`} />
+            ))}
+          </Card>
+        </Section>
+      )}
+
+      {cannotMove.length > 0 && (
+        <Section label="No puede avanzar todavía" count={cannotMove.length}>
+          <details className="surface-quiet rounded-[18px]" data-testid="project-blocked">
+            <summary className="hit flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 select-none [&::-webkit-details-marker]:hidden">
+              <span className="text-[14px] leading-[1.45] text-ink-2">Esperan a otras tareas o a algo que no se cumple. Se liberan al avanzar lo anterior.</span>
+              <span className="shrink-0 text-[13px] text-electric">Ver por qué</span>
+            </summary>
+            <div className="border-t border-[var(--line)]">
+              {cannotMove.map(({ task, ex }) => (
+                <TaskLine key={task.id} t={task} data={data} note={ex.causes.map(causeText).join(' ')} />
+              ))}
+            </div>
+          </details>
+        </Section>
+      )}
 
       {project.rules && project.rules.length > 0 && (
         <Section label="Reglas del dossier">
@@ -83,49 +178,6 @@ export function ProjectView({ data, projectId }: { data: ProjectsData; projectId
           </Card>
         </Section>
       )}
-
-      <Section label="Tus siguientes acciones" count={s.nextActions.length + s.candidates.filter((t) => !s.nextActions.includes(t)).length}>
-        {s.nextActions.length === 0 && s.candidates.length === 0 ? (
-          <Empty>
-            Ninguna tarea está lista todavía{notReady.length ? `: ${notReady.join(', ')}` : ''}. Una tarea es candidata cuando su estado tiene clase y no le queda ningún requisito pendiente ni por verificar.
-          </Empty>
-        ) : (
-          <Card className="overflow-hidden">
-            {s.nextActions.map((t) => (
-              <TaskLine key={t.id} t={t} data={data} note={`Siguiente acción: ${t.nextAction}`} />
-            ))}
-            {s.candidates
-              .filter((t) => !s.nextActions.includes(t))
-              .map((t) => (
-                <TaskLine key={t.id} t={t} data={data} note="Candidata · sin siguiente acción escrita" />
-              ))}
-          </Card>
-        )}
-      </Section>
-
-      <Section label="Encargos a agentes" count={s.agents.length}>
-        {s.agents.length === 0 ? (
-          <Empty>Ningún encargo abierto en este proyecto.</Empty>
-        ) : (
-          <Card className="overflow-hidden">
-            {s.agents.map((t) => (
-              <TaskLine key={t.id} t={t} data={data} note={`${t.owner!.name}${t.nextAction ? ` · ${t.nextAction}` : ' · sin instrucción escrita'}`} />
-            ))}
-          </Card>
-        )}
-      </Section>
-
-      <Section label="Bloqueos" count={s.blocked.length}>
-        {s.blocked.length === 0 ? (
-          <Empty>Nada bloqueado.</Empty>
-        ) : (
-          <Card className="overflow-hidden">
-            {s.blocked.map(({ task, blockers }) => (
-              <TaskLine key={task.id} t={task} data={data} note={blockerText(blockers)} />
-            ))}
-          </Card>
-        )}
-      </Section>
 
       <Section label="Hitos" count={s.milestones.length}>
         {s.milestones.length === 0 ? (
@@ -142,24 +194,33 @@ export function ProjectView({ data, projectId }: { data: ProjectsData; projectId
         )}
       </Section>
 
-      <Section label="Tareas" count={s.tasks.length}>
-        <div className="flex flex-col gap-5">
-          {STAGES.filter((st) => s.stages[st] > 0).map((st) => (
-            <div key={st}>
-              <p className="mb-2 px-1 text-[13px] text-ink-3">
-                <span className="text-ink-2">{STAGE_LABEL[st]}</span> · {STAGE_HINT[st]}
-              </p>
-              <Card className="overflow-hidden">
-                {s.tasks
-                  .filter((t) => stageOf(data, t) === st)
-                  .map((t) => (
-                    <TaskLine key={t.id} t={t} data={data} />
-                  ))}
-              </Card>
+      <Section label="Todas las tareas" count={s.tasks.length}>
+        {s.tasks.length === 0 ? (
+          <Empty>Este proyecto no tiene tareas.</Empty>
+        ) : (
+          <details className="surface-quiet rounded-[18px]" data-testid="project-tasks">
+            <summary className="hit flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 select-none [&::-webkit-details-marker]:hidden">
+              <span className="text-[14px] leading-[1.45] text-ink-2">Con su ID, agrupadas por situación.</span>
+              <span className="shrink-0 text-[13px] text-electric">Ver todas</span>
+            </summary>
+            <div className="flex flex-col gap-5 px-2 pb-3">
+              {STAGES.filter((st) => s.stages[st] > 0).map((st) => (
+                <div key={st}>
+                  <p className="mb-2 px-1 text-[13px] text-ink-3">
+                    <span className="text-ink-2">{STAGE_LABEL[st]}</span> · {STAGE_HINT[st]}
+                  </p>
+                  <Card className="overflow-hidden">
+                    {s.tasks
+                      .filter((t) => stageOf(data, t) === st)
+                      .map((t) => (
+                        <TaskLine key={t.id} t={t} data={data} />
+                      ))}
+                  </Card>
+                </div>
+              ))}
             </div>
-          ))}
-          {s.tasks.length === 0 && <Empty>Este proyecto no tiene tareas.</Empty>}
-        </div>
+          </details>
+        )}
       </Section>
 
       <Section label="Origen">

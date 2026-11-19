@@ -121,7 +121,7 @@ try {
   await go(page, taskHash('HUE-01'))
   await page.locator('[data-testid="condition-control"] button', { hasText: /^Cumplida$/ }).click()
   let o = await outcome(page)
-  check('condition marked met: saved, task becomes «Lista»', o.ok && (await page.locator('main, body').first().innerText()).includes('Se puede hacer ahora'), o.text)
+  check('condition marked met: saved, task becomes «Lista»', o.ok && (await page.locator('main, body').first().innerText()).includes('Nada la frena'), o.text)
 
   // ── 3 · Agent assignment ────────────────────────────────────────────────────
   await go(page, taskHash('TAL-03'))
@@ -182,7 +182,7 @@ try {
   await page.selectOption('[data-testid="status-select"]', 'Ejecutada')
   await page.getByTestId('status-save').click()
   o = await outcome(page)
-  check('status changed explicitly to «Ejecutada» (ELYUM word added): waits for approval', o.ok && (await body(page)).includes('Ejecutada; falta tu decisión'))
+  check('status changed explicitly to «Ejecutada» (ELYUM word added): waits for approval', o.ok && (await body(page)).includes('Está hecha y espera tu visto bueno.'))
   await page.fill('[data-testid="evidence-label"]', 'Inventario v1')
   await page.fill('[data-testid="evidence-url"]', 'https://example.invalid/inventario')
   await page.getByTestId('evidence-save').click()

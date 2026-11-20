@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { classifyStatus, decideApproval, setCondition } from './domain/ops'
-import type { ProjectsData } from './domain/types'
+import { classifyStatus, decideApproval, setCondition, setNextAction } from './domain/ops'
+import { nextActionCandidates, readinessOf } from './domain/derive'
+import type { ProjectsData, Requirement } from './domain/types'
 import { SYNTHETIC_DOSSIER, SYNTHETIC_DOSSIER_NAME } from './import/fixtures'
 import { applyImport, planImport, type ImportDecisions } from './import/plan'
 import { readDossierFile } from './import/readers'
 import { emptyProjectsData } from './store/session'
-import { attention, causeText, cycleWeek, explain, projectAttention, situationText, waitersOf } from './ui/attention'
+import { attention, BLOCK_SUMMARY_TEXT, causeText, cycleWeek, explain, projectAttention, situationText, waitersOf } from './ui/attention'
 
 /* E1 · Orientation, on SYNTHETIC data only (import/fixtures.ts). */
 
@@ -101,5 +102,97 @@ describe('E1 · dónde poner la atención', () => {
     expect(cycleWeek(cycle, '2026-11-19')).toEqual({ week: 4, of: 13 })
     expect(cycleWeek(cycle, '2027-01-23')).toEqual({ week: 13, of: 13 })
     expect(cycleWeek(cycle, '2027-02-01')).toBeUndefined()
+  })
+})
+
+/* Regressions for the three findings Codex reproduced on 4f12467 (SYNTHETIC data only). */
+
+/** Test fixture only: give a synthetic task other requirements. The requirement engine is the real one. */
+const withRequirements = (d: ProjectsData, s: string, requirements: Requirement[]): ProjectsData => ({
+  ...d,
+  tasks: d.tasks.map((t) => (t.id === id(s) ? { ...t, requirements } : t)),
+})
+const onTasks = (...xs: string[]) => xs.map((x) => ({ kind: 'tarea' as const, taskId: id(x) }))
+const onCondition = (literal: string) => ({ kind: 'condicion' as const, literal, state: 'por-verificar' as const })
+const only = (d: ProjectsData, ...xs: string[]): ProjectsData => ({ ...d, tasks: d.tasks.filter((t) => xs.map(id).includes(t.id)) })
+
+describe('E1 · correcciones F01–F03 (dictamen Codex sobre 4f12467)', () => {
+  it('F01 · a blocked task with a written next action is not «Se puede hacer ya»', async () => {
+    let data = await imported()
+    data = setNextAction(data, id('HUE-02'), 'Comprar el codo de goteo', ctx())
+    const t = task(data, 'HUE-02')
+    expect(t.nextAction).toBe('Comprar el codo de goteo')
+    expect(readinessOf(data, t)).toBe('bloqueada')
+    const p = projectAttention(data, data.projects[0])
+    expect(refs(p.ready)).toEqual([])
+    expect(refs(attention(data).ready.map((r) => r.task))).toEqual([])
+    // The list is the engine's own: exactly the candidates it says are ready.
+    expect(p.ready).toEqual(nextActionCandidates(data, data.projects[0].id, 'humano'))
+    expect(situationText(p)).not.toMatch(/Puedes avanzar/)
+    // Once its dependency is done, the same task becomes ready, with or without the written action.
+    const h1 = task(data, 'HUE-01')
+    data = setCondition(data, h1.id, h1.requirements![0].id, 0, 'cumplida', ctx())
+    expect(refs(projectAttention(data, data.projects[0]).ready)).toEqual(['HUE-01'])
+  })
+
+  it('F02 · required and alternative requirements keep their structure: «A y, además, B o C»', async () => {
+    let data = await imported()
+    data = withRequirements(data, 'HUE-05', [
+      { id: 'r1', literal: 'HUE-01', kind: 'tarea', mode: 'todas', options: onTasks('HUE-01') },
+      { id: 'r2', literal: 'HUE-02 o HUE-03', kind: 'alternativa', mode: 'alguna', options: onTasks('HUE-02', 'HUE-03') },
+    ])
+    expect(explain(data, task(data, 'HUE-05')).causes.map(causeText)).toEqual([
+      'Espera a «Comprobar la llave de paso» (HUE-01) y, además, a «Cambiar el goteo» (HUE-02) o «Elegir semillas» (HUE-03).',
+    ])
+    // Two required tasks are still said with «y».
+    data = withRequirements(data, 'HUE-05', [{ id: 'r1', literal: 'HUE-01, HUE-02', kind: 'tarea', mode: 'todas', options: onTasks('HUE-01', 'HUE-02') }])
+    expect(explain(data, task(data, 'HUE-05')).causes.map(causeText)).toEqual([
+      'Espera a «Comprobar la llave de paso» (HUE-01) y «Cambiar el goteo» (HUE-02), que aún no están terminadas.',
+    ])
+  })
+
+  it('F02 · an alternative between a task and a condition is never said as two obligations', async () => {
+    const data = await imported()
+    // HUE-03 in the synthetic dossier: «HUE-02 o semillas del vecino».
+    const say = explain(data, task(data, 'HUE-03')).causes.map(causeText)
+    expect(say).toContain('Espera a que se cumpla una de estas: «Cambiar el goteo» (HUE-02) o que se confirme «semillas del vecino».')
+    expect(say.join(' ')).not.toMatch(/Falta comprobar «semillas del vecino»/)
+  })
+
+  it('F02 · alternatives that are only conditions are one group to check, next to the required ones', async () => {
+    let data = await imported()
+    data = withRequirements(data, 'HUE-06', [
+      { id: 'r1', literal: 'Cesta', kind: 'condicional', mode: 'todas', options: [onCondition('Cesta')] },
+      { id: 'r2', literal: 'báscula o balanza prestada', kind: 'alternativa', mode: 'alguna', options: [onCondition('báscula'), onCondition('balanza prestada')] },
+    ])
+    const why = explain(data, task(data, 'HUE-06'))
+    expect(why.causes.map(causeText)).toEqual(['Falta comprobar «Cesta» y, además, «báscula» o «balanza prestada»: nadie lo ha confirmado todavía.'])
+  })
+
+  it('F03 · blocks that come only from a condition are not attributed to other tasks', async () => {
+    let data = await imported()
+    const h1 = task(data, 'HUE-01')
+    data = setCondition(data, h1.id, h1.requirements![0].id, 0, 'no-cumplida', ctx())
+    const alone = only(data, 'HUE-01')
+    const p = projectAttention(alone, alone.projects[0])
+    expect(p.blockedBy).toBe('condiciones')
+    expect(situationText(p)).toBe('Ninguna tarea puede avanzar todavía: piden algo que no se cumple o que se descartó.')
+    expect(BLOCK_SUMMARY_TEXT[p.blockedBy!]).not.toMatch(/otras tareas\./)
+  })
+
+  it('F03 · several causes give a neutral summary; only tasks give «esperan a otras»', async () => {
+    let data = await imported()
+    const h1 = task(data, 'HUE-01')
+    data = setCondition(data, h1.id, h1.requirements![0].id, 0, 'no-cumplida', ctx())
+    const mixed = only(data, 'HUE-01', 'HUE-02')
+    const p = projectAttention(mixed, mixed.projects[0])
+    expect(p.blockedBy).toBe('varias')
+    expect(situationText(p)).toBe('Ninguna tarea puede avanzar todavía, por causas distintas. Al abrir el proyecto verás la de cada una.')
+    // Each task still says its own cause in detail.
+    expect(explain(mixed, task(mixed, 'HUE-02')).causes.map(causeText)).toEqual(['Espera a «Comprobar la llave de paso» (HUE-01), que aún no está terminada.'])
+    const fresh = only(await imported(), 'HUE-01', 'HUE-02')
+    const tasksOnly = projectAttention(fresh, fresh.projects[0])
+    expect(tasksOnly.blockedBy).toBe('tareas')
+    expect(BLOCK_SUMMARY_TEXT.tareas).toBe('Esperan a otras tareas. Se liberan al terminar lo anterior.')
   })
 })

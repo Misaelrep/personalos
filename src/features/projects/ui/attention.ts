@@ -50,11 +50,22 @@ export interface CheckToMake {
   tasks: Task[]
 }
 
-/** Why an open task cannot move yet, from its real cause. */
+/**
+ * One way out of an alternative requirement («alguna»): a task to finish, a
+ * condition to confirm, or an ID the dossier names that does not exist here.
+ */
+export type Way = { kind: 'tarea'; task: Task } | { kind: 'condicion'; literal: string } | { kind: 'desconocida'; id: string }
+
+/**
+ * Why an open task cannot move yet, from its real cause. The logical structure
+ * of each requirement is kept (F02): what is required in every case (`tasks`,
+ * `literals`) is never mixed with the alternatives of an «alguna» requirement
+ * (`groups`, each one enough on its own).
+ */
 export type Cause =
   | { kind: 'estado'; literal: string }
-  | { kind: 'comprobar'; literals: string[] }
-  | { kind: 'espera'; tasks: Task[]; any: boolean }
+  | { kind: 'comprobar'; literals: string[]; groups: string[][] }
+  | { kind: 'espera'; tasks: Task[]; groups: Way[][] }
   | { kind: 'no-cumplido'; literals: string[] }
   | { kind: 'descartada'; tasks: Task[] }
   | { kind: 'visto-bueno' }
@@ -64,43 +75,65 @@ export function causesOf(t: Task, stage: Stage, b: Blockers): Cause[] {
   if (stage === 'en-aprobacion') return [{ kind: 'visto-bueno' }]
   const out: Cause[] = []
   if (stage === 'por-clasificar') out.push({ kind: 'estado', literal: t.status })
+  // Required in every case: dependencies, every option of a «todas», and the only option left of an «alguna».
   const waiting = [...b.waiting]
-  let any = false
   const check: string[] = []
   const notMet: string[] = []
   const discarded = [...b.discarded]
+  // Alternatives still open, one group per «alguna» requirement.
+  const taskGroups: Way[][] = []
+  const checkGroups: string[][] = []
+  const required = (o: Blockers['requirements'][number]['options'][number]) => {
+    if (o.option.kind === 'condicion') (o.state === 'no-cumplido' ? notMet : check).push(o.option.literal)
+    else if (!o.task) check.push(o.option.taskId.replace(/^src:/, ''))
+    else if (o.state === 'no-cumplido') discarded.push(o.task)
+    else if (!waiting.includes(o.task)) waiting.push(o.task)
+  }
   for (const r of b.requirements) {
-    for (const o of r.options) {
-      if (o.state === 'cumplido') continue
-      if (o.option.kind === 'condicion') (o.state === 'no-cumplido' ? notMet : check).push(o.option.literal)
-      else if (!o.task) check.push(o.option.taskId.replace(/^src:/, ''))
-      else if (o.state === 'no-cumplido') discarded.push(o.task)
-      else if (!waiting.includes(o.task)) {
-        waiting.push(o.task)
-        if (r.requirement.mode === 'alguna' && r.options.length > 1) any = true
-      }
+    const open = r.options.filter((o) => o.state !== 'cumplido')
+    if (r.requirement.mode === 'todas') {
+      open.forEach(required)
+      continue
+    }
+    // «alguna»: options marked as not met are no longer a way out.
+    const viable = open.filter((o) => o.state !== 'no-cumplido')
+    if (viable.length === 0) open.forEach(required)
+    else if (viable.length === 1) required(viable[0])
+    else {
+      const ways: Way[] = viable.map((o) => (o.option.kind === 'condicion' ? { kind: 'condicion', literal: o.option.literal } : o.task ? { kind: 'tarea', task: o.task } : { kind: 'desconocida', id: o.option.taskId.replace(/^src:/, '') }))
+      if (ways.some((w) => w.kind === 'tarea')) taskGroups.push(ways)
+      else checkGroups.push(ways.map((w) => (w.kind === 'condicion' ? w.literal : w.kind === 'desconocida' ? w.id : '')))
     }
   }
-  if (waiting.length) out.push({ kind: 'espera', tasks: waiting, any })
+  if (waiting.length || taskGroups.length) out.push({ kind: 'espera', tasks: waiting, groups: taskGroups })
   if (notMet.length) out.push({ kind: 'no-cumplido', literals: notMet })
   if (discarded.length) out.push({ kind: 'descartada', tasks: discarded })
-  if (check.length) out.push({ kind: 'comprobar', literals: [...new Set(check)] })
+  if (check.length || checkGroups.length) out.push({ kind: 'comprobar', literals: [...new Set(check)], groups: checkGroups })
   return out
 }
 
+/** Every condition literal a cause asks to confirm, required or alternative. */
+export const literalsToCheck = (c: Extract<Cause, { kind: 'comprobar' }>) => [...new Set([...c.literals, ...c.groups.flat()])]
+
 const quote = (s: string) => `«${s}»`
 const list = (xs: string[], joiner = ' y ') => (xs.length <= 1 ? (xs[0] ?? '') : `${xs.slice(0, -1).join(', ')}${joiner}${xs[xs.length - 1]}`)
+const way = (w: Way) => (w.kind === 'tarea' ? named(w.task) : w.kind === 'condicion' ? `que se confirme ${quote(w.literal)}` : `${quote(w.id)}, que no existe en este proyecto`)
 
-/** A cause in one plain sentence. Literals stay literal, between «». */
+/** A cause in one plain sentence. Literals stay literal, between «». «Y» joins what is required; «o», the alternatives of one group. */
 export function causeText(c: Cause): string {
   switch (c.kind) {
     case 'estado':
       return `Su estado en el dossier dice ${quote(c.literal)} y todavía no has aclarado qué significa.`
-    case 'comprobar':
-      return `Falta comprobar ${list(c.literals.map(quote))}: nadie lo ha confirmado todavía.`
+    case 'comprobar': {
+      const parts = [...(c.literals.length ? [list(c.literals.map(quote))] : []), ...c.groups.map((g) => list(g.map(quote), ' o '))]
+      return `Falta comprobar ${parts.join(' y, además, ')}: nadie lo ha confirmado todavía.`
+    }
     case 'espera': {
-      const names = c.tasks.map(named)
-      return c.any ? `Espera a que se termine alguna de estas: ${list(names, ' o ')}.` : c.tasks.length === 1 ? `Espera a ${names[0]}, que aún no está terminada.` : `Espera a ${list(names)}, que aún no están terminadas.`
+      const required = c.tasks.length ? `a ${list(c.tasks.map(named))}` : ''
+      const alternatives = c.groups.map((g) => `a ${list(g.map(way), ' o ')}`)
+      if (!alternatives.length) return c.tasks.length === 1 ? `Espera a ${named(c.tasks[0])}, que aún no está terminada.` : `Espera ${required}, que aún no están terminadas.`
+      if (!required && alternatives.length === 1) return `Espera a que se cumpla una de estas: ${list(c.groups[0].map(way), ' o ')}.`
+      return `Espera ${[required, ...alternatives].filter(Boolean).join(' y, además, ')}.`
     }
     case 'no-cumplido':
       return `Marcaste que ${list(c.literals.map(quote))} no se cumple. Mientras siga así, no puede avanzar.`
@@ -109,6 +142,26 @@ export function causeText(c: Cause): string {
     case 'visto-bueno':
       return 'Está hecha y espera tu visto bueno.'
   }
+}
+
+/**
+ * What keeps blocked tasks from moving (F03), so a summary never attributes to
+ * other tasks a block that comes from a condition, or the other way round.
+ * `tareas`: only other tasks. `condiciones`: only conditions or discarded work.
+ * `varias`: tasks with different causes, or one task with several.
+ */
+export type BlockSummary = 'tareas' | 'condiciones' | 'varias'
+
+export function blockSummary(causes: Cause[][]): BlockSummary | undefined {
+  if (!causes.length) return undefined
+  const kinds = new Set(causes.map((cs) => (cs.every((c) => c.kind === 'espera') ? 'tareas' : cs.some((c) => c.kind === 'espera') ? 'varias' : 'condiciones')))
+  return kinds.size === 1 ? ([...kinds][0] as BlockSummary) : 'varias'
+}
+
+export const BLOCK_SUMMARY_TEXT: Record<BlockSummary, string> = {
+  tareas: 'Esperan a otras tareas. Se liberan al terminar lo anterior.',
+  condiciones: 'Piden algo que no se cumple o que se descartó. No dependen de otras tareas: ábrelas para decidir.',
+  varias: 'No todas por la misma causa. Abre cada una para ver qué la frena.',
 }
 
 export interface Explanation {
@@ -139,6 +192,8 @@ export interface ProjectAttention {
   ready: Task[]
   /** Open tasks that cannot move yet because of another task or a condition marked as not met. */
   cannotMove: number
+  /** What keeps them from moving, from their real causes. */
+  blockedBy?: BlockSummary
 }
 
 export function projectAttention(data: ProjectsData, project: Project, index = indexTasks(data), waiters = waitersOf(data, index)): ProjectAttention {
@@ -147,13 +202,17 @@ export function projectAttention(data: ProjectsData, project: Project, index = i
   const words = new Map<string, Task[]>()
   const checks = new Map<string, Task[]>()
   let cannotMove = 0
+  const blockedCauses: Cause[][] = []
   for (const t of open) {
     const st = stageOf(data, t, index)
     if (st === 'por-clasificar') words.set(t.status, [...(words.get(t.status) ?? []), t])
     else if (st === 'por-verificar') {
       for (const c of causesOf(t, st, blockersOf(data, t, index)))
-        if (c.kind === 'comprobar') for (const l of c.literals) checks.set(l, [...(checks.get(l) ?? []), t])
-    } else if (st === 'bloqueada') cannotMove++
+        if (c.kind === 'comprobar') for (const l of literalsToCheck(c)) checks.set(l, [...(checks.get(l) ?? []), t])
+    } else if (st === 'bloqueada') {
+      cannotMove++
+      blockedCauses.push(causesOf(t, st, blockersOf(data, t, index)))
+    }
   }
   const waitingFor = (ts: Task[]) => new Set(ts.flatMap((t) => (waiters.get(t.id) ?? []).map((w) => w.id))).size
   return {
@@ -166,6 +225,7 @@ export function projectAttention(data: ProjectsData, project: Project, index = i
     approvals: open.filter((t) => isAwaitingApproval(data, t)),
     ready: nextActionCandidates(data, project.id, 'humano'),
     cannotMove,
+    blockedBy: blockSummary(blockedCauses),
   }
 }
 
@@ -179,7 +239,9 @@ export function situationText(a: ProjectAttention): string {
     return a.words.length || a.checks.length ? `${can}; otras necesitan antes una decisión tuya.` : `${can}.`
   }
   if (a.words.length || a.checks.length) return 'Necesita una decisión o una comprobación tuya antes de avanzar.'
-  return 'Ninguna tarea puede avanzar todavía: todas esperan a otras.'
+  if (a.blockedBy === 'tareas') return 'Ninguna tarea puede avanzar todavía: todas esperan a otras.'
+  if (a.blockedBy === 'condiciones') return 'Ninguna tarea puede avanzar todavía: piden algo que no se cumple o que se descartó.'
+  return 'Ninguna tarea puede avanzar todavía, por causas distintas. Al abrir el proyecto verás la de cada una.'
 }
 
 /** A task that, once done, would stop being in the way of several open tasks. Not a priority. */

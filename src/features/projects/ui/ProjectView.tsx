@@ -5,7 +5,7 @@ import { displayRef } from '../domain/ids'
 import type { ProjectsData, Task } from '../domain/types'
 import { dateTime, REQUIREMENT_STATE_LABEL, shortHash, STAGE_HINT, STAGE_LABEL } from './labels'
 import { Card, Empty, Field, Mono, RowLink, Section, StageChip, Title, TopBar } from './parts'
-import { causeText, explain, projectAttention, situationText, waitersOf } from './attention'
+import { BLOCK_SUMMARY_TEXT, causeText, explain, projectAttention, situationText, waitersOf } from './attention'
 import { projectSummary, STAGES, stageOf } from './view'
 
 /**
@@ -59,7 +59,8 @@ export function ProjectView({ data, projectId }: { data: ProjectsData; projectId
   const index = indexTasks(data)
   const waiters = waitersOf(data, index)
   const decide = a.words.length + a.checks.length + a.approvals.length
-  const ready = [...s.nextActions, ...s.candidates.filter((t) => !s.nextActions.includes(t))]
+  // Only what the engine says can move (readiness «lista»). A written next action never makes a blocked task ready.
+  const ready = a.ready
   const cannotMove = s.blocked.map(({ task }) => ({ task, ex: explain(data, task, index, waiters) }))
 
   return (
@@ -124,19 +125,17 @@ export function ProjectView({ data, projectId }: { data: ProjectsData; projectId
         {ready.length === 0 ? (
           <Empty>
             Ninguna todavía.
-            {decide > 0 ? ' Primero hace falta lo que está en «Necesita tu decisión».' : s.blocked.length ? ' Todas esperan a otras tareas o a algo que no se cumple (abajo).' : ''}
+            {decide > 0 ? ' Primero hace falta lo que está en «Necesita tu decisión».' : s.blocked.length ? ' Las demás no pueden avanzar todavía (abajo verás por qué).' : ''}
           </Empty>
         ) : (
           <Card className="overflow-hidden" testId="project-ready">
-            {s.nextActions.map((t) => (
-              <TaskLine key={t.id} t={t} data={data} note={`Siguiente acción: ${t.nextAction}`} />
-            ))}
-            {s.candidates
-              .filter((t) => !s.nextActions.includes(t))
-              .map((t) => {
-                const n = waiters.get(t.id)?.length ?? 0
-                return <TaskLine key={t.id} t={t} data={data} note={[t.estimate?.literal && `Tiempo según el dossier: ${t.estimate.literal}`, n && `${n === 1 ? '1 tarea espera' : `${n} tareas esperan`} por ella`].filter(Boolean).join(' · ') || undefined} />
-              })}
+            {ready.map((t) => {
+              const n = waiters.get(t.id)?.length ?? 0
+              const note = t.nextAction?.trim()
+                ? [`Siguiente acción: ${t.nextAction}`]
+                : [t.estimate?.literal && `Tiempo según el dossier: ${t.estimate.literal}`]
+              return <TaskLine key={t.id} t={t} data={data} note={[...note, n && `${n === 1 ? '1 tarea espera' : `${n} tareas esperan`} por ella`].filter(Boolean).join(' · ') || undefined} />
+            })}
           </Card>
         )}
       </Section>
@@ -155,7 +154,7 @@ export function ProjectView({ data, projectId }: { data: ProjectsData; projectId
         <Section label="No puede avanzar todavía" count={cannotMove.length}>
           <details className="surface-quiet rounded-[18px]" data-testid="project-blocked">
             <summary className="hit flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 select-none [&::-webkit-details-marker]:hidden">
-              <span className="text-[14px] leading-[1.45] text-ink-2">Esperan a otras tareas o a algo que no se cumple. Se liberan al avanzar lo anterior.</span>
+              <span className="text-[14px] leading-[1.45] text-ink-2" data-testid="blocked-summary">{BLOCK_SUMMARY_TEXT[a.blockedBy ?? 'varias']}</span>
               <span className="shrink-0 text-[13px] text-electric">Ver por qué</span>
             </summary>
             <div className="border-t border-[var(--line)]">

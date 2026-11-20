@@ -110,6 +110,7 @@ try {
     await page.locator('[data-testid="project-blocked"] summary').click()
     const body = await page.locator('body').innerText()
     check('project: why each task cannot move, in the dossier’s words', body.includes('Espera a «Comprobar la llave de paso» (HUE-01), que aún no está terminada.') && body.includes('Falta comprobar «báscula»'))
+    check('F03 · blocked summary does not blame other tasks when causes differ', (await text(page, '[data-testid="blocked-summary"]')) === 'No todas por la misma causa. Abre cada una para ver qué la frena.', await text(page, '[data-testid="blocked-summary"]'))
     check('project: no next action invented', body.includes('Ninguna todavía.') && body.includes('Aclarar qué significa «Borrador existente»'))
     await shot(page, '02-proyecto.png')
 
@@ -187,7 +188,7 @@ try {
       const { setNextAction } = await import('/src/features/projects/domain/ops.ts')
       const s = new ProjectsSession(browserStore('otra-pestaña', () => new Date().toISOString()), () => new Date().toISOString())
       await s.open()
-      await s.change((d) => setNextAction(d, 'src:HUE-01', 'Abrir la llave del jardín', { now: new Date().toISOString() }))
+      await s.change((d) => setNextAction(setNextAction(d, 'src:HUE-01', 'Abrir la llave del jardín', { now: new Date().toISOString() }), 'src:HUE-02', 'Comprar el codo de goteo', { now: new Date().toISOString() }))
     })
     await page.waitForTimeout(300)
     const before = await stored(page)
@@ -197,6 +198,12 @@ try {
     const after = JSON.parse(await stored(page))
     check('stale preview is recomputed on the newer data; the other tab’s change survives', after.generation === g3 + 1 && after.data.tasks.find((t) => t.sourceId === 'HUE-01').nextAction === 'Abrir la llave del jardín')
     await other.close()
+    // F01 · a written next action never makes a task that cannot move appear as «Se puede hacer ya».
+    await go(page, '#/')
+    await page.locator('[data-testid="project-card"]').first().click()
+    await page.waitForSelector('[data-testid="stage-strip"]')
+    const readyBox = (await page.locator('[data-testid="project-ready"]').count()) ? await text(page, '[data-testid="project-ready"]') : ''
+    check('F01 · blocked or unchecked tasks with a next action stay out of «Se puede hacer ya»', !/HUE-01|HUE-02|Comprar el codo|Abrir la llave/.test(readyBox) && (await page.locator('body').innerText()).includes('Ninguna todavía.'), readyBox)
 
     // ── 4 · Export and verify ──────────────────────────────────────────────────
     await go(page, '#/exportar')

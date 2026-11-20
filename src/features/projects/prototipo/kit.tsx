@@ -19,17 +19,17 @@ export function Back({ href, label }: { href: string; label: string }) {
 }
 
 export function Kicker({ children }: { children: ReactNode }) {
-  return <p className="text-[11px] tracking-[0.12em] text-ink-3 uppercase">{children}</p>
+  return <p className="inline-flex items-center gap-2 text-[11px] font-medium tracking-[0.14em] text-ink-3 uppercase before:h-px before:w-4 before:bg-[linear-gradient(90deg,rgba(167,139,250,0.9),rgba(58,130,246,0.7))] before:content-['']">{children}</p>
 }
 
 export function H1({ children }: { children: ReactNode }) {
-  return <h1 className="font-display text-[26px] leading-[1.12] font-medium tracking-[-0.02em] text-ink">{children}</h1>
+  return <h1 className="font-display text-[27px] leading-[1.1] font-medium tracking-[-0.025em] text-balance text-ink">{children}</h1>
 }
 
 export function Box({ children, className = '', tone = 'surface', testId }: { children: ReactNode; className?: string; tone?: 'surface' | 'quiet' | 'focus'; testId?: string }) {
   const t =
     tone === 'focus'
-      ? 'surface border border-[color-mix(in_srgb,var(--color-electric)_30%,transparent)]'
+      ? 'surface shadow-[0_0_0_1px_color-mix(in_srgb,var(--color-electric)_32%,transparent),0_24px_46px_-24px_rgba(58,130,246,0.45)]'
       : tone === 'quiet'
         ? 'surface-quiet'
         : 'surface'
@@ -47,7 +47,7 @@ export function Primary({ children, onClick, disabled, testId }: { children: Rea
       onClick={onClick}
       disabled={disabled}
       data-testid={testId}
-      className="hit inline-flex h-11 w-full items-center justify-center rounded-full bg-[var(--control)] px-5 text-[14px] font-medium text-[var(--control-ink)] shadow-[0_10px_30px_-12px_rgba(8,26,50,0.45)] active:scale-[0.985] disabled:opacity-40"
+      className="hit inline-flex h-11 w-full items-center justify-center rounded-full bg-[var(--control)] bg-[linear-gradient(180deg,rgba(255,255,255,0.22)_0%,rgba(255,255,255,0.04)_46%,rgba(0,0,0,0.18)_100%)] px-5 text-[14px] font-medium tracking-[0.005em] text-[var(--control-ink)] shadow-[inset_0_1px_0_rgba(255,255,255,0.32),inset_0_0_0_1px_rgba(255,255,255,0.08),0_12px_28px_-12px_rgba(8,26,50,0.55),0_2px_4px_rgba(8,26,50,0.25)] active:scale-[0.985] active:brightness-110 disabled:opacity-40"
     >
       {children}
     </button>
@@ -56,7 +56,7 @@ export function Primary({ children, onClick, disabled, testId }: { children: Rea
 
 export function Secondary({ children, onClick, testId }: { children: ReactNode; onClick: () => void; testId?: string }) {
   return (
-    <button type="button" onClick={onClick} data-testid={testId} className="hit inline-flex h-10 items-center justify-center rounded-full border border-[var(--line)] bg-[var(--surface-quiet)] px-4 text-[13.5px] text-ink active:scale-[0.985]">
+    <button type="button" onClick={onClick} data-testid={testId} className="hit inline-flex h-10 items-center justify-center rounded-full border border-[rgba(255,255,255,0.85)] bg-[linear-gradient(180deg,rgba(255,255,255,0.85),rgba(236,238,245,0.7))] px-4 text-[13.5px] text-ink shadow-[inset_0_1px_0_#fff,0_8px_18px_-12px_rgba(30,34,60,0.4),0_0_0_1px_rgba(120,128,156,0.14)] active:scale-[0.985]">
       {children}
     </button>
   )
@@ -156,7 +156,7 @@ export function Segmented<T extends string>({ value, options, onChange, testId }
           role="tab"
           aria-selected={o.value === value}
           onClick={() => onChange(o.value)}
-          className={`hit h-9 flex-1 rounded-full text-[13.5px] transition-colors ${o.value === value ? 'bg-[var(--color-pearl)] font-medium text-ink shadow-[0_1px_3px_rgba(8,26,50,0.12)]' : 'text-ink-3'}`}
+          className={`hit h-9 flex-1 rounded-full text-[13.5px] ${o.value === value ? 'bg-[var(--color-pearl)] font-medium text-ink shadow-[0_1px_3px_rgba(8,26,50,0.12)]' : 'text-ink-3'}`}
         >
           {o.label}
         </button>

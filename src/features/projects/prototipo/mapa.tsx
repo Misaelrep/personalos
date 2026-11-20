@@ -36,7 +36,13 @@ interface Link {
   /** A point of light travels from `to` back to `from`: the work feeding its purpose. */
   pulse?: boolean
   delay?: number
+  /** Seconds before the light starts (defaults to `delay` + 0.45). */
+  pulseAt?: number
 }
+
+/** How long a light takes to cross a connection, and how many times it crosses. */
+const PASS = 1.15
+const PASSES = 2
 
 function useNodes() {
   const box = useRef<HTMLDivElement>(null)
@@ -69,8 +75,24 @@ const STROKE: Record<LinkKind, { color: string; dash?: string; width: number }> 
   plan: { color: 'color-mix(in srgb, var(--color-violet) 70%, transparent)', dash: '1 4', width: 1.6 },
 }
 
-function Lines({ box, els, links, animate }: { box: React.RefObject<HTMLDivElement | null>; els: React.RefObject<Map<string, HTMLElement>>; links: Link[]; animate: boolean }) {
+function Lines({ box, els, links, animate, replay = '' }: { box: React.RefObject<HTMLDivElement | null>; els: React.RefObject<Map<string, HTMLElement>>; links: Link[]; animate: boolean; replay?: string }) {
   const b = box.current?.getBoundingClientRect()
+  // Where the light arrives, the node blooms once (a node reached by light looks lit).
+  useEffect(() => {
+    if (!animate) return
+    const timers = links
+      .filter((l) => l.pulse && !l.dim)
+      .map((l) => {
+        const at = (l.pulseAt ?? (l.delay ?? 0) + 0.45) + PASS * 0.92
+        return setTimeout(() => {
+          const el = els.current?.get(l.from)
+          if (!el) return
+          el.dataset.lit = 'true'
+          setTimeout(() => delete el.dataset.lit, 1000)
+        }, at * 1000)
+      })
+    return () => timers.forEach(clearTimeout)
+  }, [animate, replay, links.map((l) => `${l.from}>${l.to}${l.pulse ? 'p' : ''}${l.dim ? 'd' : ''}`).join('|')])
   if (!b) return null
   const paths = links.flatMap((l) => {
     const f = els.current?.get(l.from)?.getBoundingClientRect()
@@ -83,6 +105,7 @@ function Lines({ box, els, links, animate }: { box: React.RefObject<HTMLDivEleme
     const my = (y1 + y2) / 2
     return [{ l, d: `M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}`, rev: `M${x2},${y2} C${x2},${my} ${x1},${my} ${x1},${y1}` }]
   })
+  const lit = paths.filter((p) => animate && p.l.pulse && !p.l.dim)
   return (
     <>
       <svg aria-hidden className="pointer-events-none absolute inset-0 h-full w-full overflow-visible">
@@ -102,22 +125,30 @@ function Lines({ box, els, links, animate }: { box: React.RefObject<HTMLDivEleme
             </g>
           )
         })}
+        {/* The light itself: a bright comet with a soft trail, crossing the connection from the work to its purpose. */}
+        {lit.map(({ l, rev }) => {
+          const at = l.pulseAt ?? (l.delay ?? 0) + 0.45
+          const t = { duration: PASS, delay: at, repeat: PASSES - 1, repeatDelay: 0.7, ease: 'easeInOut' } as const
+          return (
+            <g key={`c-${l.from}>${l.to}:${replay}`}>
+              <motion.path d={rev} fill="none" stroke="rgba(120,160,255,0.55)" strokeWidth={9} strokeLinecap="round" initial={{ pathLength: 0.2, pathOffset: 0, opacity: 0 }} animate={{ pathLength: 0.2, pathOffset: 0.8, opacity: [0, 1, 1, 0] }} transition={t} style={{ filter: 'blur(4px)' }} />
+              <motion.path d={rev} fill="none" stroke="white" strokeWidth={3.2} strokeLinecap="round" initial={{ pathLength: 0.12, pathOffset: 0, opacity: 0 }} animate={{ pathLength: 0.12, pathOffset: 0.88, opacity: [0, 1, 1, 0] }} transition={t} />
+            </g>
+          )
+        })}
       </svg>
-      {animate &&
-        paths
-          .filter((p) => p.l.pulse && !p.l.dim)
-          .map(({ l, rev }) => (
-            // A point of light along the line: CSS offset-path, composited by Safari.
-            <motion.span
-              key={`p-${l.from}>${l.to}`}
-              aria-hidden
-              className="pointer-events-none absolute top-0 left-0 size-2.5 rounded-full bg-white shadow-[0_0_10px_3px_rgba(58,130,246,0.55)]"
-              style={{ offsetPath: `path("${rev}")`, offsetRotate: '0deg' }}
-              initial={{ offsetDistance: '0%', opacity: 0 }}
-              animate={{ offsetDistance: '100%', opacity: [0, 1, 1, 0] }}
-              transition={{ duration: 1.1, delay: (l.delay ?? 0) + 0.45, ease: 'easeInOut' }}
-            />
-          ))}
+      {lit.map(({ l, rev }) => (
+        // The bright head of the comet: CSS offset-path, composited by Safari.
+        <motion.span
+          key={`p-${l.from}>${l.to}:${replay}`}
+          aria-hidden
+          className="pointer-events-none absolute top-0 left-0 size-3 rounded-full bg-white shadow-[0_0_14px_5px_rgba(58,130,246,0.6)]"
+          style={{ offsetPath: `path("${rev}")`, offsetRotate: '0deg' }}
+          initial={{ offsetDistance: '0%', opacity: 0 }}
+          animate={{ offsetDistance: '100%', opacity: [0, 1, 1, 0] }}
+          transition={{ duration: PASS, delay: l.pulseAt ?? (l.delay ?? 0) + 0.45, repeat: PASSES - 1, repeatDelay: 0.7, ease: 'easeInOut' }}
+        />
+      ))}
     </>
   )
 }
@@ -295,24 +326,36 @@ function Panorama({ m, onUpdate }: { m: ProjectMap; onUpdate: OnUpdate }) {
   const { box, els, reg } = useNodes()
   const first = s.motion === 'completo' && !s.introSeen.includes(m.projectId)
   const [intro, setIntro] = useState(first)
+  const [run, setRun] = useState(0)
+  // The opening sequence: purpose → what makes it possible → where to go next. Never obligatory: skip at any moment.
+  const captions = m.noResults ? ['Esto es lo que busca el proyecto', 'Y este es el trabajo que lo mueve'] : ['Esto es lo que busca el proyecto', 'Estos resultados lo hacen posible', 'Toca uno para ver el trabajo que hay detrás']
+  const [step, setStep] = useState(0)
   useEffect(() => {
     if (!intro) return
-    const id = setTimeout(() => {
+    setStep(0)
+    const ts = captions.map((_, i) => setTimeout(() => setStep(i), i * 1500))
+    const end = setTimeout(() => {
       setIntro(false)
-      set((x) => ({ ...x, introSeen: [...x.introSeen, m.projectId] }))
-    }, 2800)
-    return () => clearTimeout(id)
-  }, [intro])
+      set((x) => (x.introSeen.includes(m.projectId) ? x : { ...x, introSeen: [...x.introSeen, m.projectId] }))
+    }, captions.length * 1500 + 600)
+    return () => {
+      ts.forEach(clearTimeout)
+      clearTimeout(end)
+    }
+  }, [intro, run])
+  const reducedNow = s.motion === 'reducido'
   const { sp, pillars } = quarterOf(s, m.projectId)
   const star = pillars.length && sp?.northStar ? sp.northStar : undefined
   const nodes = m.noResults ? m.blocks.map((b) => ({ key: `b-${b.id}`, kind: 'agrupacion' as const, icon: b.icon, name: b.name, counts: b.counts, href: mapHref(m.projectId, '-', b.id), testId: 'map-block', sub: `${b.counts.terminado} de ${b.tasks.length}` })) : m.results.map((r) => ({ key: `r-${r.id}`, kind: 'contribucion' as const, icon: r.icon, name: r.name, counts: resultCounts(m, r), href: mapHref(m.projectId, r.id), testId: 'map-result', sub: `${r.done} de ${r.total} tareas` }))
-  const links: Link[] = [...(star ? [{ from: 'star', to: 'obj', kind: 'plan' as const, delay: 0.1 }] : []), ...nodes.map((n, i) => ({ from: 'obj', to: n.key, kind: n.kind, delay: intro ? 0.35 + i * 0.18 : 0, pulse: intro && n.kind === 'contribucion' }))]
+  // Light starts only once the purpose has been shown (second caption).
+  const T = 1.5
+  const links: Link[] = [...(star ? [{ from: 'star', to: 'obj', kind: 'plan' as const, delay: 0.1 }] : []), ...nodes.map((n, i) => ({ from: 'obj', to: n.key, kind: n.kind, delay: intro ? T + i * 0.2 : 0, pulse: intro && n.kind === 'contribucion', pulseAt: T + 0.4 + i * 0.2 }))]
   const skip = () => {
     setIntro(false)
     set((x) => ({ ...x, introSeen: [...x.introSeen, m.projectId] }))
   }
   // Always animate to the final state, so skipping mid-way never leaves a node half drawn.
-  const appear = (i: number) => ({ initial: intro ? { opacity: 0, y: 8, scale: 0.94 } : false, animate: { opacity: 1, y: 0, scale: 1 }, transition: intro ? { delay: 0.25 + i * 0.18, duration: 0.35 } : { duration: 0.15 } }) as const
+  const appear = (i: number) => ({ initial: intro ? { opacity: 0, y: 10, scale: 0.9 } : false, animate: { opacity: 1, y: 0, scale: 1 }, transition: intro ? { delay: T + i * 0.2, duration: 0.45, ease: 'easeOut' as const } : { duration: 0.15 } })
   return (
     <div className="mt-3" data-testid="map-panorama">
       <div data-testid="map-objective">
@@ -330,7 +373,7 @@ function Panorama({ m, onUpdate }: { m: ProjectMap; onUpdate: OnUpdate }) {
       </div>
 
       <div ref={box} className="relative mt-5">
-        <Lines box={box} els={els} links={links} animate={intro} />
+        <Lines box={box} els={els} links={links} animate={intro} replay={String(run)} />
         {star && (
           <div ref={reg('star')} className="relative mx-auto mb-7 flex w-fit max-w-[92%] items-start gap-2 rounded-full bg-[rgba(255,255,255,0.7)] px-3 py-1.5 shadow-[0_0_0_1px_rgba(167,139,250,0.25)]" data-testid="map-star">
             <span className="mt-0.5 text-[#6d4fd8]">
@@ -342,10 +385,21 @@ function Panorama({ m, onUpdate }: { m: ProjectMap; onUpdate: OnUpdate }) {
             </p>
           </div>
         )}
+        <div className="mb-3 h-5 text-center" aria-live="polite" data-testid="intro-caption">
+          {intro && (
+            <motion.p key={step} className="text-[13px] font-medium tracking-[0.01em] text-ink-2" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}>
+              {captions[step]}
+            </motion.p>
+          )}
+        </div>
         <div className="flex justify-center">
-          <motion.div layoutId={`obj-${m.projectId}`} ref={reg('obj')} className="pl-orb grid size-[112px] place-items-center" animate={intro ? { scale: [1, 1, 1.05, 1] } : { scale: 1 }} transition={{ duration: 2.6, times: [0, 0.7, 0.85, 1] }} data-testid="map-orb">
-            <Ilustracion project={m.name} className="size-[68px]" />
-          </motion.div>
+          <div className="pl-hero">
+            <span className="pl-halo" data-i="1" aria-hidden />
+            <span className="pl-halo" data-i="2" aria-hidden />
+            <motion.div layoutId={`obj-${m.projectId}`} ref={reg('obj')} className="pl-orb pl-orb-hero grid size-[132px] place-items-center" animate={intro ? { scale: [0.9, 1.06, 1] } : { scale: 1 }} transition={{ duration: 1.3, times: [0, 0.6, 1], ease: 'easeOut' }} data-testid="map-orb">
+              <Ilustracion project={m.name} className="size-[84px]" />
+            </motion.div>
+          </div>
         </div>
         <div className="relative mt-12 flex items-start justify-around gap-1">
           {nodes.map((n, i) => (
@@ -358,10 +412,24 @@ function Panorama({ m, onUpdate }: { m: ProjectMap; onUpdate: OnUpdate }) {
         </div>
       </div>
       <div className="mt-3 h-9 text-center">
-        {intro && (
+        {intro ? (
           <button type="button" className="hit h-9 rounded-full px-3 text-[13px] text-ink-3" onClick={skip} data-testid="intro-skip">
             Omitir animación
           </button>
+        ) : (
+          !reducedNow && (
+            <button
+              type="button"
+              className="hit h-9 rounded-full px-3 text-[13px] text-ink-3"
+              onClick={() => {
+                setRun((n) => n + 1)
+                setIntro(true)
+              }}
+              data-testid="intro-replay"
+            >
+              Ver cómo se conecta
+            </button>
+          )
         )}
       </div>
       <p className="text-[12.5px] leading-[1.45] text-ink-3">
@@ -432,7 +500,8 @@ function ResultView({ m, resultId, onUpdate }: { m: ProjectMap; resultId: string
   const confirmed = s.confirmed.includes(key)
   const animate = s.motion === 'completo'
   const links: Link[] = [
-    ...m.results.map((x) => ({ from: 'obj', to: `r-${x.id}`, kind: 'contribucion' as const, dim: x.id !== r.id })),
+    // The light climbs: from the work to the result, then from the result up to the project's purpose.
+    ...m.results.map((x) => ({ from: 'obj', to: `r-${x.id}`, kind: 'contribucion' as const, dim: x.id !== r.id, pulse: x.id === r.id, pulseAt: 2.05 })),
     ...blocks.map((b, i) => ({ from: 'focus', to: `b-${b.id}`, kind: 'contribucion' as const, delay: 0.25 + i * 0.12, pulse: true })),
   ]
   return (
@@ -441,7 +510,7 @@ function ResultView({ m, resultId, onUpdate }: { m: ProjectMap; resultId: string
         <MapIcon name="diana" className="size-4" /> Vista panorámica
       </button>
       <div ref={box} className="relative mt-3">
-        <Lines box={box} els={els} links={links} animate={animate} />
+        <Lines box={box} els={els} links={links} animate={animate} replay={r.id} />
         <motion.div layoutId={`obj-${m.projectId}`} ref={reg('obj')} className="relative mx-auto flex w-fit max-w-[88%] items-center gap-2 rounded-full bg-[rgba(255,255,255,0.72)] py-1 pr-3 pl-1 text-[12px] leading-[1.35] text-ink-3">
           <span className="pl-orb grid size-8 shrink-0 place-items-center">
             <Ilustracion project={m.name} className="size-5" />
@@ -555,7 +624,7 @@ function BlockView({ m, resultId, blockId, taskId, onUpdate }: { m: ProjectMap; 
         )}
       </div>
       <div ref={box} className="relative mt-4">
-        <Lines box={box} els={els} links={r ? [{ from: 'r', to: 'b', kind: 'contribucion' }] : []} animate={animate} />
+        <Lines box={box} els={els} links={r ? [{ from: 'r', to: 'b', kind: 'contribucion', pulse: !!taskId, pulseAt: 0.15 }] : []} animate={animate} replay={taskId ?? ''} />
         {r && (
           <div className="flex justify-center">
             <span ref={reg('r')} className="inline-flex items-center gap-1.5 rounded-full bg-[rgba(255,255,255,0.72)] px-3 py-1 text-[12px] text-ink-3">
@@ -706,17 +775,27 @@ function PathUp({ n, b, results, objective }: { n: TaskNode; b: Block; results: 
     { icon: 'diana' as const, label: 'Objetivo del proyecto', text: objective ?? 'Objetivo por definir' },
   ]
   const total = 0.15 + steps.length * 0.14
+  const TRAVEL = 1.5
+  // Each stop blooms at the moment the light reaches it: task → block → result → purpose.
+  const reach = (i: number) => total + (steps.length > 1 ? (i / (steps.length - 1)) * TRAVEL : 0)
   return (
-    <ol className="relative mt-1 ml-1" aria-label="Para qué sirve esta tarea">
+    <ol className="relative mt-1 ml-1" aria-label="Para qué sirve esta tarea" data-testid="task-path-steps">
       <motion.span aria-hidden className="absolute top-3 bottom-3 left-[13px] w-[2px] origin-top rounded-full bg-[linear-gradient(180deg,#3a82f6,#a78bfa)]" initial={animate ? { scaleY: 0 } : false} animate={{ scaleY: 1 }} transition={{ duration: total, ease: 'easeInOut' }} />
       {animate && (
-        <motion.span aria-hidden className="absolute left-[9px] size-2.5 rounded-full bg-white shadow-[0_0_10px_3px_rgba(58,130,246,0.6)]" initial={{ top: '0.75rem', opacity: 0 }} animate={{ top: 'calc(100% - 1.4rem)', opacity: [0, 1, 1, 0] }} transition={{ duration: 1.3, delay: total, ease: 'easeInOut' }} />
+        <>
+          <motion.span aria-hidden className="absolute left-[7px] w-[14px] rounded-full bg-[linear-gradient(180deg,rgba(58,130,246,0),rgba(120,160,255,0.55))] blur-[3px]" style={{ height: '2.2rem' }} initial={{ top: '0.2rem', opacity: 0 }} animate={{ top: 'calc(100% - 2.8rem)', opacity: [0, 1, 1, 0] }} transition={{ duration: TRAVEL, delay: total, ease: 'easeInOut' }} />
+          <motion.span aria-hidden className="absolute left-[9px] size-2.5 rounded-full bg-white shadow-[0_0_12px_4px_rgba(58,130,246,0.65)]" initial={{ top: '0.75rem', opacity: 0 }} animate={{ top: 'calc(100% - 1.4rem)', opacity: [0, 1, 1, 0] }} transition={{ duration: TRAVEL, delay: total, ease: 'easeInOut' }} />
+        </>
       )}
       {steps.map((st, i) => (
         <motion.li key={i} className="relative flex items-start gap-3 pb-3 last:pb-0" initial={animate ? { opacity: 0, x: -6 } : false} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.08 + i * 0.14, duration: 0.25 }}>
-          <span className={`relative inline-flex size-7 shrink-0 items-center justify-center rounded-full ${i === 0 ? 'bg-[var(--control)] text-[var(--control-ink)]' : 'pl-node text-[#4b5270]'}`}>
+          <motion.span
+            className={`relative inline-flex size-7 shrink-0 items-center justify-center rounded-full ${i === 0 ? 'bg-[var(--control)] text-[var(--control-ink)]' : 'pl-node text-[#4b5270]'}`}
+            animate={animate ? { scale: [1, 1.22, 1] } : undefined}
+            transition={{ delay: reach(i), duration: 0.6, ease: 'easeOut' }}
+          >
             <MapIcon name={st.icon} className="size-4" />
-          </span>
+          </motion.span>
           <span className="min-w-0 pt-0.5">
             <span className="block text-[11px] text-ink-4">{st.label}</span>
             <span className="block text-[13.5px] leading-[1.35] text-ink">

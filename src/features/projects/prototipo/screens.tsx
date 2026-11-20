@@ -77,13 +77,22 @@ function ActivePlan() {
   return (
     <div data-testid="plan-active">
       <Kicker>Plan de 90 días · {now.before ? `empieza el 1 de diciembre, en ${startsIn} días` : now.after ? 'terminado' : `${MONTHS.find((m) => m.key === now.month)!.label.toLowerCase()}, mes ${MONTHS.findIndex((m) => m.key === now.month) + 1} de 3`}</Kicker>
-      <div className="mt-2 flex items-start gap-3" data-testid="north-star">
-        <span className="pl-orb mt-1 grid size-10 shrink-0 place-items-center text-[#6d4fd8]" aria-hidden>
-          <MapIcon name="estrella" className="size-5" />
-        </span>
-        <H1>{sp.northStar}</H1>
-      </div>
-      <span aria-hidden className="mt-3 block h-px w-full bg-[linear-gradient(90deg,rgba(167,139,250,0.6),rgba(58,130,246,0.45),rgba(242,218,220,0.6),transparent)]" />
+      {/* 1 · The north star: the one sentence everything answers to. Largest, with its own luminous orb. */}
+      <section className="surface relative mt-3 overflow-hidden rounded-[26px] px-4 pt-3.5 pb-4" data-testid="north-star">
+        <p className="text-[11px] font-medium tracking-[0.16em] text-[#6d4fd8] uppercase">Estrella polar</p>
+        <div className="mt-2.5 flex items-center gap-3.5">
+          <div className="pl-hero shrink-0">
+            <span className="pl-halo" data-i="1" aria-hidden />
+            <span className="pl-halo" data-i="2" aria-hidden />
+            <span className="pl-orb pl-orb-hero grid size-[58px] place-items-center text-[#6d4fd8]" aria-hidden>
+              <MapIcon name="estrella" className="size-7" />
+            </span>
+          </div>
+          <h1 className="font-display text-[22px] leading-[1.18] font-medium tracking-[-0.02em] text-balance text-ink">{sp.northStar}</h1>
+        </div>
+      </section>
+      {/* The light that runs from the star down to the pillars. */}
+      <span aria-hidden className="mx-auto block h-5 w-px bg-[linear-gradient(180deg,rgba(167,139,250,0.9),rgba(58,130,246,0.5))]" />
 
       {prep.length > 0 ? (
         <Box tone="focus" className="mt-5" testId="before-start">
@@ -128,32 +137,48 @@ function ActivePlan() {
           options={MONTHS.map((m) => ({ value: m.key, label: m.key === now.month && !now.before && !now.after ? <span>{m.label} <span className="text-electric">•</span></span> : m.label }))}
         />
       </div>
-      <div className="mt-2" data-testid="month-body">
-        {sp.pillars.map((p) => {
+      <div className="mt-3 space-y-3" data-testid="month-body">
+        {sp.pillars.map((p, pi) => {
           const mine = rows.filter((r) => r.pillar.id === p.id)
           return (
-            <div key={p.id} className="border-b border-[var(--line)] py-3 last:border-b-0">
-              <p className="text-[15px] font-medium text-ink">{p.name}</p>
-              <p className="mt-0.5 text-[13px] leading-[1.4] text-ink-3">Al final del mes: {p.results[month]}</p>
-              <p className="mt-0.5 text-[12px] leading-[1.6] text-ink-4" data-testid="pillar-projects">
-                Mapa de{' '}
-                {projectsOfPillar(s.data, sp, p.id).map((id, k) => (
-                  <span key={id}>
-                    {k > 0 && ' · '}
-                    <a className="text-electric" href={mapHref(id)}>
-                      {s.data.projects.find((x) => x.id === id)?.name}
-                    </a>
-                  </span>
-                ))}
-              </p>
-              <div className="mt-1">
+            <section key={p.id} className="surface-quiet rounded-[22px] px-4 pt-3.5 pb-2.5" data-testid="pillar">
+              {/* 2 · A pillar: its number, its name, and the projects that feed it. */}
+              <div className="flex items-start gap-3">
+                <span className="pl-node mt-0.5 grid size-8 shrink-0 place-items-center text-[13px] font-medium text-[#4b5270]" aria-hidden>
+                  {pi + 1}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] font-medium tracking-[0.14em] text-ink-3 uppercase">Pilar {pi + 1}</p>
+                  <h2 className="font-display text-[18px] leading-[1.2] font-medium tracking-[-0.015em] text-ink">{p.name}</h2>
+                  <p className="mt-1 text-[12px] leading-[1.6] text-ink-4" data-testid="pillar-projects">
+                    Mapa de{' '}
+                    {projectsOfPillar(s.data, sp, p.id).map((id, k) => (
+                      <span key={id}>
+                        {k > 0 && ' · '}
+                        <a className="text-electric" href={mapHref(id)}>
+                          {s.data.projects.find((x) => x.id === id)?.name}
+                        </a>
+                      </span>
+                    ))}
+                  </p>
+                </div>
+              </div>
+              {/* 3 · The monthly result: set apart as a milestone the actions lead to. */}
+              <div className="mt-3 rounded-[16px] bg-[linear-gradient(135deg,rgba(var(--pl-lavender),0.4),rgba(var(--pl-blue),0.3)_55%,rgba(var(--pl-pink),0.3))] px-3.5 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.85),0_0_0_1px_rgba(255,255,255,0.6)]" data-testid="month-result">
+                <p className="flex items-center gap-1.5 text-[11px] font-medium tracking-[0.12em] text-ink-3 uppercase">
+                  <span aria-hidden className="size-1.5 rotate-45 bg-[#8b6fe0]" />
+                  Al final de {MONTHS.find((m) => m.key === month)!.label.toLowerCase()}
+                </p>
+                <p className="mt-0.5 text-[14px] leading-[1.4] text-ink">{p.results[month]}</p>
+              </div>
+              <div className="mt-1.5">
                 {mine.map((r) => {
                   const k = kindOf(r.stage)
                   return <Row key={r.action.id} href={`#/tarea/${encodeURIComponent(r.task.id)}`} title={r.task.title} done={k === 'terminada'} right={k !== 'terminada' ? <KindTag kind={k} label={KIND_LABEL[k]} /> : undefined} testId="plan-action" />
                 })}
                 {!mine.length && <p className="py-2 text-[13px] text-[#a86a00]">Sin acciones este mes: falta planificarlo.</p>}
               </div>
-            </div>
+            </section>
           )
         })}
       </div>

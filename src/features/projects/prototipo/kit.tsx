@@ -116,6 +116,11 @@ export function LocalTag() {
   return <span className="ml-1.5 inline-flex h-5 items-center rounded-full bg-[var(--line)] px-2 align-middle text-[10.5px] font-medium tracking-[0.03em] whitespace-nowrap text-ink-3">Cálculo local</span>
 }
 
+/** Marks a HUMAN DECISION: something the person approved or confirmed. */
+export function HumanTag() {
+  return <span className="ml-1.5 inline-flex h-5 items-center rounded-full bg-[color-mix(in_srgb,#1f9d6b_14%,transparent)] px-2 align-middle text-[10.5px] font-medium tracking-[0.03em] whitespace-nowrap text-[#167a53]">Decisión tuya</span>
+}
+
 const KIND_STYLE: Record<string, string> = {
   ejecutable: 'bg-[color-mix(in_srgb,var(--color-electric)_14%,transparent)] text-electric',
   decision: 'bg-[color-mix(in_srgb,#d98a00_16%,transparent)] text-[#a86a00]',

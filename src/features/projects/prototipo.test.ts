@@ -9,6 +9,7 @@ import { continueHere, decisionsOf, nextInProject, planned } from './prototipo/d
 import { MONTHS, applyProposals, approve, checkPlan, exampleSprint, grokReview, monthOf, projectsOfPillar, proposeChanges, proposeStrategy } from './prototipo/plan'
 import { INITIAL } from './prototipo/store'
 import { exampleText } from './prototipo/update'
+import { briefOf } from './prototipo/contexto'
 import { mapHref, mapPathOf, projectMap, resultsOfTasks, taskNode } from './prototipo/mapa-modelo'
 
 /* PROTOTYPE · The 90-day plan over the six INVENTED projects. Nothing here touches storage. */
@@ -206,5 +207,29 @@ describe('smart project map', () => {
   })
   it('orientation texts never carry amounts, dates or names of people', () => {
     for (const p of data.projects) for (const b of projectMap(data, p.id).blocks) expect(b.implies).not.toMatch(/\d|€|\$/)
+  })
+})
+
+describe('task context', () => {
+  it('every task gets what to do, why and what it implies, without inventing amounts or times', () => {
+    for (const t of data.tasks) {
+      const b = briefOf(data, t)
+      for (const text of [b.hacer, b.porque, b.implica]) {
+        expect(text.length).toBeGreaterThan(10)
+        const withoutTitles = data.tasks.filter((x) => x.projectId === t.projectId).reduce((acc, x) => acc.split(x.title).join('').split(x.title.replace(/^\S+\s+/, '').toLowerCase()).join(''), text)
+        expect(withoutTitles).not.toMatch(/\d|€|\$|\bhoras?\b|\bminutos?\b/)
+      }
+    }
+  })
+  it('a follow-up task points to the work it checks', () => {
+    const t = data.tasks.find((x) => x.sourceId === 'HUE-17')!
+    expect(briefOf(data, t).porque).toContain('Organizar los turnos de riego')
+  })
+  it('only projects with proposed results say why they matter; nothing is written to the data', () => {
+    const before = JSON.stringify(data)
+    expect(projectMap(data, byName('Huerto comunitario').id).why).toBeTruthy()
+    expect(projectMap(data, byName('Web de la tienda').id).why).toBeUndefined()
+    for (const t of data.tasks) briefOf(data, t)
+    expect(JSON.stringify(data)).toBe(before)
   })
 })

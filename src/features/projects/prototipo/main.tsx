@@ -1,6 +1,7 @@
 import { StrictMode, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import '../../../styles/index.css'
+import './platino.css'
 import { Segmented, go } from './kit'
 import { ProjectPage, ProjectsView, PlanView, TaskPage } from './screens'
 import { DATES, ProtoProvider, SCENARIOS, useNotice, useProto } from './store'
@@ -120,6 +121,18 @@ function Controls() {
   )
 }
 
+/** Ambient light: strongest on the map, discreet on lists, calm where you read and decide. */
+function Ambient({ intensity }: { intensity: 'vivo' | 'discreto' | 'calma' }) {
+  const { s } = useProto()
+  return (
+    <div aria-hidden className="pl-ambient" data-intensity={intensity} data-quieto={s.motion === 'reducido' ? 'true' : 'false'} data-testid="ambient">
+      <span className="pl-ray r1" />
+      <span className="pl-ray r2" />
+      <span className="pl-ray r3" />
+    </div>
+  )
+}
+
 function App() {
   const r = route(useHash())
   const notice = useNotice()
@@ -144,11 +157,8 @@ function App() {
       <PlanView />
     )
   return (
-    <div className="relative min-h-dvh">
-      <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 bg-[var(--color-soft)]">
-        <div className="absolute -top-[30vmax] -right-[25vmax] size-[80vmax] rounded-full bg-[radial-gradient(closest-side,rgba(216,231,250,0.9),transparent)]" />
-        <div className="absolute top-[40vh] -left-[35vmax] size-[70vmax] rounded-full bg-[radial-gradient(closest-side,rgba(234,242,255,0.95),transparent)]" />
-      </div>
+    <div className="platino relative min-h-dvh">
+      <Ambient intensity={r.kind === 'mapa' ? 'vivo' : r.kind === 'plan' || r.kind === 'proyectos' || r.kind === 'proyecto' ? 'discreto' : 'calma'} />
       <div className="mx-auto w-full max-w-[560px] px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[calc(6rem+env(safe-area-inset-bottom))]">
         <p className="pt-1 pb-3 text-center text-[10.5px] tracking-[0.08em] text-ink-4 uppercase" data-testid="proto-banner">
           Prototipo · proyectos inventados · IA simulada · no se guarda nada

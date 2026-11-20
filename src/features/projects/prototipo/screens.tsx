@@ -10,11 +10,13 @@ import { STAGE_LABEL } from '../ui/labels'
 import { byRef, stageOf, trackOf } from '../ui/view'
 import { approved, continueHere, decisionsOf, needs, nextInProject, pillarsOf, planned } from './derive'
 import { AiTag, Back, Box, H1, Kicker, KindTag, LocalTag, More, Primary, Row, Secondary, Segmented, TextLink, go } from './kit'
-import { blockOfTask, impliesOf, mapHref, mapPathOf, projectMap, resultsOfTasks, taskNode } from './mapa-modelo'
-import { KIND_LABEL, MONTHS, SPRINT, daysUntil, kindOf, monthOf, type Month } from './plan'
+import { briefOf } from './contexto'
+import { blockOfTask, mapHref, mapPathOf, projectMap, resultsOfTasks, taskNode } from './mapa-modelo'
+import { KIND_LABEL, MONTHS, SPRINT, daysUntil, kindOf, monthOf, projectsOfPillar, type Month } from './plan'
 import { GrokList } from './wizard'
 import { MapIcon } from './iconos'
-import { shortDate, useProto } from './store'
+import { Ilustracion } from './ilustraciones'
+import { shortDate, useProto, type Proto } from './store'
 
 /** PROTOTYPE · The screens. Each has one primary action; the rest is a link or closed until opened. */
 
@@ -75,9 +77,13 @@ function ActivePlan() {
   return (
     <div data-testid="plan-active">
       <Kicker>Plan de 90 días · {now.before ? `empieza el 1 de diciembre, en ${startsIn} días` : now.after ? 'terminado' : `${MONTHS.find((m) => m.key === now.month)!.label.toLowerCase()}, mes ${MONTHS.findIndex((m) => m.key === now.month) + 1} de 3`}</Kicker>
-      <div className="mt-2" data-testid="north-star">
+      <div className="mt-2 flex items-start gap-3" data-testid="north-star">
+        <span className="pl-orb mt-1 grid size-10 shrink-0 place-items-center text-[#6d4fd8]" aria-hidden>
+          <MapIcon name="estrella" className="size-5" />
+        </span>
         <H1>{sp.northStar}</H1>
       </div>
+      <span aria-hidden className="mt-3 block h-px w-full bg-[linear-gradient(90deg,rgba(167,139,250,0.6),rgba(58,130,246,0.45),rgba(242,218,220,0.6),transparent)]" />
 
       {prep.length > 0 ? (
         <Box tone="focus" className="mt-5" testId="before-start">
@@ -129,6 +135,17 @@ function ActivePlan() {
             <div key={p.id} className="border-b border-[var(--line)] py-3 last:border-b-0">
               <p className="text-[15px] font-medium text-ink">{p.name}</p>
               <p className="mt-0.5 text-[13px] leading-[1.4] text-ink-3">Al final del mes: {p.results[month]}</p>
+              <p className="mt-0.5 text-[12px] leading-[1.6] text-ink-4" data-testid="pillar-projects">
+                Mapa de{' '}
+                {projectsOfPillar(s.data, sp, p.id).map((id, k) => (
+                  <span key={id}>
+                    {k > 0 && ' · '}
+                    <a className="text-electric" href={mapHref(id)}>
+                      {s.data.projects.find((x) => x.id === id)?.name}
+                    </a>
+                  </span>
+                ))}
+              </p>
               <div className="mt-1">
                 {mine.map((r) => {
                   const k = kindOf(r.stage)
@@ -180,8 +197,11 @@ export function ProjectsView() {
         }
       />
         </div>
-        <a href={mapHref(p.id)} aria-label={`Mapa de ${p.name}`} data-testid="project-row-map" className="hit surface grid size-10 shrink-0 place-items-center rounded-full text-electric active:opacity-70">
-          <MapIcon name="diana" className="size-[18px]" />
+        <a href={mapHref(p.id)} aria-label={`Mapa de ${p.name}`} data-testid="project-row-map" className="hit pl-quieto flex shrink-0 flex-col items-center gap-0.5 active:opacity-70">
+          <span className="pl-orb grid size-10 place-items-center">
+            <Ilustracion project={p.name} className="size-6" />
+          </span>
+          <span className="text-[10.5px] text-ink-3">Mapa</span>
         </a>
       </div>
     )
@@ -354,80 +374,132 @@ function Editable({ value, onSave, testId }: { value: string; onSave: (v: string
   )
 }
 
-/** The six questions of a task, each with where its answer comes from: dossier, local calculation or simulated AI. */
-function TaskContext({ t, need }: { t: Task; need: string }) {
+const Item = ({ k, children, testId }: { k: React.ReactNode; children: React.ReactNode; testId?: string }) => (
+  <div className="border-b border-[var(--line)] py-3 last:border-b-0" data-testid={testId}>
+    <p className="text-[12px] text-ink-3">{k}</p>
+    {children}
+  </div>
+)
+const P = ({ children }: { children: React.ReactNode }) => <p className="mt-0.5 text-[14.5px] leading-[1.5] text-ink">{children}</p>
+
+const TaskLinks = ({ tasks }: { tasks: Task[] }) => (
+  <ul className="mt-1 space-y-0.5">
+    {tasks.map((w) => (
+      <li key={w.id}>
+        <TextLink href={`#/tarea/${encodeURIComponent(w.id)}`}>{w.title}</TextLink>
+      </li>
+    ))}
+  </ul>
+)
+
+/**
+ * The questions a task must answer before starting it, each with its source:
+ * the dossier (confirmed), a local calculation, or a simulated AI suggestion
+ * that can be edited and never invents people, amounts, times or requirements.
+ */
+function TaskContext({ t, need, mapLink }: { t: Task; need: string; mapLink?: string }) {
   const { s, set } = useProto()
   const m = projectMap(s.data, t.projectId)
   const block = blockOfTask(m, t.id)
   const results = resultsOfTasks(s.data, [t.id])
   const node = taskNode(s.data, t)
   const note = s.notes[t.id] ?? {}
-  const implies = note.implies ?? impliesOf(s.data, t.id)
-  const dossierResult = t.deliverable ?? t.acceptance[0]
+  const brief = briefOf(s.data, t)
+  const track = trackOf(s.data, t)
+  const pending = (t.requirements ?? []).flatMap((r) => r.options.filter((o) => o.kind === 'condicion' && o.state !== 'cumplida').map((o) => (o as { literal: string }).literal))
   const estimate = t.estimate?.literal ?? (t.estimateHours ? `${t.estimateHours} h` : undefined)
-  const save = (k: 'implies' | 'deliver') => (v: string) => set((x) => ({ ...x, notes: { ...x.notes, [t.id]: { ...x.notes[t.id], [k]: v } }, notice: 'Guardado solo en esta demostración.' }))
-  const Item = ({ k, children, testId }: { k: React.ReactNode; children: React.ReactNode; testId?: string }) => (
-    <div className="border-b border-[var(--line)] py-2.5 last:border-b-0" data-testid={testId}>
-      <p className="text-[12px] text-ink-3">{k}</p>
-      {children}
-    </div>
-  )
-  const P = ({ children }: { children: React.ReactNode }) => <p className="mt-0.5 text-[14.5px] leading-[1.45] text-ink">{children}</p>
+  const save = (k: keyof Proto['notes'][string]) => (v: string) => set((x) => ({ ...x, notes: { ...x.notes, [t.id]: { ...x.notes[t.id], [k]: v } }, notice: 'Guardado solo en esta demostración.' }))
+  const aiTag = (k: keyof Proto['notes'][string]) => (note[k] ? <span className="ml-1.5 text-[11px] text-ink-4">editado por ti</span> : <AiTag />)
   return (
-    <Box className="mt-4" testId="task-card">
-      <Item k={<>Por qué importa{results.length ? <AiTag /> : <LocalTag />}</>} testId="ctx-why">
-        {results.length ? (
-          <P>
-            Ayuda a {results.length === 1 ? 'conseguir' : 'conseguir dos cosas:'} {results.map((r) => `«${r.name}»`).join(' y ')}
-            {block ? `, desde el bloque «${block.name}».` : '.'}
-          </P>
-        ) : (
-          <P>{block ? `Forma parte de «${block.name}». Este proyecto aún no tiene resultados propuestos, así que no se inventa a cuál contribuye.` : 'Sin bloque asignado.'}</P>
+    <div data-testid="task-context">
+      <div className="mt-2" data-testid="ctx-do">
+        <Editable value={note.hacer ?? brief.hacer} onSave={save('hacer')} testId="hacer" />
+        <p className="mt-0.5 text-[11px] text-ink-4">Descripción {note.hacer ? 'editada por ti' : 'sugerida a partir del título'}{!note.hacer && <AiTag />}</p>
+      </div>
+
+      {/* Where it sits: the same chain as on the map, small. */}
+      <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[12px]" data-testid="ctx-chain">
+        {block && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-[rgba(255,255,255,0.7)] px-2.5 py-1 text-ink-2">
+            <MapIcon name={block.icon} className="size-3.5" />
+            {block.name}
+          </span>
         )}
-      </Item>
-      {implies && (
-        <Item k={<>Qué implica<AiTag /></>} testId="ctx-implies">
-          <Editable value={implies} onSave={save('implies')} testId="implies" />
+        {results.map((r) => (
+          <span key={r.id} className="inline-flex items-center gap-1 text-ink-2">
+            <span aria-hidden className="h-px w-3 bg-[linear-gradient(90deg,#a78bfa,#3a82f6)]" />
+            <span className="inline-flex items-center gap-1 rounded-full bg-[rgba(255,255,255,0.7)] px-2.5 py-1">
+              <MapIcon name={r.icon} className="size-3.5" />
+              {r.name}
+            </span>
+          </span>
+        ))}
+        {mapLink && (
+          <TextLink href={mapLink} testId="task-to-map">
+            Ver en el mapa
+          </TextLink>
+        )}
+      </div>
+
+      <Box className="mt-4" testId="task-card">
+        <Item k={<>Por qué importa{aiTag('porque')}</>} testId="ctx-why">
+          <Editable value={note.porque ?? brief.porque} onSave={save('porque')} testId="porque" />
+          {results.length > 0 ? (
+            <p className="mt-1 text-[12.5px] leading-[1.4] text-ink-3">Contribuye a {results.map((r) => `«${r.name}»`).join(' y ')}, a través de su bloque.</p>
+          ) : (
+            <p className="mt-1 text-[12.5px] leading-[1.4] text-ink-3">Este proyecto aún no tiene resultados propuestos: no se inventa a cuál contribuye.</p>
+          )}
         </Item>
-      )}
-      <Item k={dossierResult ? 'Resultado a entregar · del dossier' : <>Resultado a entregar<AiTag /></>} testId="ctx-deliver">
-        {dossierResult ? (
-          <P>{dossierResult}</P>
-        ) : (
-          <Editable value={note.deliver ?? 'El dossier no lo dice. Propuesta: escribe aquí qué quedará hecho cuando la termines.'} onSave={save('deliver')} testId="deliver" />
-        )}
-      </Item>
-      <Item k={<>Qué necesito antes<LocalTag /></>} testId="ctx-before">
-        <P>{need}</P>
-        {node.waitsFor.length > 0 && (
-          <ul className="mt-1">
-            {node.waitsFor.map((w) => (
-              <li key={w.id}><TextLink href={`#/tarea/${encodeURIComponent(w.id)}`}>{w.title}</TextLink></li>
-            ))}
-          </ul>
-        )}
-      </Item>
-      <Item k={<>Qué permite después<LocalTag /></>} testId="ctx-after">
-        {node.unlocks.length ? (
-          <>
-            <P>{node.unlocks.length === 1 ? 'Esta tarea la espera:' : `La esperan ${node.unlocks.length} tareas:`}</P>
-            <ul className="mt-1">
-              {node.unlocks.map((w) => (
-                <li key={w.id}><TextLink href={`#/tarea/${encodeURIComponent(w.id)}`}>{w.title}</TextLink></li>
-              ))}
-            </ul>
-            <p className="mt-1 text-[12px] text-ink-4">Podrían avanzar; puede que tengan otros requisitos.</p>
-          </>
-        ) : (
-          <P>Ninguna tarea registrada la espera.</P>
-        )}
-      </Item>
-      {estimate && (
-        <Item k="Tiempo estimado · del dossier">
-          <P>{estimate}</P>
+        <Item k={<>Qué implica{aiTag('implies')}</>} testId="ctx-implies">
+          <Editable value={note.implies ?? brief.implica} onSave={save('implies')} testId="implies" />
         </Item>
-      )}
-    </Box>
+        <Item k={t.deliverable || t.acceptance.length ? 'Qué debo conseguir · del dossier' : <>Qué debo conseguir{aiTag('deliver')}</>} testId="ctx-deliver">
+          {t.deliverable || t.acceptance.length ? (
+            <>
+              {t.deliverable && <P>{t.deliverable}</P>}
+              {t.acceptance.length > 0 && <p className="mt-1 text-[13px] leading-[1.45] text-ink-2">{t.acceptance.join(' · ')}</p>}
+            </>
+          ) : (
+            <Editable value={note.deliver ?? 'El dossier no lo dice. Propuesta: escribe aquí qué quedará hecho cuando la termines.'} onSave={save('deliver')} testId="deliver" />
+          )}
+        </Item>
+        <Item k={<>Qué necesito antes de empezar<LocalTag /></>} testId="ctx-before">
+          <P>{need}</P>
+          {node.waitsFor.length > 0 && <TaskLinks tasks={node.waitsFor} />}
+          {pending.length > 0 && <p className="mt-1 text-[12.5px] leading-[1.4] text-ink-3">Condiciones del dossier sin confirmar: {pending.map((x) => `«${x}»`).join(', ')}.</p>}
+        </Item>
+        <Item k={<>Qué permite hacer después<LocalTag /></>} testId="ctx-after">
+          {node.unlocks.length ? (
+            <>
+              <P>{node.unlocks.length === 1 ? 'Esta tarea la espera:' : `La esperan ${node.unlocks.length} tareas:`}</P>
+              <TaskLinks tasks={node.unlocks} />
+              <p className="mt-1 text-[12px] text-ink-4">Podrían avanzar; puede que tengan otros requisitos.</p>
+            </>
+          ) : (
+            <P>Ninguna tarea registrada la espera.</P>
+          )}
+        </Item>
+        {estimate && (
+          <Item k="Tiempo estimado · del dossier">
+            <P>{estimate}</P>
+          </Item>
+        )}
+      </Box>
+
+      {/* Execution, verification and approval stay three separate things. */}
+      <div className="mt-3 grid grid-cols-3 gap-1.5 text-center text-[11.5px] leading-[1.3]" data-testid="ctx-track">
+        {[
+          ['Ejecución', TRACK_TEXT.executed[track.executed.state]],
+          ['Verificación', track.verified.state === 'sin-dato' ? 'Sin dato' : track.verified.state],
+          ['Aprobación', { 'sin-dato': 'Sin decidir', 'no-requiere': 'No requiere', pendiente: 'Pendiente', aprobada: 'Aprobada', devuelta: 'Devuelta' }[track.approved.state]],
+        ].map(([k, v]) => (
+          <div key={k} className="rounded-[12px] bg-[rgba(255,255,255,0.6)] px-1.5 py-1.5">
+            <p className="text-ink-4">{k}</p>
+            <p className="mt-0.5 text-ink-2">{v}</p>
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -535,7 +607,7 @@ export function TaskPage({ id }: { id: string }) {
         {stage !== 'cerrada' && <Kicker>Qué debo hacer</Kicker>}
         <H1>{t.title}</H1>
       </div>
-      {mapLink && (
+      {mapLink && (stage === 'cerrada' || stage === 'en-aprobacion') && (
         <p className="mt-2">
           <TextLink href={mapLink} testId="task-to-map">
             Ver en el mapa del proyecto
@@ -545,7 +617,7 @@ export function TaskPage({ id }: { id: string }) {
       {stage === 'cerrada' && <p className="mt-2 text-[14px] text-ink-3">{wc === 'descartada' ? 'Descartada.' : 'Terminada y aprobada.'}</p>}
       {t.owner?.kind === 'agente' && stage !== 'cerrada' && <p className="mt-2 text-[13.5px] text-electric">Delegada a un agente.</p>}
       {stage !== 'cerrada' && stage !== 'en-aprobacion' ? (
-        <TaskContext t={t} need={stage === 'lista' ? (wc === 'en-curso' ? 'Ya está en curso.' : 'Nada: puedes empezar ya.') : need ?? STAGE_LABEL[stage]} />
+        <TaskContext t={t} mapLink={mapLink} need={stage === 'lista' ? (wc === 'en-curso' ? 'Ya está en curso.' : 'Nada: puedes empezar ya.') : need ?? STAGE_LABEL[stage]} />
       ) : lines.length > 0 && (
         <Box className="mt-4" testId={stage === 'en-aprobacion' ? 'task-review' : 'task-card'}>
           {lines.map(([k, v]) => (

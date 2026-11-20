@@ -25,7 +25,7 @@ export interface Proto {
   /** Movement on the map: full, or reduced (no intro, instant transitions). */
   motion: 'completo' | 'reducido'
   /** The person's own edits of a task's orientation or expected result (they replace the AI proposal). */
-  notes: Record<string, { implies?: string; deliver?: string }>
+  notes: Record<string, { hacer?: string; porque?: string; implies?: string; deliver?: string }>
   /** Key results the person confirmed («projectId:resultId»). */
   confirmed: string[]
   /** The exact map point a task was opened from, to return to it. */

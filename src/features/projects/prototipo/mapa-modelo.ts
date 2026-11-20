@@ -28,6 +28,8 @@ interface ResultDef {
 }
 
 interface MapDef {
+  /** Why the project matters (simulated AI): one sentence, no people, amounts or dates. */
+  why: string
   results: ResultDef[]
   icons: Record<string, Icon>
   /** Simulated orientation per block: what the work usually involves. No people, amounts or dates. */
@@ -36,6 +38,7 @@ interface MapDef {
 
 const DEFS: Record<string, MapDef> = {
   'Huerto comunitario': {
+    why: 'Da al barrio un espacio cuidado entre todos: comida cercana, vecinos que se conocen y un lugar que no depende de una sola persona.',
     results: [
       { id: 'agua', name: 'El agua llega a las parcelas', why: 'Sin riego estable no hay cultivo posible: es la base de todo lo demás.', icon: 'gota', blocks: ['agua'] },
       { id: 'cosecha', name: 'Primera cosecha en marcha', why: 'Es la prueba visible de que el huerto funciona y lo que anima a seguir.', icon: 'brote', blocks: ['cultivo', 'agua'] },
@@ -51,6 +54,7 @@ const DEFS: Record<string, MapDef> = {
     },
   },
   'Taller de cerámica': {
+    why: 'Probar el curso con pocas personas evita invertir en materiales, horno y difusión antes de saber si funciona.',
     results: [
       { id: 'programa', name: 'Un programa probado', why: 'Saber qué se enseña en cada sesión es lo que permite ofrecer el curso con confianza.', icon: 'documento', blocks: ['programa', 'prueba'] },
       { id: 'material', name: 'Material y horno listos', why: 'Sin barro, esmaltes y horno reservado no se puede dar ni una sesión.', icon: 'llama', blocks: ['materiales'] },
@@ -67,6 +71,7 @@ const DEFS: Record<string, MapDef> = {
     },
   },
   'Boletín del barrio': {
+    why: 'Es el canal que mantiene informados a los vecinos y da visibilidad a lo que pasa en el barrio, incluidos el huerto y el taller.',
     results: [
       { id: 'llega', name: 'Un boletín que llega cada mes', why: 'La constancia es lo que hace que los vecinos lo esperen y lo abran.', icon: 'carta', blocks: ['herramientas', 'envio'] },
       { id: 'leido', name: 'Contenido que la gente lee', why: 'Si lo que se cuenta interesa, el boletín crece solo.', icon: 'documento', blocks: ['contenido', 'envio'] },
@@ -104,7 +109,10 @@ export interface KeyResult {
 
 export interface ProjectMap {
   projectId: string
+  name: string
   objective?: string
+  /** Why the project matters (simulated AI); absent when nothing was proposed. */
+  why?: string
   results: KeyResult[]
   blocks: Block[]
   /** True when the AI has not proposed results for this project: only blocks are shown. */
@@ -126,7 +134,7 @@ export function projectMap(data: ProjectsData, projectId: string): ProjectMap {
     const tasks = blocks.filter((b) => r.blocks.includes(b.id)).flatMap((b) => b.tasks)
     return { ...r, done: tasks.filter((t) => stageOf(data, t, index) === 'cerrada').length, total: tasks.length }
   })
-  return { projectId, ...(project?.objective ? { objective: project.objective } : {}), results, blocks, noResults: results.length === 0 }
+  return { projectId, name: project?.name ?? '', ...(project?.objective ? { objective: project.objective } : {}), ...(def ? { why: def.why } : {}), results, blocks, noResults: results.length === 0 }
 }
 
 export const blockOfTask = (m: ProjectMap, taskId: string) => m.blocks.find((b) => b.tasks.some((t) => t.id === taskId))

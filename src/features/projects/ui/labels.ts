@@ -6,20 +6,30 @@ import type { Stage } from './view'
 /** P4a · The words the screens use. One place, so a state always reads the same. */
 
 export const STAGE_LABEL: Record<Stage, string> = {
-  lista: 'Lista',
-  'por-verificar': 'Por verificar',
-  bloqueada: 'Bloqueada',
-  'por-clasificar': 'Sin clasificar',
-  'en-aprobacion': 'Espera aprobación',
+  lista: 'Se puede hacer ya',
+  'por-verificar': 'Falta comprobar algo',
+  bloqueada: 'No puede avanzar todavía',
+  'por-clasificar': 'Estado por aclarar',
+  'en-aprobacion': 'Espera tu visto bueno',
+  cerrada: 'Cerrada',
+}
+
+/** E1 · The same states, short enough for a chip next to a task title. */
+export const STAGE_CHIP: Record<Stage, string> = {
+  lista: 'Se puede hacer',
+  'por-verificar': 'Comprobar',
+  bloqueada: 'No puede avanzar',
+  'por-clasificar': 'Por aclarar',
+  'en-aprobacion': 'Visto bueno',
   cerrada: 'Cerrada',
 }
 
 export const STAGE_HINT: Record<Stage, string> = {
-  lista: 'Se puede hacer ahora',
-  'por-verificar': 'Un requisito no se ha comprobado',
-  bloqueada: 'Espera otra tarea o un requisito',
-  'por-clasificar': 'Su estado aún no tiene clase',
-  'en-aprobacion': 'Ejecutada; falta tu decisión',
+  lista: 'Nada la frena',
+  'por-verificar': 'El dossier pide algo que nadie ha confirmado',
+  bloqueada: 'Espera a otra tarea o a algo que no se cumple',
+  'por-clasificar': 'El dossier usa una palabra que todavía no has aclarado',
+  'en-aprobacion': 'Está hecha; falta tu decisión',
   cerrada: 'Hecha o descartada',
 }
 

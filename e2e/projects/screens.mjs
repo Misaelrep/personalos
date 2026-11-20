@@ -96,18 +96,25 @@ try {
 
     await go(page, '#/')
     const card = await text(page, '[data-testid="project-card"]')
-    check('overview shows the project with its stages', /huerto de prueba/i.test(card) && /6\/6 abiertas/.test(card) && /Ninguna tarea lista/.test(card), card.replace(/\s+/g, ' '))
+    check('overview shows the project with its situation in plain words', /huerto de prueba/i.test(card) && /Necesita una decisión o una comprobación tuya antes de avanzar/.test(card), card.replace(/\s+/g, ' '))
+    const decide = (await text(page, '[data-testid="attention-decide"]')).replace(/\s+/g, ' ')
+    check('overview: what needs a decision, counted once per task', /Estado por aclarar .* 2/.test(decide) && /Falta comprobar algo .* 1/.test(decide) && !/visto bueno/.test(decide), decide)
+    const obody = await page.locator('body').innerText()
+    check('overview: nothing ready, and says where the reason is', obody.includes('Ninguna tarea se puede hacer todavía') && obody.includes('3 tareas no pueden avanzar todavía'))
     await shot(page, '01-proyectos.png')
 
     await page.locator('[data-testid="project-card"]').click()
     await page.waitForSelector('[data-testid="stage-strip"]')
     const strip = (await text(page, '[data-testid="stage-strip"]')).replace(/\s+/g, ' ')
-    check('project: 0 ready · 1 to verify · 3 blocked · 2 unclassified', /0 Lista/.test(strip) && /1 Por verificar/.test(strip) && /3 Bloqueada/.test(strip) && /2 Sin clasificar/.test(strip), strip)
+    check('project: 0 of 6 closed · 2 to clarify · 1 to check · 3 cannot move', /0 de 6 cerradas/.test(strip) && /2 con estado por aclarar/.test(strip) && /1 en las que falta comprobar algo/.test(strip) && /3 no pueden avanzar todavía/.test(strip), strip)
+    await page.locator('[data-testid="project-blocked"] summary').click()
     const body = await page.locator('body').innerText()
-    check('project: blockers in the dossier’s words', body.includes('espera HUE-01') && body.includes('«báscula» por verificar'))
-    check('project: no next action invented', body.includes('Ninguna tarea está lista todavía'))
+    check('project: why each task cannot move, in the dossier’s words', body.includes('Espera a «Comprobar la llave de paso» (HUE-01), que aún no está terminada.') && body.includes('Falta comprobar «báscula»'))
+    check('F03 · blocked summary does not blame other tasks when causes differ', (await text(page, '[data-testid="blocked-summary"]')) === 'No todas por la misma causa. Abre cada una para ver qué la frena.', await text(page, '[data-testid="blocked-summary"]'))
+    check('project: no next action invented', body.includes('Ninguna todavía.') && body.includes('Aclarar qué significa «Borrador existente»'))
     await shot(page, '02-proyecto.png')
 
+    await page.locator('[data-testid="project-tasks"] summary').click()
     await page.locator('[data-testid="task-row"]', { hasText: 'HUE-01' }).first().click()
     await page.waitForSelector('[data-testid="track"]')
     const track = (await text(page, '[data-testid="track"]')).replace(/\s+/g, ' ')
@@ -181,7 +188,7 @@ try {
       const { setNextAction } = await import('/src/features/projects/domain/ops.ts')
       const s = new ProjectsSession(browserStore('otra-pestaña', () => new Date().toISOString()), () => new Date().toISOString())
       await s.open()
-      await s.change((d) => setNextAction(d, 'src:HUE-01', 'Abrir la llave del jardín', { now: new Date().toISOString() }))
+      await s.change((d) => setNextAction(setNextAction(d, 'src:HUE-01', 'Abrir la llave del jardín', { now: new Date().toISOString() }), 'src:HUE-02', 'Comprar el codo de goteo', { now: new Date().toISOString() }))
     })
     await page.waitForTimeout(300)
     const before = await stored(page)
@@ -191,6 +198,12 @@ try {
     const after = JSON.parse(await stored(page))
     check('stale preview is recomputed on the newer data; the other tab’s change survives', after.generation === g3 + 1 && after.data.tasks.find((t) => t.sourceId === 'HUE-01').nextAction === 'Abrir la llave del jardín')
     await other.close()
+    // F01 · a written next action never makes a task that cannot move appear as «Se puede hacer ya».
+    await go(page, '#/')
+    await page.locator('[data-testid="project-card"]').first().click()
+    await page.waitForSelector('[data-testid="stage-strip"]')
+    const readyBox = (await page.locator('[data-testid="project-ready"]').count()) ? await text(page, '[data-testid="project-ready"]') : ''
+    check('F01 · blocked or unchecked tasks with a next action stay out of «Se puede hacer ya»', !/HUE-01|HUE-02|Comprar el codo|Abrir la llave/.test(readyBox) && (await page.locator('body').innerText()).includes('Ninguna todavía.'), readyBox)
 
     // ── 4 · Export and verify ──────────────────────────────────────────────────
     await go(page, '#/exportar')

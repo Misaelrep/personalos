@@ -11,6 +11,7 @@ import {
   REQUIREMENT_STATE_LABEL,
   shortHash,
   STAGE_HINT,
+  STAGE_LABEL,
   VERIFICATION_LABEL,
   WORK_CLASS_LABEL,
 } from './labels'
@@ -18,6 +19,7 @@ import { Card, Chip, Empty, Field, Mono, RowLink, Section, StageChip, Title, Top
 import { taskHref } from './ProjectView'
 import { committedWeeks } from './review'
 import { ConditionButtons, DecisionControl, EvidenceForm, OwnerControl, StatusControl } from './TaskActions'
+import { causeText, explain } from './attention'
 import { taskDetail, type Track } from './view'
 import { useWrite } from './write'
 
@@ -73,6 +75,7 @@ export function TaskView({ data, taskId }: { data: ProjectsData; taskId: string 
   const { task: t, project } = d
   const back = project ? `#/proyecto/${encodeURIComponent(project.id)}` : '#/'
   const extra = Object.entries(t.extra ?? {})
+  const why = explain(data, t)
 
   return (
     <>
@@ -90,13 +93,30 @@ export function TaskView({ data, taskId }: { data: ProjectsData; taskId: string 
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <StageChip stage={d.stage} />
-        <span className="text-[13px] text-ink-3">{STAGE_HINT[d.stage]}</span>
         {d.track.approved.returned && <Chip tone="warn">Devuelta</Chip>}
         {t.owner?.kind === 'agente' && <Chip>Encargo · {t.owner.name}</Chip>}
         {committedWeeks(data, t.id).map((w) => (
           <Chip key={w}>Compromiso · semana del {w.slice(8)}/{w.slice(5, 7)}</Chip>
         ))}
       </div>
+
+      <Card className="mb-4 px-4 py-3.5" testId="task-why">
+        <p className="text-[15px] font-medium leading-[1.4] text-ink">{STAGE_LABEL[d.stage]}</p>
+        {why.causes.length ? (
+          why.causes.map((c, i) => (
+            <p key={i} className="mt-1 text-[14px] leading-[1.5] text-ink-2">
+              {causeText(c)}
+            </p>
+          ))
+        ) : (
+          <p className="mt-1 text-[14px] leading-[1.5] text-ink-2">{STAGE_HINT[d.stage]}.</p>
+        )}
+        {why.waiters.length > 0 && (
+          <p className="mt-1.5 text-[13px] leading-[1.45] text-ink-3">
+            {why.waiters.length === 1 ? '1 tarea abierta espera' : `${why.waiters.length} tareas abiertas esperan`} directamente por esta. No es una prioridad; terminarla no garantiza que queden listas.
+          </p>
+        )}
+      </Card>
 
       <TrackRow track={d.track} />
 

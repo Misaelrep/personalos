@@ -21,10 +21,23 @@
   --pl-blue: 200, 216, 238;
   --pl-pink: 242, 218, 220;
   --pl-light: 255, 255, 255;
+  /* Secondary inks a step darker: they sit on metal, not on white. */
+  --ink-3: #465066;
+  --ink-4: #646c80;
 }
 
-/* ── Ambient layer ─────────────────────────────────────────────────────── */
+/* A soft white halo keeps text crisp over the moving metal (no plates, no blur). */
+.platino {
+  text-shadow: 0 0 1px rgba(255, 255, 255, 0.55), 0 0 12px rgba(255, 255, 255, 0.75);
+}
+.platino [class*='bg-[var(--control)]'],
+.platino [class*='bg-[var(--control)]'] * {
+  text-shadow: none;
+}
 
+/* ── Ambient layer: the living metal (metal-liquido.tsx) ─────────────── */
+
+/* CSS pearl underneath: what shows if WebGL is unavailable, and while it starts. */
 .pl-ambient {
   position: fixed;
   inset: 0;
@@ -37,94 +50,105 @@
     radial-gradient(ellipse 70vmax 40vmax at 30% 100%, rgba(var(--pl-pink), 0.45), transparent 72%),
     linear-gradient(165deg, #eceef3 0%, #dcdee7 38%, #e4e0ea 68%, #e9ecf2 100%);
 }
-
-/* A soft satin band: the metal's slow sheen. */
-.pl-ambient::before {
-  content: '';
+.pl-metal {
   position: absolute;
-  inset: -30%;
-  background: conic-gradient(from 210deg at 60% 40%, rgba(var(--pl-light), 0) 0deg, rgba(var(--pl-light), 0.5) 40deg, rgba(var(--pl-lavender), 0.18) 80deg, rgba(var(--pl-light), 0) 130deg, rgba(var(--pl-blue), 0.16) 220deg, rgba(var(--pl-light), 0) 300deg);
-  opacity: 0.7;
-  animation: pl-turn 60s linear infinite;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
-.pl-ray {
-  position: absolute;
-  left: -40vmax;
-  width: 220vmax;
-  border-radius: 50%;
-  transform: rotate(-58deg);
-  background: linear-gradient(90deg, rgba(var(--pl-light), 0) 0%, rgba(var(--pl-light), 0) 34%, rgba(var(--pl-light), 0.45) 46%, rgba(var(--pl-light), 0.95) 50%, rgba(var(--pl-light), 0.45) 54%, rgba(var(--pl-light), 0) 66%, rgba(var(--pl-light), 0) 100%);
-  will-change: transform;
-}
-.pl-ray.r1 { top: 10vh; height: 26vmax; animation: pl-drift-1 26s ease-in-out infinite alternate; }
-.pl-ray.r2 { top: 45vh; height: 14vmax; opacity: 0.7; animation: pl-drift-2 34s ease-in-out infinite alternate; }
-.pl-ray.r3 { top: 78vh; height: 34vmax; opacity: 0.55; background: linear-gradient(90deg, transparent 40%, rgba(var(--pl-pink), 0.55) 49%, rgba(var(--pl-light), 0.7) 50%, rgba(var(--pl-blue), 0.45) 51.5%, transparent 60%); animation: pl-drift-3 42s ease-in-out infinite alternate; }
-
-@keyframes pl-turn { to { transform: rotate(360deg); } }
-@keyframes pl-drift-1 { from { transform: rotate(-58deg) translateY(-7vmax); } to { transform: rotate(-58deg) translateY(7vmax); } }
-@keyframes pl-drift-2 { from { transform: rotate(-56deg) translateY(6vmax); } to { transform: rotate(-60deg) translateY(-6vmax); } }
-@keyframes pl-drift-3 { from { transform: rotate(-60deg) translateY(-4vmax); } to { transform: rotate(-57deg) translateY(5vmax); } }
-
-/* Intensity per screen: the map shows the most, the task the least. */
-.pl-ambient[data-intensity='discreto'] .pl-ray { opacity: 0.45; }
-.pl-ambient[data-intensity='discreto'] .pl-ray.r3 { opacity: 0.3; }
-.pl-ambient[data-intensity='calma'] .pl-ray { display: none; }
-.pl-ambient[data-intensity='calma']::before { opacity: 0.35; animation: none; }
-
-/* Reduced movement: the same light, still. */
-.pl-ambient[data-quieto='true']::before,
-.pl-ambient[data-quieto='true'] .pl-ray,
+/* Reduced movement: illustrations and orb reflections stand still too. */
 .pl-quieto .pl-anim,
-.pl-quieto .pl-anim * { animation: none !important; }
+.pl-quieto .pl-anim *,
+.platino[data-quieto='true'] .pl-orb::before { animation: none !important; }
 @media (prefers-reduced-motion: reduce) {
-  .pl-ambient::before, .pl-ray, .pl-anim, .pl-anim * { animation: none !important; }
+  .pl-anim, .pl-anim *, .pl-orb::before { animation: none !important; }
 }
 
-/* ── Platinum objects ──────────────────────────────────────────────────── */
+/* ── Platinum objects: metal spheres under the same light ──────────────── */
 
-/* Liquid metal orb: the project's purpose. */
+/* A · satin silver sphere: soft key light, dark metallic rim, floor bounce. */
 .pl-orb {
   position: relative;
+  isolation: isolate;
   border-radius: 9999px;
+  overflow: hidden;
   background:
-    radial-gradient(circle at 32% 26%, rgba(255, 255, 255, 1) 0%, rgba(255, 255, 255, 0.6) 18%, rgba(255, 255, 255, 0) 42%),
-    radial-gradient(circle at 70% 78%, rgba(var(--pl-pink), 0.7), rgba(var(--pl-pink), 0) 45%),
-    radial-gradient(circle at 80% 30%, rgba(var(--pl-blue), 0.85), rgba(var(--pl-blue), 0) 50%),
-    radial-gradient(circle at 25% 75%, rgba(var(--pl-lavender), 0.9), rgba(var(--pl-lavender), 0) 55%),
-    linear-gradient(160deg, #f7f7fa, #d9dbe3 60%, #e8e6ee);
+    radial-gradient(circle at 34% 24%, rgba(255, 255, 255, 1) 0%, rgba(255, 255, 255, 0.9) 9%, rgba(255, 255, 255, 0) 30%),
+    radial-gradient(ellipse 70% 30% at 50% 104%, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0) 70%),
+    radial-gradient(circle at 46% 42%, #f4f5f8 0%, #dcdee5 45%, #b4b8c5 78%, #8d92a3 100%);
   box-shadow:
-    inset 0 1px 1px rgba(255, 255, 255, 0.95),
-    inset 0 -8px 18px rgba(120, 124, 150, 0.18),
-    0 18px 40px -18px rgba(40, 46, 80, 0.35),
-    0 0 0 1px rgba(255, 255, 255, 0.7);
+    inset 0 2px 2px rgba(255, 255, 255, 0.9),
+    inset 0 -10px 22px rgba(70, 76, 100, 0.28),
+    0 22px 40px -18px rgba(30, 34, 60, 0.45),
+    0 3px 8px -4px rgba(30, 34, 60, 0.25);
 }
-.pl-orb::after {
-  /* Iridescent rim. */
+/* A slow reflection turning over the sphere: light on liquid metal. */
+.pl-orb::before {
   content: '';
   position: absolute;
-  inset: -1px;
+  inset: -20%;
+  z-index: -1;
+  background: conic-gradient(from 0deg, rgba(255, 255, 255, 0) 0deg, rgba(255, 255, 255, 0.55) 40deg, rgba(255, 255, 255, 0) 95deg, rgba(255, 255, 255, 0) 200deg, rgba(255, 255, 255, 0.35) 250deg, rgba(255, 255, 255, 0) 300deg);
+  animation: pl-turn 16s linear infinite;
+  mix-blend-mode: soft-light;
+}
+.pl-orb::after {
+  content: '';
+  position: absolute;
+  inset: 0;
   border-radius: inherit;
   padding: 1.5px;
-  background: conic-gradient(from 0deg, rgba(var(--pl-lavender), 0.9), rgba(var(--pl-blue), 0.9), rgba(255, 255, 255, 1), rgba(var(--pl-pink), 0.9), rgba(var(--pl-lavender), 0.9));
+  background: linear-gradient(160deg, rgba(255, 255, 255, 1), rgba(160, 165, 180, 0.6) 50%, rgba(255, 255, 255, 0.9));
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   pointer-events: none;
 }
+.pl-orb > * { position: relative; z-index: 1; }
 
-/* Smaller pearl node: results and blocks. */
+/* B · iridescent liquid metal: thin-film colours over a brighter chrome. */
+.platino[data-acabado='B'] .pl-orb {
+  background:
+    radial-gradient(circle at 34% 24%, rgba(255, 255, 255, 1) 0%, rgba(255, 255, 255, 0.95) 10%, rgba(255, 255, 255, 0) 32%),
+    radial-gradient(ellipse 70% 30% at 50% 104%, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0) 70%),
+    radial-gradient(circle at 78% 70%, rgba(var(--pl-pink), 0.95), rgba(var(--pl-pink), 0) 40%),
+    radial-gradient(circle at 20% 70%, rgba(var(--pl-lavender), 0.95), rgba(var(--pl-lavender), 0) 45%),
+    radial-gradient(circle at 80% 30%, rgba(var(--pl-blue), 0.95), rgba(var(--pl-blue), 0) 45%),
+    radial-gradient(circle at 46% 42%, #f6f6f9 0%, #dcdde6 45%, #a9adbd 80%, #858aa0 100%);
+}
+.platino[data-acabado='B'] .pl-orb::before {
+  background: conic-gradient(from 0deg, rgba(var(--pl-lavender), 0) 0deg, rgba(var(--pl-lavender), 0.9) 45deg, rgba(var(--pl-blue), 0.8) 90deg, rgba(255, 255, 255, 0) 140deg, rgba(var(--pl-pink), 0.85) 220deg, rgba(255, 255, 255, 0.7) 260deg, rgba(var(--pl-lavender), 0) 320deg);
+  animation-duration: 11s;
+  mix-blend-mode: overlay;
+}
+.platino[data-acabado='B'] .pl-orb::after {
+  background: conic-gradient(from 0deg, rgba(var(--pl-lavender), 1), rgba(var(--pl-blue), 1), rgba(255, 255, 255, 1), rgba(var(--pl-pink), 1), rgba(var(--pl-lavender), 1));
+}
+
+/* Smaller metal node: results and blocks. */
 .pl-node {
   position: relative;
   border-radius: 9999px;
   background:
-    radial-gradient(circle at 30% 25%, rgba(255, 255, 255, 1), rgba(255, 255, 255, 0) 50%),
-    linear-gradient(160deg, #fbfbfd, #e4e5ec 70%, #ecebf2);
-  box-shadow: inset 0 -4px 10px rgba(120, 124, 150, 0.14), 0 10px 24px -14px rgba(40, 46, 80, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.9);
+    radial-gradient(circle at 34% 26%, rgba(255, 255, 255, 1), rgba(255, 255, 255, 0) 45%),
+    radial-gradient(ellipse 70% 30% at 50% 104%, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0) 70%),
+    radial-gradient(circle at 46% 42%, #fafafc 0%, #e2e4ea 55%, #bfc3cf 100%);
+  box-shadow: inset 0 -5px 12px rgba(70, 76, 100, 0.2), 0 12px 24px -14px rgba(30, 34, 60, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.95);
+}
+.platino[data-acabado='B'] .pl-node {
+  background:
+    radial-gradient(circle at 34% 26%, rgba(255, 255, 255, 1), rgba(255, 255, 255, 0) 45%),
+    radial-gradient(circle at 80% 75%, rgba(var(--pl-pink), 0.8), rgba(var(--pl-pink), 0) 45%),
+    radial-gradient(circle at 18% 72%, rgba(var(--pl-lavender), 0.85), rgba(var(--pl-lavender), 0) 50%),
+    radial-gradient(circle at 46% 42%, #fbfbfd 0%, #e2e3ec 55%, #b8bccb 100%);
 }
 .pl-node[data-on='true'] {
-  box-shadow: inset 0 -4px 10px rgba(120, 124, 150, 0.14), 0 10px 28px -12px rgba(58, 130, 246, 0.45), 0 0 0 1.5px rgba(58, 130, 246, 0.55);
+  box-shadow: inset 0 -5px 12px rgba(70, 76, 100, 0.2), 0 12px 30px -12px rgba(58, 130, 246, 0.5), 0 0 0 1.5px rgba(58, 130, 246, 0.55);
 }
+
+@keyframes pl-turn { to { transform: rotate(360deg); } }
 
 /* ── Illustrations: subtle, slow, inside the orb only ─────────────────── */
 

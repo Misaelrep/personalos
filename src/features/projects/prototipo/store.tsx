@@ -30,6 +30,8 @@ export interface Proto {
   confirmed: string[]
   /** The exact map point a task was opened from, to return to it. */
   mapFrom?: string
+  /** Liquid Platinum finish being compared: A satin silver, B iridescent liquid metal. */
+  acabado: 'A' | 'B'
 }
 
 const prefersReduced = () => {
@@ -40,7 +42,7 @@ const prefersReduced = () => {
   }
 }
 
-const fresh = (): Proto => ({ data: INITIAL, sprint: null, today: TODAY, introSeen: [], motion: prefersReduced() ? 'reducido' : 'completo', notes: {}, confirmed: [] })
+const fresh = (): Proto => ({ data: INITIAL, sprint: null, today: TODAY, introSeen: [], motion: prefersReduced() ? 'reducido' : 'completo', notes: {}, confirmed: [], acabado: 'B' })
 
 interface Store {
   s: Proto

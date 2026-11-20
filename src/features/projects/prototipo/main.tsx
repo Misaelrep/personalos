@@ -7,6 +7,7 @@ import { ProjectPage, ProjectsView, PlanView, TaskPage } from './screens'
 import { DATES, ProtoProvider, SCENARIOS, useNotice, useProto } from './store'
 import { UpdatePage } from './update'
 import { SmartMap } from './mapa'
+import { MetalLiquido, type Intensidad } from './metal-liquido'
 import { Moment, Part } from './wizard'
 
 /**
@@ -122,18 +123,44 @@ function Controls() {
 }
 
 /** Ambient light: strongest on the map, discreet on lists, calm where you read and decide. */
-function Ambient({ intensity }: { intensity: 'vivo' | 'discreto' | 'calma' }) {
+function Ambient({ intensity }: { intensity: Intensidad }) {
   const { s } = useProto()
   return (
     <div aria-hidden className="pl-ambient" data-intensity={intensity} data-quieto={s.motion === 'reducido' ? 'true' : 'false'} data-testid="ambient">
-      <span className="pl-ray r1" />
-      <span className="pl-ray r2" />
-      <span className="pl-ray r3" />
+      <MetalLiquido acabado={s.acabado} intensidad={intensity} quieto={s.motion === 'reducido'} />
+    </div>
+  )
+}
+
+/** Compare the two Liquid Platinum finishes on the same screens. */
+function FinishPicker() {
+  const { s, set } = useProto()
+  return (
+    <div className="mb-4 flex items-center justify-center gap-2" data-testid="finish">
+      <span className="text-[11px] text-ink-3">Acabado</span>
+      {(
+        [
+          ['A', 'A · Plata satinada'],
+          ['B', 'B · Metal líquido'],
+        ] as const
+      ).map(([k, label]) => (
+        <button
+          key={k}
+          type="button"
+          data-testid={`finish-${k}`}
+          aria-pressed={s.acabado === k}
+          onClick={() => set((x) => ({ ...x, acabado: k }))}
+          className={`hit h-8 rounded-full px-3 text-[12px] ${s.acabado === k ? 'bg-[var(--control)] text-[var(--control-ink)]' : 'bg-[rgba(255,255,255,0.7)] text-ink-2'}`}
+        >
+          {label}
+        </button>
+      ))}
     </div>
   )
 }
 
 function App() {
+  const { s } = useProto()
   const r = route(useHash())
   const notice = useNotice()
   const top = r.kind === 'plan' || r.kind === 'proyectos'
@@ -157,12 +184,13 @@ function App() {
       <PlanView />
     )
   return (
-    <div className="platino relative min-h-dvh">
+    <div className="platino relative min-h-dvh" data-acabado={s.acabado} data-quieto={s.motion === 'reducido' ? 'true' : 'false'}>
       <Ambient intensity={r.kind === 'mapa' ? 'vivo' : r.kind === 'plan' || r.kind === 'proyectos' || r.kind === 'proyecto' ? 'discreto' : 'calma'} />
       <div className="mx-auto w-full max-w-[560px] px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[calc(6rem+env(safe-area-inset-bottom))]">
         <p className="pt-1 pb-3 text-center text-[10.5px] tracking-[0.08em] text-ink-4 uppercase" data-testid="proto-banner">
           Prototipo · proyectos inventados · IA simulada · no se guarda nada
         </p>
+        <FinishPicker />
         {top && (
           <div className="mb-5" data-testid="top-tabs">
             <Segmented

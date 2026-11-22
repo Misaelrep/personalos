@@ -17,6 +17,7 @@ import { GrokList } from './wizard'
 import { MapIcon } from './iconos'
 import { Ilustracion } from './ilustraciones'
 import { shortDate, useProto, type Proto } from './store'
+import { GAP, Sequence, useReveal } from './aparicion'
 
 /** PROTOTYPE · The screens. Each has one primary action; the rest is a link or closed until opened. */
 
@@ -61,7 +62,12 @@ export function PlanView() {
       </div>
     )
   }
-  return <ActivePlan key={s.today} />
+  // In order of importance: north star → three pillars → the month's results → the next action or decision.
+  return (
+    <Sequence id="plan" length={1.35}>
+      <ActivePlan key={s.today} />
+    </Sequence>
+  )
 }
 
 function ActivePlan() {
@@ -74,11 +80,17 @@ function ActivePlan() {
   const startsIn = now.before ? daysUntil(s.today, SPRINT.start) : 0
   // Before the start: what December needs from the person, so the first day is not lost.
   const prep = now.before ? planned(s.data, sp, 'dic').filter((r) => kindOf(r.stage) === 'decision') : []
+  const reveal = useReveal()
+  const PILLAR = 0.32
+  const RESULT = PILLAR + sp.pillars.length * GAP + 0.06
+  const NEXT = RESULT + sp.pillars.length * 0.12 + 0.06
   return (
-    <div data-testid="plan-active">
-      <Kicker>Plan de 90 días · {now.before ? `empieza el 1 de diciembre, en ${startsIn} días` : now.after ? 'terminado' : `${MONTHS.find((m) => m.key === now.month)!.label.toLowerCase()}, mes ${MONTHS.findIndex((m) => m.key === now.month) + 1} de 3`}</Kicker>
+    <div data-testid="plan-active" className="flex flex-col">
+      <div {...reveal(0)}>
+        <Kicker>Plan de 90 días · {now.before ? `empieza el 1 de diciembre, en ${startsIn} días` : now.after ? 'terminado' : `${MONTHS.find((m) => m.key === now.month)!.label.toLowerCase()}, mes ${MONTHS.findIndex((m) => m.key === now.month) + 1} de 3`}</Kicker>
+      </div>
       {/* 1 · The north star: the one sentence everything answers to. Largest, with its own luminous orb. */}
-      <section className="surface relative mt-3 overflow-hidden rounded-[26px] px-4 pt-3.5 pb-4" data-testid="north-star">
+      <section {...reveal(0.06, 'surface relative mt-3 overflow-hidden rounded-[26px] px-4 pt-3.5 pb-4')} data-testid="north-star">
         <p className="text-[11px] font-medium tracking-[0.16em] text-[#6d4fd8] uppercase">Estrella polar</p>
         <div className="mt-2.5 flex items-center gap-3.5">
           <div className="pl-hero shrink-0">
@@ -92,10 +104,10 @@ function ActivePlan() {
         </div>
       </section>
       {/* The light that runs from the star down to the pillars. */}
-      <span aria-hidden className="mx-auto block h-5 w-px bg-[linear-gradient(180deg,rgba(167,139,250,0.9),rgba(58,130,246,0.5))]" />
+      <span aria-hidden {...reveal(0.22, 'mx-auto block h-5 w-px bg-[linear-gradient(180deg,rgba(167,139,250,0.9),rgba(58,130,246,0.5))]')} />
 
       {prep.length > 0 ? (
-        <Box tone="focus" className="mt-5" testId="before-start">
+        <Box tone="focus" className={`mt-5 ${reveal(NEXT).className}`} style={reveal(NEXT).style} testId="before-start">
           <p className="text-[12px] text-ink-3">Antes de empezar</p>
           <p className="mt-1 text-[15px] leading-[1.4] text-ink">
             {prep.length === 1 ? 'Una acción de diciembre necesita' : `${prep.length} acciones de diciembre necesitan`} antes una decisión tuya. Resolverlas ahora deja libre el primer día.
@@ -113,7 +125,7 @@ function ActivePlan() {
         </Box>
       ) : (
         here && (
-          <Box tone="focus" className="mt-5" testId="continue-here">
+          <Box tone="focus" className={`mt-5 ${reveal(NEXT).className}`} style={reveal(NEXT).style} testId="continue-here">
             <p className="text-[12px] text-ink-3">{now.before ? 'Lo primero, el 1 de diciembre' : 'Continúa aquí'}</p>
             <p className="mt-1 text-[16px] leading-[1.35] text-ink">{here.task.title}</p>
             <p className="mt-1 flex flex-wrap items-center gap-2 text-[12.5px] text-ink-3">
@@ -129,7 +141,7 @@ function ActivePlan() {
         )
       )}
 
-      <div className="mt-6">
+      <div {...reveal(PILLAR, 'mt-6')}>
         <Segmented
           testId="months"
           value={month}
@@ -141,7 +153,7 @@ function ActivePlan() {
         {sp.pillars.map((p, pi) => {
           const mine = rows.filter((r) => r.pillar.id === p.id)
           return (
-            <section key={p.id} className="surface-quiet rounded-[22px] px-4 pt-3.5 pb-2.5" data-testid="pillar">
+            <section key={p.id} {...reveal(PILLAR + pi * GAP, 'surface-quiet rounded-[22px] px-4 pt-3.5 pb-2.5')} data-testid="pillar">
               {/* 2 · A pillar: its number, its name, and the projects that feed it. */}
               <div className="flex items-start gap-3">
                 <span className="pl-node mt-0.5 grid size-8 shrink-0 place-items-center text-[13px] font-medium text-[#4b5270]" aria-hidden>
@@ -164,6 +176,7 @@ function ActivePlan() {
                 </div>
               </div>
               {/* 3 · The monthly result: set apart as a milestone the actions lead to. */}
+              <div {...reveal(RESULT + pi * 0.12)}>
               <div className="mt-3 rounded-[16px] bg-[linear-gradient(135deg,rgba(var(--pl-lavender),0.4),rgba(var(--pl-blue),0.3)_55%,rgba(var(--pl-pink),0.3))] px-3.5 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.85),0_0_0_1px_rgba(255,255,255,0.6)]" data-testid="month-result">
                 <p className="flex items-center gap-1.5 text-[11px] font-medium tracking-[0.12em] text-ink-3 uppercase">
                   <span aria-hidden className="size-1.5 rotate-45 bg-[#8b6fe0]" />
@@ -178,12 +191,13 @@ function ActivePlan() {
                 })}
                 {!mine.length && <p className="py-2 text-[13px] text-[#a86a00]">Sin acciones este mes: falta planificarlo.</p>}
               </div>
+              </div>
             </section>
           )
         })}
       </div>
 
-      <div className="mt-4">
+      <div {...reveal(NEXT + GAP, 'mt-4')}>
         <More title="Grok, asesor opcional" testId="grok">
           <GrokList sp={sp} />
         </More>
@@ -399,12 +413,15 @@ function Editable({ value, onSave, testId }: { value: string; onSave: (v: string
   )
 }
 
-const Item = ({ k, children, testId }: { k: React.ReactNode; children: React.ReactNode; testId?: string }) => (
-  <div className="border-b border-[var(--line)] py-3 last:border-b-0" data-testid={testId}>
-    <p className="text-[12px] text-ink-3">{k}</p>
-    {children}
-  </div>
-)
+function Item({ k, children, testId, at = 0 }: { k: React.ReactNode; children: React.ReactNode; testId?: string; at?: number }) {
+  const reveal = useReveal()
+  return (
+    <div {...reveal(at, 'border-b border-[var(--line)] py-3 last:border-b-0')} data-testid={testId}>
+      <p className="text-[12px] font-medium text-ink-3">{k}</p>
+      {children}
+    </div>
+  )
+}
 const P = ({ children }: { children: React.ReactNode }) => <p className="mt-0.5 text-[14.5px] leading-[1.5] text-ink">{children}</p>
 
 const TaskLinks = ({ tasks }: { tasks: Task[] }) => (
@@ -435,15 +452,18 @@ function TaskContext({ t, need, mapLink }: { t: Task; need: string; mapLink?: st
   const estimate = t.estimate?.literal ?? (t.estimateHours ? `${t.estimateHours} h` : undefined)
   const save = (k: keyof Proto['notes'][string]) => (v: string) => set((x) => ({ ...x, notes: { ...x.notes, [t.id]: { ...x.notes[t.id], [k]: v } }, notice: 'Guardado solo en esta demostración.' }))
   const aiTag = (k: keyof Proto['notes'][string]) => (note[k] ? <span className="ml-1.5 text-[11px] text-ink-4">editado por ti</span> : <AiTag />)
+  const reveal = useReveal()
+  // Revealed in the order it has to be read: do → why → implies → before starting → what it achieves.
+  const at = (i: number) => 0.1 + i * GAP
   return (
     <div data-testid="task-context">
-      <div className="mt-2" data-testid="ctx-do">
+      <div {...reveal(at(0), 'mt-2')} data-testid="ctx-do">
         <Editable value={note.hacer ?? brief.hacer} onSave={save('hacer')} testId="hacer" />
         <p className="mt-0.5 text-[11px] text-ink-4">Descripción {note.hacer ? 'editada por ti' : 'sugerida a partir del título'}{!note.hacer && <AiTag />}</p>
       </div>
 
       {/* Where it sits: the same chain as on the map, small. */}
-      <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[12px]" data-testid="ctx-chain">
+      <div {...reveal(at(0.5), 'mt-3 flex flex-wrap items-center gap-1.5 text-[12px]')} data-testid="ctx-chain">
         {block && (
           <span className="inline-flex items-center gap-1 rounded-full bg-[rgba(255,255,255,0.7)] px-2.5 py-1 text-ink-2">
             <MapIcon name={block.icon} className="size-3.5" />
@@ -467,7 +487,7 @@ function TaskContext({ t, need, mapLink }: { t: Task; need: string; mapLink?: st
       </div>
 
       <Box className="mt-4" testId="task-card">
-        <Item k={<>Por qué importa{aiTag('porque')}</>} testId="ctx-why">
+        <Item at={at(1)} k={<>Por qué importa{aiTag('porque')}</>} testId="ctx-why">
           <Editable value={note.porque ?? brief.porque} onSave={save('porque')} testId="porque" />
           {results.length > 0 ? (
             <p className="mt-1 text-[12.5px] leading-[1.4] text-ink-3">Contribuye a {results.map((r) => `«${r.name}»`).join(' y ')}, a través de su bloque.</p>
@@ -475,10 +495,15 @@ function TaskContext({ t, need, mapLink }: { t: Task; need: string; mapLink?: st
             <p className="mt-1 text-[12.5px] leading-[1.4] text-ink-3">Este proyecto aún no tiene resultados propuestos: no se inventa a cuál contribuye.</p>
           )}
         </Item>
-        <Item k={<>Qué implica{aiTag('implies')}</>} testId="ctx-implies">
+        <Item at={at(2)} k={<>Qué implica{aiTag('implies')}</>} testId="ctx-implies">
           <Editable value={note.implies ?? brief.implica} onSave={save('implies')} testId="implies" />
         </Item>
-        <Item k={t.deliverable || t.acceptance.length ? 'Qué debo conseguir · del dossier' : <>Qué debo conseguir{aiTag('deliver')}</>} testId="ctx-deliver">
+        <Item at={at(3)} k={<>Qué necesito antes de empezar<LocalTag /></>} testId="ctx-before">
+          <P>{need}</P>
+          {node.waitsFor.length > 0 && <TaskLinks tasks={node.waitsFor} />}
+          {pending.length > 0 && <p className="mt-1 text-[12.5px] leading-[1.4] text-ink-3">Condiciones del dossier sin confirmar: {pending.map((x) => `«${x}»`).join(', ')}.</p>}
+        </Item>
+        <Item at={at(4)} k={t.deliverable || t.acceptance.length ? 'Qué debo conseguir · del dossier' : <>Qué debo conseguir{aiTag('deliver')}</>} testId="ctx-deliver">
           {t.deliverable || t.acceptance.length ? (
             <>
               {t.deliverable && <P>{t.deliverable}</P>}
@@ -488,12 +513,7 @@ function TaskContext({ t, need, mapLink }: { t: Task; need: string; mapLink?: st
             <Editable value={note.deliver ?? 'El dossier no lo dice. Propuesta: escribe aquí qué quedará hecho cuando la termines.'} onSave={save('deliver')} testId="deliver" />
           )}
         </Item>
-        <Item k={<>Qué necesito antes de empezar<LocalTag /></>} testId="ctx-before">
-          <P>{need}</P>
-          {node.waitsFor.length > 0 && <TaskLinks tasks={node.waitsFor} />}
-          {pending.length > 0 && <p className="mt-1 text-[12.5px] leading-[1.4] text-ink-3">Condiciones del dossier sin confirmar: {pending.map((x) => `«${x}»`).join(', ')}.</p>}
-        </Item>
-        <Item k={<>Qué permite hacer después<LocalTag /></>} testId="ctx-after">
+        <Item at={at(5)} k={<>Qué permite hacer después<LocalTag /></>} testId="ctx-after">
           {node.unlocks.length ? (
             <>
               <P>{node.unlocks.length === 1 ? 'Esta tarea la espera:' : `La esperan ${node.unlocks.length} tareas:`}</P>
@@ -505,14 +525,14 @@ function TaskContext({ t, need, mapLink }: { t: Task; need: string; mapLink?: st
           )}
         </Item>
         {estimate && (
-          <Item k="Tiempo estimado · del dossier">
+          <Item at={at(5.5)} k="Tiempo estimado · del dossier">
             <P>{estimate}</P>
           </Item>
         )}
       </Box>
 
       {/* Execution, verification and approval stay three separate things. */}
-      <div className="mt-3 grid grid-cols-3 gap-1.5 text-center text-[11.5px] leading-[1.3]" data-testid="ctx-track">
+      <div {...reveal(at(6), 'mt-3 grid grid-cols-3 gap-1.5 text-center text-[11.5px] leading-[1.3]')} data-testid="ctx-track">
         {[
           ['Ejecución', TRACK_TEXT.executed[track.executed.state]],
           ['Verificación', track.verified.state === 'sin-dato' ? 'Sin dato' : track.verified.state],
@@ -627,11 +647,9 @@ export function TaskPage({ id }: { id: string }) {
 
   return (
     <div data-testid="task">
+      <Sequence id={`ficha:${t.id}`} length={1.05}>
       {fromMap ? <Back href={fromMap} label="Volver al mapa" /> : <Back href={`#/proyecto/${encodeURIComponent(p.id)}`} label={p.name} />}
-      <div className="mt-1">
-        {stage !== 'cerrada' && <Kicker>Qué debo hacer</Kicker>}
-        <H1>{t.title}</H1>
-      </div>
+      <TaskTitle kicker={stage !== 'cerrada'} title={t.title} />
       {mapLink && (stage === 'cerrada' || stage === 'en-aprobacion') && (
         <p className="mt-2">
           <TextLink href={mapLink} testId="task-to-map">
@@ -653,11 +671,7 @@ export function TaskPage({ id }: { id: string }) {
           ))}
         </Box>
       )}
-      {action && (
-        <div className="mt-5" data-testid="task-action">
-          {action}
-        </div>
-      )}
+      {action && <TaskAction at={0.1 + 7 * GAP}>{action}</TaskAction>}
       <div className="mt-6">
         <More title="Más información" testId="task-more">
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-[13.5px]">
@@ -698,6 +712,28 @@ export function TaskPage({ id }: { id: string }) {
           </dl>
         </More>
       </div>
+      </Sequence>
+    </div>
+  )
+}
+
+/** 1 · What to do: the title appears first. */
+function TaskTitle({ kicker, title }: { kicker: boolean; title: string }) {
+  const reveal = useReveal()
+  return (
+    <div {...reveal(0, 'mt-1')}>
+      {kicker && <Kicker>Qué debo hacer</Kicker>}
+      <H1>{title}</H1>
+    </div>
+  )
+}
+
+/** The action comes last, once the reasons are on screen; it can be used at any moment. */
+function TaskAction({ at, children }: { at: number; children: React.ReactNode }) {
+  const reveal = useReveal()
+  return (
+    <div {...reveal(at, 'mt-5')} data-testid="task-action">
+      {children}
     </div>
   )
 }

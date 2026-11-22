@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { Inline } from '../ui/inline'
 
 /** PROTOTYPE · Compact pieces: ELYUM's tokens, less height, one primary action per screen. */
@@ -26,7 +26,7 @@ export function H1({ children }: { children: ReactNode }) {
   return <h1 className="font-display text-[27px] leading-[1.1] font-medium tracking-[-0.025em] text-balance text-ink">{children}</h1>
 }
 
-export function Box({ children, className = '', tone = 'surface', testId }: { children: ReactNode; className?: string; tone?: 'surface' | 'quiet' | 'focus'; testId?: string }) {
+export function Box({ children, className = '', tone = 'surface', testId, style }: { children: ReactNode; className?: string; tone?: 'surface' | 'quiet' | 'focus'; testId?: string; style?: CSSProperties }) {
   const t =
     tone === 'focus'
       ? 'surface shadow-[0_0_0_1px_color-mix(in_srgb,var(--color-electric)_32%,transparent),0_24px_46px_-24px_rgba(58,130,246,0.45)]'
@@ -34,7 +34,7 @@ export function Box({ children, className = '', tone = 'surface', testId }: { ch
         ? 'surface-quiet'
         : 'surface'
   return (
-    <div className={`${t} rounded-[18px] px-4 py-3 ${className}`} data-testid={testId}>
+    <div className={`${t} rounded-[18px] px-4 py-3 ${className}`} style={style} data-testid={testId}>
       {children}
     </div>
   )

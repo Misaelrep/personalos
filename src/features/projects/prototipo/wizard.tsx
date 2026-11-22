@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Sequence, useStagger } from './aparicion'
 import { indexTasks } from '../domain/derive'
 import { stageOf } from '../ui/view'
 import { AiTag, Box, H1, Kicker, KindTag, LocalTag, Primary, Secondary, Segmented, go } from './kit'
@@ -77,7 +78,17 @@ function Header({ n, title, kicker }: { n: number; title: string; kicker: string
 }
 
 /** The three moments: #/plan/1, #/plan/2, #/plan/3. */
+/** Planning: each section comes in after the previous one (not extra steps; everything can be used at once). */
 export function Moment({ n }: { n: number }) {
+  return (
+    <Sequence id={`momento:${n}`} length={1.1}>
+      <MomentBody n={n} />
+    </Sequence>
+  )
+}
+
+function MomentBody({ n }: { n: number }) {
+  const stagger = useStagger()
   const { s, sp, patch } = usePlan()
   const m = Math.min(3, Math.max(1, n))
   useEffect(() => {
@@ -87,7 +98,7 @@ export function Moment({ n }: { n: number }) {
     if (m >= 2 && !(s.sprint?.pillars.length ?? 0)) patch((x) => ({ ...proposeStrategy(s.data, x.hoursPerWeek), step: m }))
   }, [m])
   return (
-    <div data-testid="wizard" data-moment={m}>
+    <div data-testid="wizard" data-moment={m} className={stagger}>
       <Header n={m} kicker={`Momento ${m} de 3 · ${SPRINT.label}`} title={MOMENTS[m - 1]} />
       {m === 1 && (
         <>
@@ -109,8 +120,9 @@ function Strategy({ sp, patch }: { sp: Sprint; patch: Patch }) {
   const [hoursChoice, setHours] = useState(sp.hoursPerWeek)
   const index = indexTasks(s.data)
   const name = (id: string) => s.data.projects.find((p) => p.id === id)?.name
+  const stagger = useStagger()
   return (
-    <div data-testid="strategy">
+    <div data-testid="strategy" className={stagger}>
       <p className="text-[14px] leading-[1.45] text-ink-3">
         Una propuesta completa para que la edites, hecha con tus proyectos, sus dependencias y tu tiempo.
         <AiTag />
@@ -210,8 +222,9 @@ function Review({ sp, patch }: { sp: Sprint; patch: Patch }) {
   const check = checkPlan(s.data, sp)
   const pillar = (id: string) => sp.pillars.find((p) => p.id === id)!
   const prereqs = check.prerequisites.filter((p) => !dismissed.includes(p.task.id))
+  const stagger = useStagger()
   return (
-    <div data-testid="review">
+    <div data-testid="review" className={stagger}>
       <p className="text-[14px] leading-[1.45] text-ink-3">
         Lo que pasará cada mes, con lo que hace falta para lograrlo.
         <LocalTag />
@@ -330,10 +343,19 @@ export function GrokList({ sp }: { sp: Sprint }) {
 
 /** One part of the plan on its own: #/plan/paso/2…5. */
 export function Part({ step }: { step: number }) {
+  return (
+    <Sequence id={`apartado:${step}`} length={1.1}>
+      <PartBody step={step} />
+    </Sequence>
+  )
+}
+
+function PartBody({ step }: { step: number }) {
+  const stagger = useStagger()
   const { sp, patch } = usePlan()
   const n = Math.min(5, Math.max(2, step))
   return (
-    <div data-testid="wizard-part" data-step={n}>
+    <div data-testid="wizard-part" data-step={n} className={stagger}>
       <Header n={0} kicker="Revisar un apartado" title={PARTS[n]} />
       {n === 2 && <StepNorthStar sp={sp} patch={patch} />}
       {n === 3 && <StepPillars sp={sp} patch={patch} />}

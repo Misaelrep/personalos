@@ -31,6 +31,7 @@ uniform float uContrast; // depth of the metal shading
 uniform float uVeil;     // lightening for reading
 uniform float uGloss;    // sharpness of the white reflections
 uniform float uFloor;    // the darkest the metal may get (legibility): troughs keep their depth above this
+uniform float uRead;     // how much the light lines and sharp reflections calm down in the upper, reading area
 
 float h(vec2 p, float t){
   vec2 q = p;
@@ -66,23 +67,29 @@ void main(){
   float sky = smoothstep(-0.65, 0.9, R.y * 0.75 + R.x * 0.35);
   // Studio environment with a second, broad softbox on the left: wide silver lobes, not thin lines.
   float box2 = smoothstep(0.15, 0.75, -R.x * 0.8 + R.y * 0.25);
-  vec3 env = mix(vec3(0.60, 0.615, 0.675), vec3(0.975, 0.977, 0.99), sky);
+  // Silver Flow: a lighter silver base (iteration 1) with the depth of iteration 2.
+  vec3 env = mix(vec3(0.675, 0.688, 0.74), vec3(0.982, 0.984, 0.995), sky);
   env = mix(env, vec3(0.90, 0.905, 0.935), box2 * 0.38);
   float diff = clamp(dot(n, L), 0.0, 1.0);
   float rl = clamp(dot(reflect(-L, n), V), 0.0, 1.0);
   float spec = pow(rl, uGloss);
   float sheen = pow(rl, 3.2);
-  // Wide soft folds where the surface turns: broad tonal bands instead of isolated bright curves.
+  // Wide soft folds where the surface turns (depth)…
   float band = pow(1.0 - abs(sin(c * 2.2 + t * 0.10)), 3.5);
+  // …and the luminous trajectories that flow along the metal (fluidity), tuned on their own.
+  float flow = pow(1.0 - abs(sin(c * 3.0 + t * 0.16)), 12.0);
+  // Reading area: in the upper part of the screen, lines and sharp highlights calm down so no strong
+  // reflection crosses the text; the base and the shadows are untouched.
+  float read = 1.0 - uRead * smoothstep(0.38, 0.8, gl_FragCoord.y / uRes.y);
 
   vec3 col = env * 0.78 + vec3(0.88, 0.89, 0.92) * diff * 0.22;
   float ang = dot(n, V);
   vec3 film = tint(ang * 1.4 + c * 0.22 + t * 0.025);
   col = mix(col, col * film * 1.10, uIri * (1.1 - ang * 0.55) * (0.65 + 0.35 * sin(c * 2.0 + t * 0.2)));
-  col += vec3(1.0) * (spec * 0.62 + sheen * 0.16 + band * 0.07 * uWave);
-  // Depth: shade the troughs toward cool graphite and let the crests open up, same average light.
-  col *= 0.80 + 0.20 * sky;
-  col *= 0.93 + 0.14 * smoothstep(-0.8, 0.8, c);
+  col += vec3(1.0) * (spec * 0.66 * read + sheen * 0.15 + band * 0.06 * uWave + flow * 0.26 * uWave * read);
+  // Shadows, tuned apart from the base: cool graphite in the troughs, softer than iteration 2.
+  col *= 0.855 + 0.145 * sky;
+  col *= 0.95 + 0.10 * smoothstep(-0.8, 0.8, c);
 
   col = mix(vec3(0.90, 0.905, 0.93), col, uContrast);
   col = mix(col, vec3(0.955, 0.957, 0.968), uVeil);
@@ -96,13 +103,13 @@ const FINISH: Record<Acabado, { wave: number; iri: number; contrast: number; glo
   // A is kept only as the reference of iteration 1; the chosen base is B.
   A: { wave: 0.6, iri: 0.18, contrast: 0.78, gloss: 22, speed: 0.32 },
   // B · liquid metal, iteration 2: more material (deeper folds, wide silver reflections), subtle iridescence.
-  B: { wave: 1.0, iri: 0.5, contrast: 1.0, gloss: 24, speed: 0.5 },
+  B: { wave: 1.0, iri: 0.5, contrast: 1.0, gloss: 26, speed: 0.56 },
 }
-const LEVEL: Record<Intensidad, { veil: number; speed: number; still: boolean; floor: number }> = {
-  vivo: { veil: 0.04, speed: 1.2, still: false, floor: 0.56 },
-  enfoque: { veil: 0.27, speed: 0.75, still: false, floor: 0.64 },
-  limpio: { veil: 0.46, speed: 0.55, still: false, floor: 0.7 },
-  calma: { veil: 0.56, speed: 0, still: true, floor: 0.73 },
+const LEVEL: Record<Intensidad, { veil: number; speed: number; still: boolean; floor: number; read: number }> = {
+  vivo: { veil: 0.04, speed: 1.2, still: false, floor: 0.58, read: 0.75 },
+  enfoque: { veil: 0.06, speed: 0.75, still: false, floor: 0.64, read: 0.55 },
+  limpio: { veil: 0.46, speed: 0.55, still: false, floor: 0.7, read: 0.5 },
+  calma: { veil: 0.48, speed: 0, still: true, floor: 0.73, read: 0.5 },
 }
 
 export function MetalLiquido({ acabado, intensidad, quieto }: { acabado: Acabado; intensidad: Intensidad; quieto: boolean }) {
@@ -135,7 +142,7 @@ export function MetalLiquido({ acabado, intensidad, quieto }: { acabado: Acabado
     gl.enableVertexAttribArray(loc)
     gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0)
     const u = (n: string) => gl.getUniformLocation(prog, n)
-    const U = { res: u('uRes'), time: u('uTime'), wave: u('uWave'), iri: u('uIri'), contrast: u('uContrast'), veil: u('uVeil'), gloss: u('uGloss'), floor: u('uFloor') }
+    const U = { res: u('uRes'), time: u('uTime'), wave: u('uWave'), iri: u('uIri'), contrast: u('uContrast'), veil: u('uVeil'), gloss: u('uGloss'), floor: u('uFloor'), read: u('uRead') }
 
     const size = () => {
       const w = Math.max(1, Math.round(window.innerWidth * 0.5))
@@ -163,6 +170,7 @@ export function MetalLiquido({ acabado, intensidad, quieto }: { acabado: Acabado
       gl.uniform1f(U.veil, l.veil)
       gl.uniform1f(U.gloss, f.gloss)
       gl.uniform1f(U.floor, l.floor)
+      gl.uniform1f(U.read, l.read)
       gl.drawArrays(gl.TRIANGLES, 0, 3)
       ;(window as unknown as { __metalFrames?: number }).__metalFrames = ((window as unknown as { __metalFrames?: number }).__metalFrames ?? 0) + 1
     }

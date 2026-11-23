@@ -21,9 +21,13 @@
   --pl-blue: 200, 216, 238;
   --pl-pink: 242, 218, 220;
   --pl-light: 255, 255, 255;
-  /* Secondary inks a step darker: they sit on metal, not on white. */
-  --ink-3: #465066;
-  --ink-4: #646c80;
+  /* Secondary inks dark enough for 4.5:1 over the darkest moment of the moving metal, not only on white.
+     The hierarchy comes from size and weight; the ink stays readable everywhere. */
+  --ink-2: #2c3850;
+  --ink-3: #343c50;
+  --ink-4: #343c50;
+  /* Links and accents in a deep blue that keeps 4.5:1 on metal; the bright electric stays in the light itself. */
+  --color-electric: #15378a;
   /* Surfaces: a fine silver rim that turns lavender at the far corner, a soft sheen, controlled depth. */
   --glass-border: rgba(255, 255, 255, 0.72);
   --glass-rim: linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(190, 196, 216, 0.38) 38%, rgba(255, 255, 255, 0.3) 62%, rgba(var(--pl-lavender), 0.6));
@@ -50,7 +54,7 @@
 
 /* Bottom bar: a pearl veil, and the active section marked by a small bead of metal. */
 .platino .bottom-nav::before {
-  background: linear-gradient(180deg, transparent, rgba(232, 234, 241, 0.8) 42%, rgba(226, 228, 237, 0.95) 72%);
+  background: linear-gradient(180deg, rgba(236, 237, 243, 0) 0%, rgba(236, 237, 243, 0.94) 28%, rgba(232, 233, 240, 0.98) 60%);
 }
 .platino .bottom-nav [aria-current='page'] > span:first-child {
   width: 6px;
@@ -242,11 +246,6 @@
   background: linear-gradient(180deg, rgba(var(--pl-lavender), 0.9), rgba(var(--pl-blue), 0.9) 50%, rgba(var(--pl-pink), 0.7));
 }
 
-/* On the map the text sits straight on the metal: its secondary inks are one more step darker there. */
-.platino [data-testid='smart-map'] {
-  --ink-3: #363f55;
-  --ink-4: #4d566b;
-}
 
 /* ── Sequential appearance (aparicion.tsx), after HOY's FADE: a small rise, ease-out ─────── */
 .pl-in,
@@ -273,3 +272,16 @@
 .platino[data-quieto='true'] .pl-in,
 .platino[data-quieto='true'] .pl-seq > *,
 .platino[data-quieto='true'] .pl-dot-on { animation: none !important; }
+
+/* Opening a section: its content comes in piece by piece, briefly. Only when the person opens it. */
+.platino details[data-anim='true'] > .pl-open > * {
+  animation: pl-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.platino details[data-anim='true'] > .pl-open > :nth-child(2) { animation-delay: 60ms; }
+.platino details[data-anim='true'] > .pl-open > :nth-child(3) { animation-delay: 120ms; }
+.platino details[data-anim='true'] > .pl-open > :nth-child(4) { animation-delay: 180ms; }
+.platino details[data-anim='true'] > .pl-open > :nth-child(n + 5) { animation-delay: 220ms; }
+.platino[data-quieto='true'] details[data-anim='true'] > .pl-open > * { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .platino details[data-anim='true'] > .pl-open > * { animation: none; }
+}

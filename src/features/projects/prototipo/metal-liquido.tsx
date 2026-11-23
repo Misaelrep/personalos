@@ -68,7 +68,7 @@ void main(){
   // Studio environment with a second, broad softbox on the left: wide silver lobes, not thin lines.
   float box2 = smoothstep(0.15, 0.75, -R.x * 0.8 + R.y * 0.25);
   // Silver Flow: a lighter silver base (iteration 1) with the depth of iteration 2.
-  vec3 env = mix(vec3(0.675, 0.688, 0.74), vec3(0.982, 0.984, 0.995), sky);
+  vec3 env = mix(vec3(0.765, 0.77, 0.815), vec3(0.985, 0.985, 0.996), sky);
   env = mix(env, vec3(0.90, 0.905, 0.935), box2 * 0.38);
   float diff = clamp(dot(n, L), 0.0, 1.0);
   float rl = clamp(dot(reflect(-L, n), V), 0.0, 1.0);
@@ -86,10 +86,13 @@ void main(){
   float ang = dot(n, V);
   vec3 film = tint(ang * 1.4 + c * 0.22 + t * 0.025);
   col = mix(col, col * film * 1.10, uIri * (1.1 - ang * 0.55) * (0.65 + 0.35 * sin(c * 2.0 + t * 0.2)));
-  col += vec3(1.0) * (spec * 0.66 * read + sheen * 0.15 + band * 0.06 * uWave + flow * 0.26 * uWave * read);
+  col += vec3(1.0) * (spec * 0.62 * read + sheen * 0.15 + band * 0.06 * uWave + flow * 0.32 * uWave * read);
   // Shadows, tuned apart from the base: cool graphite in the troughs, softer than iteration 2.
-  col *= 0.855 + 0.145 * sky;
-  col *= 0.95 + 0.10 * smoothstep(-0.8, 0.8, c);
+  col *= 0.915 + 0.085 * sky;
+  col *= 0.965 + 0.07 * smoothstep(-0.8, 0.8, c);
+  // Pearl: a faint lavender over the whole metal and a rosy warmth rising from the bottom, as in the reference captures.
+  col *= vec3(1.012, 0.992, 1.024);
+  col = mix(col, col * vec3(1.035, 0.985, 0.992), (1.0 - smoothstep(0.0, 0.5, gl_FragCoord.y / uRes.y)) * 0.75);
 
   col = mix(vec3(0.90, 0.905, 0.93), col, uContrast);
   col = mix(col, vec3(0.955, 0.957, 0.968), uVeil);
@@ -106,10 +109,10 @@ const FINISH: Record<Acabado, { wave: number; iri: number; contrast: number; glo
   B: { wave: 1.0, iri: 0.5, contrast: 1.0, gloss: 26, speed: 0.56 },
 }
 const LEVEL: Record<Intensidad, { veil: number; speed: number; still: boolean; floor: number; read: number }> = {
-  vivo: { veil: 0.04, speed: 1.2, still: false, floor: 0.58, read: 0.75 },
-  enfoque: { veil: 0.06, speed: 0.75, still: false, floor: 0.64, read: 0.55 },
-  limpio: { veil: 0.46, speed: 0.55, still: false, floor: 0.7, read: 0.5 },
-  calma: { veil: 0.48, speed: 0, still: true, floor: 0.73, read: 0.5 },
+  vivo: { veil: 0.04, speed: 1.2, still: false, floor: 0.67, read: 0.75 },
+  enfoque: { veil: 0.06, speed: 0.75, still: false, floor: 0.71, read: 0.6 },
+  limpio: { veil: 0.34, speed: 0.55, still: false, floor: 0.75, read: 0.55 },
+  calma: { veil: 0.38, speed: 0, still: true, floor: 0.78, read: 0.55 },
 }
 
 export function MetalLiquido({ acabado, intensidad, quieto }: { acabado: Acabado; intensidad: Intensidad; quieto: boolean }) {

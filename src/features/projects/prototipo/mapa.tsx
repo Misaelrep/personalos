@@ -6,7 +6,7 @@ import { areasOf, type MapState } from './areas'
 import { MapIcon } from './iconos'
 import { Ilustracion } from './ilustraciones'
 import { GAP, Sequence, useReveal, useSequence, wasRevealed } from './aparicion'
-import { AiTag, Back, HumanTag, KindTag, LocalTag, Primary, Secondary, StateBar, go } from './kit'
+import { AiTag, Back, HumanTag, KindTag, LocalTag, More, Primary, Secondary, StateBar, go } from './kit'
 import { mapHref, mapPathOf, projectMap, taskNode, type Block, type KeyResult, type ProjectMap, type TaskNode } from './mapa-modelo'
 import { KIND_LABEL, MONTHS, projectsOfPillar, type ActionKind, type PlanAction, type Sprint } from './plan'
 import { useProto, type Proto } from './store'
@@ -168,34 +168,56 @@ const DOT: Record<ActionKind, string> = {
   terminada: 'bg-ink-3',
 }
 
-function Legend() {
+/** How to read the map: the legend and the notes, one tap away instead of always on screen. */
+function MapInfo({ notes, testId = 'map-info' }: { notes: ReactNode[]; testId?: string }) {
   return (
-    <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-ink-3" data-testid="map-legend">
-      <span className="inline-flex items-center gap-1.5">
-        <svg width="18" height="6" aria-hidden>
-          <defs>
-            <linearGradient id="lg-l" x1="0" x2="1">
-              <stop offset="0" stopColor="#a78bfa" />
-              <stop offset="1" stopColor="#3a82f6" />
-            </linearGradient>
-          </defs>
-          <path d="M1 3h16" stroke="url(#lg-l)" strokeWidth="1.8" />
-        </svg>
-        Aporta a (sugerencia IA)
-      </span>
-      <span className="inline-flex items-center gap-1.5">
-        <svg width="18" height="6" aria-hidden>
-          <path d="M1 3h16" stroke="rgba(91,97,120,.6)" strokeWidth="1.3" strokeDasharray="3 4" />
-        </svg>
-        Agrupación (cálculo local)
-      </span>
-      <span className="inline-flex items-center gap-1.5">
-        <span className="font-medium text-ink-2">→</span> Dependencia confirmada (dossier)
-      </span>
-      <span className="inline-flex items-center gap-1.5">
-        <span className="size-2 rotate-45 bg-[#8b6fe0]" /> En tu plan del trimestre
-      </span>
-    </div>
+    <More
+      id="mapa:info"
+      testId={testId}
+      lead={
+        <span aria-hidden className="grid size-8 shrink-0 place-items-center rounded-full border border-[var(--line)] text-[15px] font-medium text-ink-3">
+          i
+        </span>
+      }
+      title="Cómo leer el mapa"
+      hint="Qué significan las líneas, los anillos y las etiquetas"
+    >
+      <div className="space-y-2 text-[16px] leading-[1.45] text-ink-2" data-testid="map-legend">
+        <p className="flex items-center gap-2">
+          <svg width="26" height="8" aria-hidden className="shrink-0">
+            <defs>
+              <linearGradient id="lg-l" x1="0" x2="1">
+                <stop offset="0" stopColor="#a78bfa" />
+                <stop offset="1" stopColor="#3a82f6" />
+              </linearGradient>
+            </defs>
+            <path d="M1 4h24" stroke="url(#lg-l)" strokeWidth="2.4" />
+          </svg>
+          <span>Aporta a: una sugerencia de la IA, no una dependencia.</span>
+        </p>
+        <p className="flex items-center gap-2">
+          <svg width="26" height="8" aria-hidden className="shrink-0">
+            <path d="M1 4h24" stroke="rgba(60,66,90,.8)" strokeWidth="1.6" strokeDasharray="3 4" />
+          </svg>
+          <span>Agrupación por el título de cada tarea: un cálculo local que no cambia tareas, IDs ni dependencias.</span>
+        </p>
+        <p className="flex items-center gap-2">
+          <span aria-hidden className="w-[26px] shrink-0 text-center font-medium text-ink">→</span>
+          <span>Dependencia confirmada en el dossier.</span>
+        </p>
+        <p className="flex items-center gap-2">
+          <span aria-hidden className="mx-[9px] size-2 shrink-0 rotate-45 bg-[#8b6fe0]" />
+          <span>En tu plan del trimestre.</span>
+        </p>
+        <p className="flex items-center gap-2">
+          <span aria-hidden className="mx-[5px] size-4 shrink-0 rounded-full border-2 border-[#3e4560]" />
+          <span>El anillo muestra las tareas hechas, no si el resultado se ha alcanzado: eso lo confirmas tú.</span>
+        </p>
+        {notes.map((n, i) => (
+          <p key={i}>{n}</p>
+        ))}
+      </div>
+    </More>
   )
 }
 
@@ -246,8 +268,8 @@ function Sheet({ title, onClose, children }: { title: string; onClose: () => voi
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between gap-3">
-          <h2 className="text-[16px] font-medium text-ink">{title}</h2>
-          <button type="button" className="hit h-10 px-1 text-[14px] text-ink-3" onClick={onClose} data-testid="sheet-close">
+          <h2 className="text-[18px] font-medium text-ink">{title}</h2>
+          <button type="button" className="hit min-h-11 px-1 text-[16px] text-ink-3" onClick={onClose} data-testid="sheet-close">
             Cerrar
           </button>
         </div>
@@ -265,7 +287,7 @@ const monthLabel = (a: PlanAction) => MONTHS.find((x) => x.key === a.month)?.lab
 function SprintBadge({ a }: { a?: PlanAction }) {
   if (!a) return null
   return (
-    <span className="inline-flex h-5 shrink-0 items-center gap-1 rounded-full bg-[color-mix(in_srgb,#8b6fe0_13%,transparent)] px-2 text-[10.5px] font-medium text-[#6d4fd8]" data-testid="in-sprint">
+    <span className="inline-flex min-h-6 shrink-0 items-center gap-1 rounded-full bg-[#ece6fb] px-2 text-[14px] font-medium text-[#5634c4]" data-testid="in-sprint">
       <span className="size-1.5 rotate-45 bg-[#8b6fe0]" />
       {MONTHS.find((x) => x.key === a.month)?.short}
     </span>
@@ -289,9 +311,9 @@ export function SmartMap({ projectId, resultId, blockId, taskId }: { projectId: 
     <MotionConfig reducedMotion={reduced ? 'always' : 'never'}>
       <div data-testid="smart-map" data-level={level} className={reduced ? 'pl-quieto' : ''}>
         <div className="flex items-center justify-between gap-3">
-          <Back href={`#/proyecto/${encodeURIComponent(p.id)}`} label={p.name} />
-          <button type="button" className="hit h-10 text-[12.5px] text-ink-3" data-testid="motion-toggle" onClick={() => set((x) => ({ ...x, motion: x.motion === 'reducido' ? 'completo' : 'reducido' }))}>
-            {reduced ? 'Activar movimiento' : 'Reducir movimiento'}
+          <Back href={`#/proyecto/${encodeURIComponent(p.id)}`} label="Proyecto" />
+          <button type="button" className="hit min-h-11 text-right text-[15px] text-ink-3" data-testid="motion-toggle" onClick={() => set((x) => ({ ...x, motion: x.motion === 'reducido' ? 'completo' : 'reducido' }))}>
+            {reduced ? 'Más movimiento' : 'Menos movimiento'}
           </button>
         </div>
         <Sequence key={seq} id={seq} length={level === 'panorama' ? 2.1 : level === 'resultado' ? 1.6 : 0.9} testId="map-sequence">
@@ -318,8 +340,8 @@ function MapHeader({ name, reveal }: { name: string; reveal: boolean }) {
   const at = (t: number, c: string) => (reveal ? r(t, c) : { className: c })
   return (
     <>
-      <p {...at(0, 'text-[11px] font-medium tracking-[0.14em] text-ink-3 uppercase')}>Mapa del proyecto</p>
-      <h1 {...at(0.06, 'font-display mt-0.5 text-[25px] leading-[1.12] font-medium tracking-[-0.022em] text-balance text-ink')}>{name}</h1>
+      <p {...at(0, 'mt-1 text-[15px] font-medium text-ink-3')}>Mapa del proyecto</p>
+      <h1 {...at(0.06, 'font-display mt-0.5 text-[31px] leading-[1.12] font-medium tracking-[-0.022em] text-balance text-ink')}>{name}</h1>
     </>
   )
 }
@@ -366,27 +388,18 @@ function Panorama({ m, onUpdate }: { m: ProjectMap; onUpdate: OnUpdate }) {
   return (
     <div className="mt-3" data-testid="map-panorama">
       <div data-testid="map-objective">
-        <p {...reveal(0.1, 'text-[12px] text-ink-3')}>Qué busca este proyecto</p>
-        <p {...reveal(0.14, 'mt-0.5 text-[18px] leading-[1.35] text-ink')}>{m.objective ?? 'Objetivo por definir'}</p>
-        {m.why ? (
-          <p {...reveal(0.24, 'mt-1.5 text-[13.5px] leading-[1.45] text-ink-2')} data-testid="map-why">
-            <span className="text-ink-3">Por qué importa: </span>
-            {m.why}
-            <AiTag />
-          </p>
-        ) : (
-          <p {...reveal(0.24, 'mt-1.5 text-[13px] leading-[1.45] text-ink-3')}>Por qué importa: por definir. No se ha propuesto nada para este proyecto.</p>
-        )}
+        <p {...reveal(0.1, 'text-[15px] font-medium text-ink-3')}>Qué busca este proyecto</p>
+        <p {...reveal(0.14, 'mt-1 text-[22px] leading-[1.35] text-ink')}>{m.objective ?? 'Objetivo por definir'}</p>
       </div>
 
       <div ref={box} className="relative mt-6">
         <Lines box={box} els={els} links={links} animate={running} />
         {star && (
           <div ref={reg('star')} {...reveal(LINES - 0.1, 'relative mx-auto mb-7 flex w-fit max-w-[92%] items-start gap-2 rounded-full bg-[rgba(255,255,255,0.74)] px-3 py-1.5 shadow-[0_0_0_1px_rgba(167,139,250,0.25)]')} data-testid="map-star">
-            <span className="mt-0.5 text-[#6d4fd8]">
+            <span className="mt-0.5 text-[#5634c4]">
               <MapIcon name="estrella" className="size-4" />
             </span>
-            <p className="text-[12.5px] leading-[1.4] text-ink-2">
+            <p className="line-clamp-1 text-[15px] leading-[1.4] text-ink-2">
               <span className="text-ink-3">Estrella polar: </span>
               {star}
             </p>
@@ -408,49 +421,49 @@ function Panorama({ m, onUpdate }: { m: ProjectMap; onUpdate: OnUpdate }) {
             <motion.button key={n.key} type="button" layoutId={n.key} onClick={() => go(n.href)} {...reveal(nodeAt(i), 'hit flex min-w-0 flex-1 flex-col items-center text-center active:opacity-70')} style={{ marginTop: arc(i, nodes.length), ...reveal(nodeAt(i)).style }} data-testid={n.testId} data-explore={n.key === explore ? 'true' : undefined}>
               {/* 5 · The one to explore keeps a soft ring of light. */}
               <Pearl icon={n.icon} counts={n.counts} on={n.key === explore} nodeRef={reg(n.key)} />
-              <span className="mt-2 line-clamp-3 px-0.5 text-[13px] leading-[1.25] font-medium text-ink">{n.name}</span>
-              <span className="mt-0.5 text-[11px] text-ink-3">{n.sub}</span>
+              <span className="mt-2 line-clamp-3 px-0.5 text-[15px] leading-[1.25] font-medium text-ink">{n.name}</span>
+              <span className="mt-0.5 text-[14px] text-ink-3">{n.sub}</span>
             </motion.button>
           ))}
         </div>
       </div>
-      <p {...reveal(HIGHLIGHT, 'mt-5 text-[12.5px] leading-[1.45] text-ink-3')}>
-        {m.noResults ? (
-          <>
-            Todavía no hay resultados clave propuestos para este proyecto: ves sus bloques de trabajo. No se inventa a qué contribuye cada uno. Toca un bloque para ver sus tareas.
-            <LocalTag />
-          </>
-        ) : (
-          <>
-            Resultados clave deducidos de las tareas. Toca uno para ver qué trabajo lo hace posible; el iluminado es el primero con trabajo pendiente. El anillo muestra las tareas hechas, no si el resultado se ha alcanzado.
-            <AiTag />
-          </>
-        )}
+      <p {...reveal(HIGHLIGHT, 'mt-6 text-center text-[16px] leading-[1.45] text-ink-2')} data-testid="map-hint">
+        {m.noResults ? 'Toca un bloque para ver sus tareas.' : 'Toca un resultado para ver qué trabajo lo hace posible.'}
       </p>
 
-      <section {...reveal(HIGHLIGHT + GAP, 'mt-5 border-t border-[var(--line)] pt-4')} data-testid="map-quarter">
-        <h2 className="text-[13px] font-medium text-ink-3">En el trimestre</h2>
+      {m.why ? (
+          <p {...reveal(HIGHLIGHT + 0.06, 'mt-4 text-[17px] leading-[1.5] text-ink-2')} data-testid="map-why">
+            <span className="text-ink-3">Por qué importa: </span>
+            {m.why}
+            <AiTag />
+          </p>
+        ) : (
+          <p {...reveal(HIGHLIGHT + 0.06, 'mt-4 text-[17px] leading-[1.5] text-ink-3')}>Por qué importa: por definir. No se ha propuesto nada para este proyecto.</p>
+        )}
+
+      <div {...reveal(HIGHLIGHT + GAP, 'mt-6 border-t border-[var(--line)]')}>
+      <More id={`mapa:${m.projectId}:trimestre`} testId="map-quarter" title="En el plan del trimestre" hint={!sp ? 'Todavía no hay plan de 90 días' : pillars.length === 0 ? 'Fuera del plan de este trimestre' : `Aporta a ${pillars.length === 1 ? '1 pilar' : `${pillars.length} pilares`}`}>
         {!sp ? (
-          <p className="mt-1 text-[13.5px] leading-[1.45] text-ink-2">Todavía no hay plan de 90 días. Cuando lo prepares, aquí verás a qué pilar aporta este proyecto.</p>
+          <p className="mt-1 text-[16px] leading-[1.45] text-ink-2">Todavía no hay plan de 90 días. Cuando lo prepares, aquí verás a qué pilar aporta este proyecto.</p>
         ) : pillars.length === 0 ? (
-          <p className="mt-1 text-[13.5px] leading-[1.45] text-ink-2">
+          <p className="mt-1 text-[16px] leading-[1.45] text-ink-2">
             Fuera del plan de este trimestre. Sigue disponible para cuando decidas incluirlo.
             <LocalTag />
           </p>
         ) : (
           pillars.map((pl) => (
-            <div key={pl.id} className="mt-1.5 text-[13.5px] leading-[1.45] text-ink-2">
+            <div key={pl.id} className="mt-1.5 text-[16px] leading-[1.45] text-ink-2">
               <p>
                 Aporta al pilar <span className="text-ink">«{pl.name}»</span> con {pl.actions === 1 ? '1 acción' : `${pl.actions} acciones`}.
                 {sp.status === 'aprobado' ? <HumanTag /> : <AiTag />}
               </p>
               {pl.others.length > 0 && (
-                <p className="text-[12.5px] text-ink-3">
+                <p className="text-[15px] text-ink-3">
                   Junto con{' '}
                   {pl.others.map((id, k) => (
                     <span key={id}>
                       {k > 0 && ' y '}
-                      <a className="text-electric" href={mapHref(id)} data-testid="map-sibling">
+                      <a className="hit text-electric underline underline-offset-4" href={mapHref(id)} data-testid="map-sibling">
                         {s.data.projects.find((x) => x.id === id)?.name}
                       </a>
                     </span>
@@ -460,7 +473,17 @@ function Panorama({ m, onUpdate }: { m: ProjectMap; onUpdate: OnUpdate }) {
             </div>
           ))
         )}
-      </section>
+      </More>
+      <MapInfo
+        notes={[
+          m.noResults ? (
+            <>Este proyecto aún no tiene resultados clave propuestos: ves sus bloques de trabajo y no se inventa a qué contribuye cada uno.<LocalTag /></>
+          ) : (
+            <>Los resultados clave se deducen de las tareas; el iluminado es el primero con trabajo pendiente, no una prioridad.<AiTag /></>
+          ),
+        ]}
+      />
+      </div>
 
       <div {...reveal(HIGHLIGHT + GAP * 2, 'mt-5')}>
         <Primary testId="map-update-project" onClick={() => onUpdate('¿Qué ha cambiado en el proyecto?', { projectId: m.projectId })}>
@@ -468,6 +491,26 @@ function Panorama({ m, onUpdate }: { m: ProjectMap; onUpdate: OnUpdate }) {
         </Primary>
       </div>
     </div>
+  )
+}
+
+/** Where you are on the map, and the way back to the panorama in one tap. */
+function Crumbs({ m, r }: { m: ProjectMap; r?: KeyResult }) {
+  const pill = 'hit inline-flex min-h-11 items-center gap-1.5 rounded-full bg-[rgba(255,255,255,0.72)] px-3.5 text-[16px] text-ink-2 shadow-[inset_0_1px_0_#fff,0_0_0_1px_rgba(120,128,156,0.14)]'
+  return (
+    <nav aria-label="Posición en el mapa" className="flex min-w-0 flex-wrap items-center gap-1.5">
+      <button type="button" className={pill} onClick={() => go(mapHref(m.projectId))} data-testid="to-panorama">
+        <MapIcon name="diana" className="size-4" /> Panorama
+      </button>
+      {r && (
+        <>
+          <span aria-hidden className="text-ink-3">›</span>
+          <button type="button" className={`${pill} min-w-0 max-w-full`} onClick={() => go(mapHref(m.projectId, r.id))} data-testid="to-result">
+            <MapIcon name={r.icon} className="size-4 shrink-0" /> <span className="truncate">{r.name}</span>
+          </button>
+        </>
+      )}
+    </nav>
   )
 }
 
@@ -502,65 +545,62 @@ function ResultView({ m, resultId, onUpdate }: { m: ProjectMap; resultId: string
   const READY = blockAt(blocks.length) + 0.05
   const links: Link[] = [
     // 2 · Its connection to the purpose lights up, travelling down to it.
-    ...m.results.map((x) => ({ from: 'obj', to: `r-${x.id}`, kind: 'contribucion' as const, dim: x.id !== r.id, pulse: x.id === r.id, down: true, pulseAt: 0.08 })),
+    { from: 'obj', to: `r-${r.id}`, kind: 'contribucion' as const, pulse: true, down: true, pulseAt: 0.08 },
     // 4 · Each block is drawn as it appears; light rises from it to the result.
     ...blocks.map((b, i) => ({ from: 'focus', to: `b-${b.id}`, kind: 'contribucion' as const, delay: blockAt(i), pulse: true, pulseAt: blockAt(i) + 0.3 })),
   ]
   return (
     <div className="mt-3" data-testid="map-result-view">
-      <button type="button" className="hit inline-flex h-9 items-center gap-1.5 rounded-full bg-[rgba(255,255,255,0.66)] px-3 text-[13px] text-ink-2 shadow-[inset_0_1px_0_#fff,0_0_0_1px_rgba(120,128,156,0.12)]" onClick={() => go(mapHref(m.projectId))} data-testid="to-panorama">
-        <MapIcon name="diana" className="size-4" /> Vista panorámica
-      </button>
+      <Crumbs m={m} />
       <div ref={box} className="relative mt-3">
         <Lines box={box} els={els} links={links} animate={running} />
-        <motion.div layoutId={`obj-${m.projectId}`} ref={reg('obj')} className="relative mx-auto flex w-fit max-w-[88%] items-center gap-2 rounded-full bg-[rgba(255,255,255,0.76)] py-1 pr-3 pl-1 text-[12px] leading-[1.35] text-ink-3 shadow-[inset_0_1px_0_#fff]">
+        <motion.div layoutId={`obj-${m.projectId}`} ref={reg('obj')} className="relative mx-auto flex w-fit max-w-full items-center gap-2 rounded-full bg-[rgba(255,255,255,0.8)] py-1 pr-4 pl-1 text-[15px] leading-[1.35] text-ink-2 shadow-[inset_0_1px_0_#fff]">
           <span className="pl-orb grid size-8 shrink-0 place-items-center">
             <Ilustracion project={m.name} className="size-5" />
           </span>
           <span className="line-clamp-1">{m.objective ?? 'Objetivo por definir'}</span>
         </motion.div>
-        <div className="relative mt-8 flex items-start justify-around">
-          {m.results.map((x) => (
-            <motion.button key={x.id} type="button" layoutId={`r-${x.id}`} onClick={() => go(mapHref(m.projectId, x.id))} className={`hit flex flex-1 flex-col items-center transition-opacity duration-300 ${x.id === r.id ? '' : 'opacity-40'}`} aria-current={x.id === r.id} data-testid={x.id === r.id ? 'result-node' : 'other-result'}>
-              <Pearl icon={x.icon} size={x.id === r.id ? 54 : 40} on={x.id === r.id} nodeRef={reg(`r-${x.id}`)} />
-            </motion.button>
-          ))}
+        {/* Only the branch being explored: its result, and below it the work that makes it possible. */}
+        <div className="relative mt-8 flex justify-center">
+          <motion.div layoutId={`r-${r.id}`} aria-current="true" data-testid="result-node">
+            <Pearl icon={r.icon} size={60} on nodeRef={reg(`r-${r.id}`)} />
+          </motion.div>
         </div>
         {/* 3 · What it is and why it matters. */}
-        <div ref={reg('focus')} {...reveal(CARD, 'surface relative mt-4 rounded-[20px] px-4 py-3.5')} data-testid="result-card">
-          <p className="text-[12px] text-ink-3">Qué debemos conseguir</p>
-          <p className="font-display mt-0.5 text-[19px] leading-[1.25] font-medium tracking-[-0.012em] text-ink">{r.name}</p>
-          <p className="mt-2.5 text-[12px] text-ink-3">Por qué importa</p>
-          <p className="mt-0.5 text-[14px] leading-[1.45] text-ink-2">
+        <div ref={reg('focus')} {...reveal(CARD, 'surface relative mt-4 rounded-[22px] px-4 py-4')} data-testid="result-card">
+          <p className="text-[15px] font-medium text-ink-3">Qué debemos conseguir</p>
+          <p className="font-display mt-1 text-[23px] leading-[1.25] font-medium tracking-[-0.012em] text-ink">{r.name}</p>
+          <p className="mt-3 text-[15px] font-medium text-ink-3">Por qué importa</p>
+          <p className="mt-1 text-[17px] leading-[1.5] text-ink-2">
             {r.why}
             {confirmed ? <HumanTag /> : <AiTag />}
           </p>
-          <p className="mt-2.5 text-[12.5px] leading-[1.4] text-ink-3">
-            {r.done} de {r.total} tareas de su trabajo están hechas. Terminar tareas no significa haberlo conseguido: eso lo confirmas tú.
+          <p className="mt-3 text-[15px] leading-[1.45] text-ink-3">
+            {r.done} de {r.total} tareas hechas
           </p>
           <div className="mt-2">
             {confirmed ? (
-              <p className="text-[12.5px] text-[#167a53]">Confirmaste este resultado como parte del proyecto.</p>
+              <p className="text-[15px] text-[#094d33]">Confirmaste este resultado como parte del proyecto.</p>
             ) : (
-              <button type="button" className="hit text-[13px] text-electric" data-testid="confirm-result" onClick={() => set((x) => ({ ...x, confirmed: [...x.confirmed, key], notice: 'Resultado confirmado. Ya no es una sugerencia.' }))}>
+              <button type="button" className="hit min-h-11 text-left text-[16px] text-electric underline underline-offset-4" data-testid="confirm-result" onClick={() => set((x) => ({ ...x, confirmed: [...x.confirmed, key], notice: 'Resultado confirmado. Ya no es una sugerencia.' }))}>
                 Confirmar que este resultado es parte del proyecto
               </button>
             )}
           </div>
         </div>
-        <p {...reveal(CARD + 0.16, 'mt-7 text-center text-[12px] font-medium tracking-[0.02em] text-ink-3')}>Trabajo que lo hace posible</p>
+        <p {...reveal(CARD + 0.16, 'mt-7 text-center text-[15px] font-medium text-ink-3')}>Trabajo que lo hace posible</p>
         <div className="relative mt-3 flex items-start justify-around gap-1">
           {blocks.map((b, i) => (
             <BlockNode key={b.id} m={m} b={b} r={r} reg={reg} i={i} n={blocks.length} at={blockAt(i)} />
           ))}
         </div>
         {/* 5 · The way into the tasks. */}
-        <p {...reveal(READY, 'mt-3 text-center text-[12.5px] text-ink-2')} data-testid="explore-tasks">
+        <p {...reveal(READY, 'mt-4 text-center text-[16px] text-ink-2')} data-testid="explore-tasks">
           Toca un bloque para ver sus tareas
         </p>
       </div>
-      <div {...reveal(READY + GAP, 'mt-6')}>
-        <Legend />
+      <div {...reveal(READY + GAP, 'mt-6 border-t border-[var(--line)]')}>
+        <MapInfo notes={['Terminar tareas no significa haber conseguido el resultado: eso lo confirmas tú.']} />
       </div>
       <div {...reveal(READY + GAP, 'mt-5')}>
         <Secondary testId="map-update-result" onClick={() => onUpdate(`¿Qué ha cambiado en «${r.name}»?`, { projectId: m.projectId, taskIds: blocks.flatMap((b) => b.tasks.map((t) => t.id)) })}>
@@ -578,11 +618,11 @@ function BlockNode({ m, b, r, reg, i, n, at }: { m: ProjectMap; b: Block; r?: Ke
   return (
     <motion.button type="button" layoutId={`b-${b.id}`} onClick={() => go(mapHref(m.projectId, r?.id ?? '-', b.id))} className={rv.className} style={{ marginTop: arc(i, n), ...rv.style }} data-testid="map-block">
       <Pearl icon={b.icon} counts={b.counts} nodeRef={reg(`b-${b.id}`)} />
-      <span className="mt-2 line-clamp-2 px-0.5 text-[13px] leading-[1.25] font-medium text-ink">{b.name}</span>
-      <span className="mt-0.5 text-[11px] text-ink-3">
+      <span className="mt-2 line-clamp-2 px-0.5 text-[15px] leading-[1.25] font-medium text-ink">{b.name}</span>
+      <span className="mt-0.5 text-[14px] text-ink-3">
         {b.counts.terminado} de {b.tasks.length} hechas
       </span>
-      {others.length > 0 && <span className="mt-0.5 line-clamp-2 text-[10.5px] leading-[1.3] text-ink-3">también «{others.join('», «')}»</span>}
+      {others.length > 0 && <span className="mt-0.5 line-clamp-2 text-[14px] leading-[1.3] text-ink-3">también «{others.join('», «')}»</span>}
     </motion.button>
   )
 }
@@ -612,65 +652,55 @@ function BlockView({ m, resultId, blockId, taskId, onUpdate }: { m: ProjectMap; 
   const fresh = useMemo(() => !!taskId && s.motion === 'completo' && !wasRevealed(`tarea:${taskId}`), [taskId])
   return (
     <div className="mt-3" data-testid="map-block-view">
-      <div className="flex flex-wrap items-center gap-1.5 text-[13px]">
-        <button type="button" className="hit inline-flex h-9 items-center gap-1 rounded-full bg-[rgba(255,255,255,0.6)] px-3 text-ink-2" onClick={() => go(mapHref(m.projectId))} data-testid="to-panorama">
-          <MapIcon name="diana" className="size-4" /> Panorama
-        </button>
-        {r && (
-          <>
-            <span className="text-ink-4">›</span>
-            <button type="button" className="hit inline-flex h-9 items-center gap-1 rounded-full bg-[rgba(255,255,255,0.6)] px-3 text-ink-2" onClick={() => go(mapHref(m.projectId, r.id))} data-testid="to-result">
-              <MapIcon name={r.icon} className="size-4" /> <span className="max-w-[46vw] truncate">{r.name}</span>
-            </button>
-          </>
-        )}
-      </div>
+      <Crumbs m={m} r={r} />
       <div ref={box} className="relative mt-4">
         <Lines box={box} els={els} links={r ? [{ from: 'r', to: 'b', kind: 'contribucion', pulse: fresh, pulseAt: 0.42 }] : []} animate={running || fresh} replay={taskId ?? ''} />
         {r && (
           <div className="flex justify-center">
-            <span ref={reg('r')} className="inline-flex items-center gap-1.5 rounded-full bg-[rgba(255,255,255,0.72)] px-3 py-1 text-[12px] text-ink-3">
-              <MapIcon name={r.icon} className="size-4" />
-              <span className="line-clamp-1">{r.name}</span>
-            </span>
+            {/* The result it serves, already named above: here only its orb, where the light arrives. */}
+            <Pearl icon={r.icon} size={40} nodeRef={reg('r')} />
           </div>
         )}
         <motion.div layoutId={`b-${b.id}`} className={`flex flex-col items-center text-center ${r ? 'mt-8' : ''}`} data-testid="block-card">
           <Pearl icon={b.icon} size={60} counts={b.counts} on nodeRef={reg('b')} />
-          <p className="mt-2 text-[17px] leading-[1.3] font-medium text-ink">{b.name}</p>
-          <p className="mt-0.5 max-w-[34ch] text-[13.5px] leading-[1.4] text-ink-3">{b.purpose}</p>
-          <div className="mt-2 w-40">
+          <p className="mt-2 text-[19px] leading-[1.3] font-medium text-ink">{b.name}</p>
+          <p className="mt-1 max-w-[34ch] text-[17px] leading-[1.45] text-ink-2">{b.purpose}</p>
+          <div className="mt-2.5 w-40">
             <StateBar counts={b.counts} />
           </div>
-          <p className="mt-1.5 text-[11.5px] leading-[1.4] text-ink-4">
-            Agrupado por el título de cada tarea. No cambia tareas, IDs ni dependencias.
+          <p className="mt-1.5 text-[15px] text-ink-3">
+            {b.counts.terminado} de {b.tasks.length} hechas
             <LocalTag />
           </p>
         </motion.div>
       </div>
 
       <section {...reveal(GAP, 'mt-6')} data-testid="block-trail">
-        <h2 className="mb-1 text-[13px] font-medium text-ink-3">{all ? 'Todas las tareas del bloque' : open.length ? 'Siguientes pasos' : 'No queda nada que puedas mover ahora'}</h2>
+        <h2 className="mb-1 text-[17px] font-medium text-ink">{all ? 'Todas las tareas del bloque' : open.length ? 'Siguientes pasos' : 'No queda nada que puedas mover ahora'}</h2>
         <div className="relative pl-6">
           <span className="pl-rail" aria-hidden />
           {shown.map((n, i) => {
             const groupStart = all && (i === 0 || shown[i - 1].kind !== n.kind)
             return (
               <div key={n.task.id} data-testid={`block-${n.kind}`}>
-                {groupStart && <p className="mt-3 mb-0.5 -ml-6 text-[11.5px] text-ink-4">{GROUP_TITLE[n.kind]}</p>}
+                {groupStart && <p className="mt-4 mb-0.5 -ml-6 text-[15px] font-medium text-ink-3">{GROUP_TITLE[n.kind]}</p>}
                 <TaskItem m={m} b={b} r={r} n={n} open={n.task.id === taskId} onUpdate={onUpdate} />
               </div>
             )
           })}
         </div>
         {(hiddenCount > 0 || all) && (
-          <button type="button" className="hit mt-2 h-10 text-[13.5px] text-electric" onClick={() => setAll((x) => !x)} data-testid="block-all">
+          <button type="button" className="hit mt-2 min-h-11 text-[16px] text-electric underline underline-offset-4" onClick={() => setAll((x) => !x)} data-testid="block-all">
             {all ? 'Ver solo los siguientes pasos' : `Ver las ${nodes.length} tareas del bloque`}
           </button>
         )}
       </section>
-      <div className="mt-5">
-        <Legend />
+      <div className="mt-6 border-t border-[var(--line)]">
+        <MapInfo
+          notes={[
+            'Al tocar una tarea, la luz sube de la tarea a su bloque, a su resultado y al objetivo del proyecto: muestra para qué sirve. No es una dependencia; las dependencias confirmadas aparecen aparte, con flecha.',
+          ]}
+        />
       </div>
       <div className="mt-5">
         <Secondary testId="map-update-block" onClick={() => onUpdate(`¿Qué ha cambiado en «${b.name}»?`, { projectId: m.projectId, areaId: b.id })}>
@@ -693,14 +723,14 @@ function TaskItem({ m, b, r, n, open, onUpdate }: { m: ProjectMap; b: Block; r?:
   return (
     <div ref={ref} className={`relative ${open ? '-ml-2 rounded-[16px] bg-[rgba(255,255,255,0.78)] pl-2 shadow-[0_8px_30px_-18px_rgba(40,46,80,0.4)]' : ''}`} data-testid="map-task">
       <span aria-hidden className={`absolute top-[1.05rem] -left-[1.2rem] size-2.5 rounded-full ring-2 ring-[rgba(255,255,255,0.9)] ${DOT[n.kind]} ${open ? 'pl-dot-on -left-[0.7rem]' : ''}`} />
-      <button type="button" className="hit flex w-full items-center gap-2 py-2.5 pr-2 text-left" onClick={() => go(open ? mapHref(m.projectId, r?.id ?? '-', b.id) : here)} aria-expanded={open}>
-        <span className={`min-w-0 flex-1 text-[14.5px] leading-[1.35] ${n.kind === 'terminada' ? 'text-ink-4 line-through' : 'text-ink'}`}>{n.task.title}</span>
+      <button type="button" className="hit flex min-h-12 w-full items-center gap-2 py-2.5 pr-2 text-left" onClick={() => go(open ? mapHref(m.projectId, r?.id ?? '-', b.id) : here)} aria-expanded={open}>
+        <span className={`min-w-0 flex-1 text-[17px] leading-[1.4] ${n.kind === 'terminada' ? 'text-ink-4 line-through' : 'text-ink'}`}>{n.task.title}</span>
         <SprintBadge a={action} />
-        {n.unlocks.length > 0 && n.kind !== 'terminada' && <span className="shrink-0 text-[11px] text-ink-3">libera {n.unlocks.length}</span>}
+        {n.unlocks.length > 0 && n.kind !== 'terminada' && <span className="shrink-0 text-[14px] text-ink-3">libera {n.unlocks.length}</span>}
       </button>
       <AnimatePresence initial={false}>
         {open && (
-          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.22 }} className="overflow-hidden pr-2" data-testid="task-path">
+          <motion.div initial={{ height: 0, opacity: 0, overflow: 'hidden' }} animate={{ height: 'auto', opacity: 1, transitionEnd: { overflow: 'visible' } }} exit={{ height: 0, opacity: 0, overflow: 'hidden' }} transition={{ duration: 0.22 }} className="pr-2" data-testid="task-path">
             <Sequence id={`tarea:${n.task.id}`} length={PATH_READY}>
             <PathUp n={n} b={b} results={results} objective={m.objective} />
             <TaskActions m={m} n={n} here={here} action={action} onUpdate={onUpdate} />
@@ -718,7 +748,7 @@ function TaskActions({ m, n, here, action, onUpdate }: { m: ProjectMap; n: TaskN
   const reveal = useReveal()
   return (
     <div {...reveal(PATH_READY)}>
-            <p className="mt-3 text-[12.5px] leading-[1.4] text-ink-2" data-testid="task-sprint">
+            <p className="mt-3 text-[16px] leading-[1.45] text-ink-2" data-testid="task-sprint">
               {action ? (
                 <>
                   En tu plan: {monthLabel(action)} · pilar «{s.sprint?.pillars.find((p) => p.id === action.pillarId)?.name}»
@@ -729,10 +759,9 @@ function TaskActions({ m, n, here, action, onUpdate }: { m: ProjectMap; n: TaskN
               )}
             </p>
             {(n.waitsFor.length > 0 || n.unlocks.length > 0) && (
-              <div className="mt-3 space-y-2.5 text-[13px] leading-[1.4]" data-testid="task-deps">
-                {n.waitsFor.length > 0 && <DepList title="Antes necesita" arrow="in" tasks={n.waitsFor} />}
+              <div className="mt-3 space-y-3 text-[16px] leading-[1.45]" data-testid="task-deps">
+                {n.waitsFor.length > 0 && <DepList title="Antes necesita · dependencia del dossier" arrow="in" tasks={n.waitsFor} />}
                 {n.unlocks.length > 0 && <DepList title={n.kind === 'terminada' ? 'Ahora pueden avanzar' : 'Al terminarla podrían avanzar'} arrow="out" tasks={n.unlocks} note={n.kind !== 'terminada' ? 'si no esperan también a otra cosa' : undefined} />}
-                <p className="text-[11px] text-ink-4">Dependencias confirmadas en el dossier. Toca una para ir a ella en el mapa.</p>
               </div>
             )}
             <div className="mt-3 flex flex-col gap-2 pb-3">
@@ -767,7 +796,7 @@ function DepList({ title, arrow, tasks, note }: { title: string; arrow: 'in' | '
           const p = mapPathOf(s.data, w.id)
           return (
             <li key={w.id}>
-              <a href={p ? mapHref(p.projectId, p.resultId, p.blockId, w.id) : `#/tarea/${encodeURIComponent(w.id)}`} className="inline-flex items-start gap-1.5 text-ink" data-testid="dep-link">
+              <a href={p ? mapHref(p.projectId, p.resultId, p.blockId, w.id) : `#/tarea/${encodeURIComponent(w.id)}`} className="hit inline-flex min-h-11 items-start gap-1.5 py-1 text-ink" data-testid="dep-link">
                 <span aria-hidden className="font-medium text-ink-3">{arrow === 'in' ? '→' : '↳'}</span>
                 <span className="underline decoration-[var(--line)] underline-offset-4">{w.title}</span>
               </a>
@@ -819,8 +848,8 @@ function PathUp({ n, b, results, objective }: { n: TaskNode; b: Block; results: 
               <MapIcon name={st.icon} className="size-4" />
             </motion.span>
             <span className="min-w-0 pt-0.5">
-              <span className="block text-[11px] text-ink-3">{st.label}</span>
-              <span className="block text-[13.5px] leading-[1.35] text-ink">
+              <span className="block text-[14px] text-ink-3">{st.label}</span>
+              <span className="block text-[16px] leading-[1.4] text-ink">
                 {st.text}
                 {st.tag}
               </span>
@@ -828,8 +857,8 @@ function PathUp({ n, b, results, objective }: { n: TaskNode; b: Block; results: 
           </li>
         ))}
       </ol>
-      <p {...reveal(PATH_READY - 0.1, 'mt-2 text-[11.5px] leading-[1.4] text-ink-3')} data-testid="path-note">
-        La luz muestra para qué sirve la tarea. No es una dependencia: el bloque es una agrupación local y el resultado, una sugerencia de la IA.
+      <p {...reveal(PATH_READY - 0.1, 'mt-2 text-[15px] leading-[1.4] text-ink-3')} data-testid="path-note">
+        Para qué sirve, no una dependencia.
       </p>
     </>
   )
@@ -844,7 +873,7 @@ export function Situation() {
   const { s } = useProto()
   return (
     <section data-testid="situation" className="pl-quieto">
-      <h2 className="mb-1 text-[13px] font-medium text-ink-3">Situación conocida · toca uno para ver su mapa</h2>
+      <h2 className="mb-1 text-[15px] font-medium text-ink-3">Situación conocida · toca uno para ver su mapa</h2>
       {s.data.projects.map((p) => {
         const areas = areasOf(s.data, p.id)
         const c = sum(areas.map((a) => a.counts))
@@ -855,11 +884,11 @@ export function Situation() {
               <Ilustracion project={p.name} className="size-6" />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[14.5px] text-ink">{p.name}</p>
+              <p className="truncate text-[16px] text-ink">{p.name}</p>
               <div className="mt-1.5">
                 <StateBar counts={c} />
               </div>
-              <p className="mt-1 text-[12px] text-ink-3">
+              <p className="mt-1 text-[14px] text-ink-3">
                 {c.terminado} de {total} terminadas{c.confirmar ? ` · ${c.confirmar} por confirmar` : ''}
               </p>
             </div>

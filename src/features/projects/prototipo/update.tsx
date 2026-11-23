@@ -50,7 +50,7 @@ const EFFECT: Record<ChangeKind, string> = {
   nueva: 'Se creará una tarea nueva, sin empezar.',
 }
 
-const field = 'w-full rounded-[18px] border border-[var(--line)] bg-[var(--surface)] px-4 py-3 text-[16px] leading-[1.45] text-ink placeholder:text-ink-4 focus:outline-none'
+const field = 'w-full rounded-[18px] border border-[var(--line)] bg-[var(--surface)] px-4 py-3 text-[18px] leading-[1.45] text-ink placeholder:text-ink-4 focus:outline-none'
 
 export function UpdateFlow({ onDone, inWizard, scope = {}, doneLabel }: { onDone?: () => void; inWizard?: boolean; scope?: Scope; doneLabel?: string }) {
   const { s, set, ctx } = useProto()
@@ -65,8 +65,8 @@ export function UpdateFlow({ onDone, inWizard, scope = {}, doneLabel }: { onDone
   if (applied !== null)
     return (
       <div data-testid="update-done">
-        <p className="text-[16px] leading-[1.45] text-ink">{applied === 1 ? 'Aplicado 1 cambio.' : `Aplicados ${applied} cambios.`}</p>
-        <p className="mt-1 text-[14px] leading-[1.45] text-ink-3">Quedan en el historial de cada tarea. El dossier original no cambia y nada se ha borrado.</p>
+        <p className="text-[18px] leading-[1.45] text-ink">{applied === 1 ? 'Aplicado 1 cambio.' : `Aplicados ${applied} cambios.`}</p>
+        <p className="mt-1 text-[16px] leading-[1.45] text-ink-3">Quedan en el historial de cada tarea. El dossier original no cambia y nada se ha borrado.</p>
         <div className="mt-5 flex flex-col gap-2">
           <Primary onClick={() => (onDone ? onDone() : go('#/'))}>{inWizard ? 'Siguiente' : (doneLabel ?? 'Volver al plan')}</Primary>
           {!inWizard && (
@@ -89,16 +89,16 @@ export function UpdateFlow({ onDone, inWizard, scope = {}, doneLabel }: { onDone
       <div data-testid="update-write">
         <textarea data-testid="update-text" value={text} onChange={(e) => setText(e.target.value)} rows={5} placeholder={'Terminé…\nYa no voy a…\nCambió…\nQuiero añadir…'} className={field} />
         <div className="mt-2 flex items-center justify-between">
-          <button type="button" className="text-[14px] text-electric" data-testid="update-example" onClick={() => setText(exampleText(s.data, scope))}>
+          <button type="button" className="hit -ml-2 inline-flex min-h-11 items-center rounded-full px-2 text-[16px] text-electric" data-testid="update-example" onClick={() => setText(exampleText(s.data, scope))}>
             Usar un ejemplo
           </button>
           {inWizard && (
-            <button type="button" className="text-[14px] text-ink-3" data-testid="update-skip" onClick={onDone}>
+            <button type="button" className="hit -mr-2 inline-flex min-h-11 items-center rounded-full px-2 text-[16px] text-ink-3" data-testid="update-skip" onClick={onDone}>
               Está al día, seguir
             </button>
           )}
         </div>
-        <p className="mt-2 text-[12.5px] leading-[1.4] text-ink-4">No hace falta nombrar tareas ni IDs: «todo lo del riego», «lo del horno»… Puedes contar varias cosas a la vez.</p>
+        <p className="mt-2 text-[14px] leading-[1.4] text-ink-4">No hace falta nombrar tareas ni IDs: «todo lo del riego», «lo del horno»… Puedes contar varias cosas a la vez.</p>
         <div className="mt-4">
           <Primary testId="update-propose" disabled={text.trim().length < 4} onClick={() => setProps(proposeChanges(s.data, text, scope))}>
             Ver qué cambiaría
@@ -115,13 +115,13 @@ export function UpdateFlow({ onDone, inWizard, scope = {}, doneLabel }: { onDone
   }
   return (
     <div data-testid="update-review">
-      <p className="text-[14px] leading-[1.45] text-ink-3">
+      <p className="text-[16px] leading-[1.45] text-ink-3">
         Esto es lo que entendí. Quita lo que no sea, o corrige las tareas. Nada se aplica hasta que lo confirmes.
         <AiTag />
       </p>
       {kinds.map((k) => (
         <section key={k} className="mt-5">
-          <h2 className="mb-1 text-[13px] font-medium text-ink-3">{GROUP[k]}</h2>
+          <h2 className="mb-1 text-[15px] font-medium text-ink-3">{GROUP[k]}</h2>
           {props
             .filter((p) => p.kind === k)
             .map((p) => {
@@ -132,9 +132,9 @@ export function UpdateFlow({ onDone, inWizard, scope = {}, doneLabel }: { onDone
                 <div key={p.id} className="border-b border-[var(--line)] py-3 last:border-b-0" data-testid="proposal">
                   <label className="flex items-start gap-3">
                     <input type="checkbox" data-testid="proposal-accept" className="mt-0.5 size-5 shrink-0 accent-[var(--color-electric)]" checked={p.accepted} disabled={k === 'nueva' ? !p.projectId : !p.taskIds.length} onChange={(e) => patch(p.id, { accepted: e.target.checked })} />
-                    <span className="text-[14.5px] leading-[1.4] text-ink italic">«{p.sentence}»</span>
+                    <span className="text-[16px] leading-[1.4] text-ink italic">«{p.sentence}»</span>
                   </label>
-                  <div className="mt-2 ml-8 space-y-1.5 text-[13px] leading-[1.45]">
+                  <div className="mt-2 ml-8 space-y-1.5 text-[15px] leading-[1.45]">
                     <p className="text-ink-2">
                       <span className="text-ink-3">Qué cambia: </span>
                       {EFFECT[k]}
@@ -145,8 +145,8 @@ export function UpdateFlow({ onDone, inWizard, scope = {}, doneLabel }: { onDone
                     </p>
                     {k === 'nueva' ? (
                       <>
-                        <input aria-label="Título de la tarea nueva" className="w-full rounded-[12px] border border-[var(--line)] bg-[var(--surface)] px-3 py-1.5 text-[15px] text-ink" value={p.title} onChange={(e) => patch(p.id, { title: e.target.value })} />
-                        <select className="max-w-full rounded-full border border-[var(--line)] bg-[var(--surface-quiet)] px-3 py-1.5 text-[13px] text-ink-3" value={p.projectId ?? ''} onChange={(e) => patch(p.id, { projectId: e.target.value || undefined, accepted: Boolean(e.target.value) })}>
+                        <input aria-label="Título de la tarea nueva" className="w-full rounded-[12px] border border-[var(--line)] bg-[var(--surface)] px-3 py-1.5 text-[17px] text-ink" value={p.title} onChange={(e) => patch(p.id, { title: e.target.value })} />
+                        <select className="max-w-full min-h-11 rounded-full border border-[var(--line)] bg-[var(--surface-quiet)] px-3 py-1.5 text-[16px] text-ink-2" value={p.projectId ?? ''} onChange={(e) => patch(p.id, { projectId: e.target.value || undefined, accepted: Boolean(e.target.value) })}>
                           <option value="">Elegir proyecto</option>
                           {s.data.projects.map((x) => (
                             <option key={x.id} value={x.id}>
@@ -180,7 +180,7 @@ export function UpdateFlow({ onDone, inWizard, scope = {}, doneLabel }: { onDone
                         )}
                         <select
                           data-testid="proposal-add"
-                          className="mt-2 max-w-full rounded-full border border-[var(--line)] bg-[var(--surface-quiet)] px-3 py-1.5 text-[13px] text-ink-3"
+                          className="mt-2 max-w-full min-h-11 rounded-full border border-[var(--line)] bg-[var(--surface-quiet)] px-3 py-1.5 text-[16px] text-ink-2"
                           value=""
                           onChange={(e) => {
                             const t = index.get(e.target.value)
@@ -228,7 +228,7 @@ function Impact({ taskIds }: { taskIds: string[] }) {
     <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-ink-3" data-testid="proposal-results">
       Resultados que tocan:
       {rs.map((r) => (
-        <span key={r.id + r.name} className="inline-flex h-6 items-center rounded-full bg-[color-mix(in_srgb,var(--color-electric)_12%,transparent)] px-2 text-[11.5px] text-electric">
+        <span key={r.id + r.name} className="inline-flex h-6 items-center rounded-full bg-[color-mix(in_srgb,var(--color-electric)_12%,transparent)] px-2 text-[14px] text-electric">
           {r.name}
         </span>
       ))}

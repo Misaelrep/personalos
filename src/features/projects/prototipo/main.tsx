@@ -1,5 +1,5 @@
 import { motion, MotionConfig } from 'framer-motion'
-import { StrictMode, useEffect, useState } from 'react'
+import { StrictMode, useEffect, useLayoutEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import '../../../styles/index.css'
 import './platino.css'
@@ -37,16 +37,30 @@ export function route(hash: string): Route {
   return { kind: 'plan' }
 }
 
+/** Where each screen was left, in memory only: coming back from a task or the map finds the same place. */
+const positions = new Map<string, number>()
+/** A task always opens at its top; every other screen returns to where it was left. */
+const keepsPlace = (hash: string) => !/^#\/tarea\//.test(hash)
+
 function useHash(): string {
   const [hash, setHash] = useState(() => window.location.hash)
   useEffect(() => {
+    let current = window.location.hash
+    const onScroll = () => positions.set(current, window.scrollY)
     const on = () => {
-      setHash(window.location.hash)
-      window.scrollTo(0, 0)
+      current = window.location.hash
+      setHash(current)
     }
+    window.addEventListener('scroll', onScroll, { passive: true })
     window.addEventListener('hashchange', on)
-    return () => window.removeEventListener('hashchange', on)
+    return () => {
+      window.removeEventListener('scroll', onScroll)
+      window.removeEventListener('hashchange', on)
+    }
   }, [])
+  useLayoutEffect(() => {
+    window.scrollTo(0, keepsPlace(hash) ? (positions.get(hash) ?? 0) : 0)
+  }, [hash])
   return hash
 }
 
@@ -56,7 +70,7 @@ function BottomNav() {
   const [tip, setTip] = useState(false)
   return (
     <nav aria-label="Secciones" className="bottom-nav" data-testid="bottom-nav">
-      {tip && <p className="pointer-events-none absolute -top-8 rounded-full bg-[var(--control)] px-3 py-1 text-[12px] text-[var(--control-ink)]">En el prototipo solo funciona PROYECTOS</p>}
+      {tip && <p className="pointer-events-none absolute -top-8 rounded-full bg-[var(--control)] px-3 py-1 text-[14px] text-[var(--control-ink)]">En el prototipo solo funciona PROYECTOS</p>}
       <ul className="flex w-full max-w-[420px] items-center justify-evenly" style={{ pointerEvents: 'auto', paddingLeft: 'max(env(safe-area-inset-left), 12px)', paddingRight: 'max(env(safe-area-inset-right), 12px)' }}>
         {OTHER.map((s) => {
           const current = s === 'PROYECTOS'
@@ -72,7 +86,7 @@ function BottomNav() {
                     setTimeout(() => setTip(false), 1800)
                   }
                 }}
-                className={`flex min-h-11 min-w-11 flex-col items-center justify-center gap-2 px-2 pt-2 pb-1.5 text-[10px] font-medium tracking-[0.24em] whitespace-nowrap uppercase max-[359px]:tracking-[0.12em] ${current ? 'text-ink' : 'text-ink-3'}`}
+                className={`flex min-h-12 min-w-11 flex-col items-center justify-center gap-1.5 px-1.5 pt-2 pb-1.5 text-[14px] font-medium tracking-[0.06em] whitespace-nowrap uppercase max-[359px]:px-1 max-[359px]:tracking-[0.01em] ${current ? 'text-ink' : 'text-ink-3'}`}
               >
                 <span className={`size-1 rounded-full ${current ? 'bg-ink' : 'bg-transparent'}`} />
                 {s}
@@ -89,8 +103,8 @@ function Controls() {
   const { s, set } = useProto()
   return (
     <details className="mt-14 rounded-[18px] border border-dashed border-[var(--line)] px-4 py-2" data-testid="proto-controls">
-      <summary className="hit cursor-pointer list-none py-1 text-center text-[12px] text-ink-4 [&::-webkit-details-marker]:hidden">Controles del prototipo</summary>
-      <p className="mt-2 text-[12px] text-ink-3">Situación</p>
+      <summary className="hit min-h-11 cursor-pointer list-none py-2 text-center text-[15px] text-ink-3 [&::-webkit-details-marker]:hidden">Controles del prototipo</summary>
+      <p className="mt-2 text-[14px] text-ink-3">Situación</p>
       <div className="mt-1 flex flex-wrap gap-2">
         {(
           [
@@ -104,7 +118,7 @@ function Controls() {
             key={k}
             type="button"
             data-testid={`scenario-${k}`}
-            className="h-9 rounded-full border border-[var(--line)] px-3 text-[13px] text-ink"
+            className="min-h-11 rounded-full border border-[var(--line)] px-3 text-[15px] text-ink"
             onClick={() => {
               set((x) => SCENARIOS[k](x))
               go('#/')
@@ -114,11 +128,11 @@ function Controls() {
           </button>
         ))}
       </div>
-      <p className="mt-3 text-[12px] text-ink-3">Fecha simulada</p>
+      <p className="mt-3 text-[14px] text-ink-3">Fecha simulada</p>
       <div className="mt-1 mb-2">
         <Segmented testId="proto-date" value={s.today} onChange={(today) => set((x) => ({ ...x, today }))} options={DATES} />
       </div>
-      <p className="mb-1 text-[11.5px] leading-[1.4] text-ink-4">Cambiar de situación vuelve a los datos inventados del principio. Recargar la página también.</p>
+      <p className="mb-1 text-[14px] leading-[1.4] text-ink-4">Cambiar de situación vuelve a los datos inventados del principio. Recargar la página también.</p>
     </details>
   )
 }
@@ -164,8 +178,8 @@ function App() {
     <div className="platino relative min-h-dvh" data-acabado="B" data-quieto={s.motion === 'reducido' ? 'true' : 'false'}>
       <Ambient intensity={intensityOf(r.kind)} />
       <div className="mx-auto w-full max-w-[560px] px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[calc(6rem+env(safe-area-inset-bottom))]">
-        <p className="pt-1 pb-3 text-center text-[10.5px] tracking-[0.08em] text-ink-4 uppercase" data-testid="proto-banner">
-          Prototipo · proyectos inventados · IA simulada · no se guarda nada
+        <p className="pt-1 pb-3 text-center text-[14px] leading-[1.4] text-ink-3" data-testid="proto-banner">
+          Prototipo con datos inventados e IA simulada · nada se guarda
         </p>
         {top && (
           <div className="mb-5" data-testid="top-tabs">
@@ -189,7 +203,7 @@ function App() {
       </div>
       {notice && (
         <div role="status" className="fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-30 flex justify-center px-4" data-testid="notice">
-          <p className="rounded-full bg-[var(--control)] px-4 py-2 text-[13.5px] text-[var(--control-ink)] shadow-lg">{notice}</p>
+          <p className="rounded-full bg-[var(--control)] px-4 py-2 text-[15px] text-[var(--control-ink)] shadow-lg">{notice}</p>
         </div>
       )}
       <BottomNav />

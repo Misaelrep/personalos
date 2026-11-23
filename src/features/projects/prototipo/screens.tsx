@@ -23,12 +23,12 @@ import { GAP, Sequence, useReveal } from './aparicion'
 
 const Section = ({ title, children, testId }: { title: string; children: React.ReactNode; testId?: string }) => (
   <section className="mt-6" data-testid={testId}>
-    <h2 className="mb-2 text-[13px] font-medium text-ink-3">{title}</h2>
+    <h2 className="mb-2 text-[15px] font-medium text-ink-3">{title}</h2>
     {children}
   </section>
 )
 
-const Muted = ({ children }: { children: React.ReactNode }) => <p className="text-[14px] leading-[1.45] text-ink-3">{children}</p>
+const Muted = ({ children }: { children: React.ReactNode }) => <p className="text-[16px] leading-[1.45] text-ink-3">{children}</p>
 
 // ── Plan de 90 días ─────────────────────────────────────────────────────────
 
@@ -42,7 +42,7 @@ export function PlanView() {
         <div className="mt-2">
           <H1>Todavía no hay un plan aprobado</H1>
         </div>
-        <p className="mt-3 text-[15px] leading-[1.5] text-ink-2">
+        <p className="mt-3 text-[17px] leading-[1.5] text-ink-2">
           En tres momentos: pones al día tus proyectos, editas una propuesta completa de estrategia y la apruebas. La IA propone; nada cuenta hasta que tú lo apruebas.
         </p>
         <div className="mt-6">
@@ -62,9 +62,9 @@ export function PlanView() {
       </div>
     )
   }
-  // In order of importance: north star → three pillars → the month's results → the next action or decision.
+  // In order of importance: north star → this month's result → the next action; pillars and the full plan one tap away.
   return (
-    <Sequence id="plan" length={1.35}>
+    <Sequence id="plan" length={0.9}>
       <ActivePlan key={s.today} />
     </Sequence>
   )
@@ -74,135 +74,153 @@ function ActivePlan() {
   const { s } = useProto()
   const sp = s.sprint!
   const now = monthOf(s.today)
-  const [month, setMonth] = useState<Month>(now.month)
+  const current = MONTHS.find((m) => m.key === now.month)!
+  // The rest of the plan: the months the summary does not show, so nothing is repeated.
+  const others = MONTHS.filter((m) => m.key !== now.month)
+  const [month, setMonth] = useState<Month>(others[0].key)
   const here = continueHere(s.data, sp, s.today)
-  const rows = planned(s.data, sp, month)
   const startsIn = now.before ? daysUntil(s.today, SPRINT.start) : 0
   // Before the start: what December needs from the person, so the first day is not lost.
   const prep = now.before ? planned(s.data, sp, 'dic').filter((r) => kindOf(r.stage) === 'decision') : []
   const reveal = useReveal()
-  const PILLAR = 0.32
-  const RESULT = PILLAR + sp.pillars.length * GAP + 0.06
-  const NEXT = RESULT + sp.pillars.length * 0.12 + 0.06
+  // North star → this month's result → the next action, which is on screen in under half a second.
+  const RESULT = 0.16
+  const NEXT = 0.3
+  const actions = (key: Month, pillarId: string) => planned(s.data, sp, key).filter((r) => r.pillar.id === pillarId)
+  const actionRows = (key: Month, pillarId: string) => {
+    const mine = actions(key, pillarId)
+    return mine.length ? (
+      mine.map((r) => {
+        const k = kindOf(r.stage)
+        return <Row key={r.action.id} href={`#/tarea/${encodeURIComponent(r.task.id)}`} title={r.task.title} done={k === 'terminada'} sub={k !== 'terminada' ? <KindTag kind={k} label={KIND_LABEL[k]} /> : undefined} testId="plan-action" />
+      })
+    ) : (
+      <p className="py-2 text-[16px] text-[#5f3a00]">Sin acciones este mes: falta planificarlo.</p>
+    )
+  }
+  const next = prep.length > 0 ? (
+    <Box tone="focus" className={`mt-4 ${reveal(NEXT).className}`} style={reveal(NEXT).style} testId="before-start">
+      <p className="text-[15px] font-medium text-ink-3">Antes de empezar</p>
+      <p className="mt-1 text-[18px] leading-[1.4] text-ink">
+        {prep.length === 1 ? 'Una acción de diciembre necesita' : `${prep.length} acciones de diciembre necesitan`} antes una decisión tuya.
+      </p>
+      <div className="mt-1">
+        {prep.slice(0, 3).map((r) => (
+          <Row key={r.action.id} href={`#/tarea/${encodeURIComponent(r.task.id)}`} title={r.task.title} sub={STAGE_LABEL[r.stage]} />
+        ))}
+      </div>
+      <div className="mt-3">
+        <Primary testId="before-start-open" onClick={() => go(`#/tarea/${encodeURIComponent(prep[0].task.id)}`)}>
+          Resolver la primera
+        </Primary>
+      </div>
+    </Box>
+  ) : (
+    here && (
+      <Box tone="focus" className={`mt-4 ${reveal(NEXT).className}`} style={reveal(NEXT).style} testId="continue-here">
+        <p className="text-[15px] font-medium text-ink-3">{now.before ? 'Lo primero, el 1 de diciembre' : 'Siguiente acción'}</p>
+        <p className="mt-1 text-[20px] leading-[1.3] text-ink">{here.task.title}</p>
+        <div className="mt-2">
+          <KindTag kind={kindOf(here.stage)} label={KIND_LABEL[kindOf(here.stage)]} />
+        </div>
+        <div className="mt-3">
+          <Primary testId="continue-open" onClick={() => go(`#/tarea/${encodeURIComponent(here.task.id)}`)}>
+            Abrir
+          </Primary>
+        </div>
+      </Box>
+    )
+  )
   return (
     <div data-testid="plan-active" className="flex flex-col">
       <div {...reveal(0)}>
-        <Kicker>Plan de 90 días · {now.before ? `empieza el 1 de diciembre, en ${startsIn} días` : now.after ? 'terminado' : `${MONTHS.find((m) => m.key === now.month)!.label.toLowerCase()}, mes ${MONTHS.findIndex((m) => m.key === now.month) + 1} de 3`}</Kicker>
+        <Kicker>{now.before ? `Empieza el 1 de diciembre, en ${startsIn} días` : now.after ? 'Plan terminado' : `${current.label}, mes ${MONTHS.indexOf(current) + 1} de 3`}</Kicker>
       </div>
-      {/* 1 · The north star: the one sentence everything answers to. Largest, with its own luminous orb. */}
-      <section {...reveal(0.06, 'surface relative mt-3 overflow-hidden rounded-[26px] px-4 pt-3.5 pb-4')} data-testid="north-star">
-        <p className="text-[11px] font-medium tracking-[0.16em] text-[#6d4fd8] uppercase">Estrella polar</p>
-        <div className="mt-2.5 flex items-center gap-3.5">
-          <div className="pl-hero shrink-0">
-            <span className="pl-halo" data-i="1" aria-hidden />
-            <span className="pl-halo" data-i="2" aria-hidden />
-            <span className="pl-orb pl-orb-hero grid size-[58px] place-items-center text-[#6d4fd8]" aria-hidden>
-              <MapIcon name="estrella" className="size-7" />
-            </span>
-          </div>
-          <h1 className="font-display text-[22px] leading-[1.18] font-medium tracking-[-0.02em] text-balance text-ink">{sp.northStar}</h1>
+      {/* 1 · The north star: the one sentence everything answers to. */}
+      <section {...reveal(0.04, 'surface relative mt-3 overflow-hidden rounded-[26px] px-4 pt-3.5 pb-4')} data-testid="north-star">
+        <div className="flex items-center gap-2.5">
+          <span className="pl-orb pl-orb-hero grid size-9 shrink-0 place-items-center text-[#5634c4]" aria-hidden>
+            <MapIcon name="estrella" className="size-[18px]" />
+          </span>
+          <p className="text-[15px] font-medium text-[#5634c4]">Estrella polar</p>
+        </div>
+        <h1 className="font-display mt-2 text-[24px] leading-[1.3] font-medium tracking-[-0.015em] text-ink">{sp.northStar}</h1>
+      </section>
+
+      {/* 2 · This month's result, one per pillar; each opens the actions that lead to it. */}
+      <section {...reveal(RESULT, 'surface-quiet mt-4 rounded-[24px] px-4 pt-4 pb-1')} data-testid="month-result">
+        <h2 className="flex items-center gap-2 text-[15px] font-medium text-ink-3">
+          <span aria-hidden className="size-2 rotate-45 bg-[#8b6fe0]" />
+          Resultado del mes · al final de {current.label.toLowerCase()}
+        </h2>
+        <div className="mt-1" data-testid="month-body">
+          {sp.pillars.map((p, pi) => (
+            <More
+              key={p.id}
+              id={`plan:mes:${now.month}:${p.id}`}
+              testId="month-result-item"
+              lead={<span className="pl-node grid size-8 shrink-0 place-items-center self-start text-[15px] font-medium text-[#3e4560]" aria-label={`Pilar ${pi + 1}`}>{pi + 1}</span>}
+              title={<span className="block text-[20px] leading-[1.35] font-normal">{p.results[now.month]}</span>}
+            >
+              <p className="text-[15px] text-ink-3">
+                Pilar {pi + 1} · {p.name} · {actions(now.month, p.id).length === 1 ? '1 acción' : `${actions(now.month, p.id).length} acciones`} este mes
+              </p>
+              {actionRows(now.month, p.id)}
+            </More>
+          ))}
         </div>
       </section>
-      {/* The light that runs from the star down to the pillars. */}
-      <span aria-hidden {...reveal(0.22, 'mx-auto block h-5 w-px bg-[linear-gradient(180deg,rgba(167,139,250,0.9),rgba(58,130,246,0.5))]')} />
 
-      {prep.length > 0 ? (
-        <Box tone="focus" className={`mt-5 ${reveal(NEXT).className}`} style={reveal(NEXT).style} testId="before-start">
-          <p className="text-[12px] text-ink-3">Antes de empezar</p>
-          <p className="mt-1 text-[15px] leading-[1.4] text-ink">
-            {prep.length === 1 ? 'Una acción de diciembre necesita' : `${prep.length} acciones de diciembre necesitan`} antes una decisión tuya. Resolverlas ahora deja libre el primer día.
-          </p>
+      {/* 3 · The next action or decision. */}
+      {next}
+
+      {/* The rest, one tap away and closed until needed. */}
+      <section {...reveal(NEXT + GAP, 'mt-6')} data-testid="plan-more">
+        <More id="plan:pilares" testId="pillars" title="Los tres pilares" hint={sp.pillars.map((p) => p.name).join(' · ')}>
+          {sp.pillars.map((p, pi) => (
+            <div key={p.id} className="flex items-start gap-3 border-b border-[var(--line)] py-3 last:border-b-0" data-testid="pillar">
+              <span className="pl-node grid size-8 shrink-0 place-items-center text-[15px] font-medium text-[#3e4560]" aria-hidden>
+                {pi + 1}
+              </span>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-[19px] leading-[1.3] font-medium text-ink">{p.name}</h3>
+                <p className="mt-1 text-[16px] leading-[1.6] text-ink-3" data-testid="pillar-projects">
+                  Mapa de{' '}
+                  {projectsOfPillar(s.data, sp, p.id).map((id, k) => (
+                    <span key={id}>
+                      {k > 0 && ' · '}
+                      <a className="hit text-electric underline decoration-[color-mix(in_srgb,var(--color-electric)_35%,transparent)] underline-offset-4" href={mapHref(id)}>
+                        {s.data.projects.find((x) => x.id === id)?.name}
+                      </a>
+                    </span>
+                  ))}
+                </p>
+              </div>
+            </div>
+          ))}
+        </More>
+        <More id="plan:completo" testId="plan-full" title="Plan completo" hint={`${others.map((m) => m.label).join(' y ')}, con sus resultados y acciones`}>
+          <p className="mb-3 text-[15px] leading-[1.45] text-ink-3">{current.label} está arriba, en el resumen.</p>
+          <Segmented testId="months" value={month} onChange={setMonth} options={others.map((m) => ({ value: m.key, label: m.label }))} />
           <div className="mt-2">
-            {prep.slice(0, 3).map((r) => (
-              <Row key={r.action.id} href={`#/tarea/${encodeURIComponent(r.task.id)}`} title={r.task.title} sub={STAGE_LABEL[r.stage]} />
+            {sp.pillars.map((p, pi) => (
+              <div key={p.id} className="border-b border-[var(--line)] py-3 last:border-b-0" data-testid="full-pillar">
+                <p className="text-[15px] font-medium text-ink-3">
+                  Pilar {pi + 1} · {p.name}
+                </p>
+                <p className="mt-1 text-[18px] leading-[1.4] text-ink" data-testid="full-result">
+                  {p.results[month]}
+                </p>
+                <div className="mt-1">{actionRows(month, p.id)}</div>
+              </div>
             ))}
           </div>
-          <div className="mt-3">
-            <Primary testId="before-start-open" onClick={() => go(`#/tarea/${encodeURIComponent(prep[0].task.id)}`)}>
-              Resolver la primera
-            </Primary>
-          </div>
-        </Box>
-      ) : (
-        here && (
-          <Box tone="focus" className={`mt-5 ${reveal(NEXT).className}`} style={reveal(NEXT).style} testId="continue-here">
-            <p className="text-[12px] text-ink-3">{now.before ? 'Lo primero, el 1 de diciembre' : 'Continúa aquí'}</p>
-            <p className="mt-1 text-[16px] leading-[1.35] text-ink">{here.task.title}</p>
-            <p className="mt-1 flex flex-wrap items-center gap-2 text-[12.5px] text-ink-3">
-              {here.pillar.name}
-              <KindTag kind={kindOf(here.stage)} label={KIND_LABEL[kindOf(here.stage)]} />
-            </p>
-            <div className="mt-3">
-              <Primary testId="continue-open" onClick={() => go(`#/tarea/${encodeURIComponent(here.task.id)}`)}>
-                Abrir
-              </Primary>
-            </div>
-          </Box>
-        )
-      )}
-
-      <div {...reveal(PILLAR, 'mt-6')}>
-        <Segmented
-          testId="months"
-          value={month}
-          onChange={setMonth}
-          options={MONTHS.map((m) => ({ value: m.key, label: m.key === now.month && !now.before && !now.after ? <span>{m.label} <span className="text-electric">•</span></span> : m.label }))}
-        />
-      </div>
-      <div className="mt-3 space-y-3" data-testid="month-body">
-        {sp.pillars.map((p, pi) => {
-          const mine = rows.filter((r) => r.pillar.id === p.id)
-          return (
-            <section key={p.id} {...reveal(PILLAR + pi * GAP, 'surface-quiet rounded-[22px] px-4 pt-3.5 pb-2.5')} data-testid="pillar">
-              {/* 2 · A pillar: its number, its name, and the projects that feed it. */}
-              <div className="flex items-start gap-3">
-                <span className="pl-node mt-0.5 grid size-8 shrink-0 place-items-center text-[13px] font-medium text-[#4b5270]" aria-hidden>
-                  {pi + 1}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[11px] font-medium tracking-[0.14em] text-ink-3 uppercase">Pilar {pi + 1}</p>
-                  <h2 className="font-display text-[18px] leading-[1.2] font-medium tracking-[-0.015em] text-ink">{p.name}</h2>
-                  <p className="mt-1 text-[12px] leading-[1.6] text-ink-4" data-testid="pillar-projects">
-                    Mapa de{' '}
-                    {projectsOfPillar(s.data, sp, p.id).map((id, k) => (
-                      <span key={id}>
-                        {k > 0 && ' · '}
-                        <a className="text-electric" href={mapHref(id)}>
-                          {s.data.projects.find((x) => x.id === id)?.name}
-                        </a>
-                      </span>
-                    ))}
-                  </p>
-                </div>
-              </div>
-              {/* 3 · The monthly result: set apart as a milestone the actions lead to. */}
-              <div {...reveal(RESULT + pi * 0.12)}>
-              <div className="mt-3 rounded-[16px] bg-[linear-gradient(135deg,rgba(var(--pl-lavender),0.4),rgba(var(--pl-blue),0.3)_55%,rgba(var(--pl-pink),0.3))] px-3.5 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.85),0_0_0_1px_rgba(255,255,255,0.6)]" data-testid="month-result">
-                <p className="flex items-center gap-1.5 text-[11px] font-medium tracking-[0.12em] text-ink-3 uppercase">
-                  <span aria-hidden className="size-1.5 rotate-45 bg-[#8b6fe0]" />
-                  Al final de {MONTHS.find((m) => m.key === month)!.label.toLowerCase()}
-                </p>
-                <p className="mt-0.5 text-[14px] leading-[1.4] text-ink">{p.results[month]}</p>
-              </div>
-              <div className="mt-1.5">
-                {mine.map((r) => {
-                  const k = kindOf(r.stage)
-                  return <Row key={r.action.id} href={`#/tarea/${encodeURIComponent(r.task.id)}`} title={r.task.title} done={k === 'terminada'} right={k !== 'terminada' ? <KindTag kind={k} label={KIND_LABEL[k]} /> : undefined} testId="plan-action" />
-                })}
-                {!mine.length && <p className="py-2 text-[13px] text-[#a86a00]">Sin acciones este mes: falta planificarlo.</p>}
-              </div>
-              </div>
-            </section>
-          )
-        })}
-      </div>
-
-      <div {...reveal(NEXT + GAP, 'mt-4')}>
-        <More title="Grok, asesor opcional" testId="grok">
+        </More>
+        <More id="plan:grok" title="Grok, asesor opcional" hint="Observaciones simuladas; no cambia el plan" testId="grok">
           <GrokList sp={sp} />
         </More>
-      </div>
-      <p className="mt-6 text-center text-[13px] text-ink-4">
+      </section>
+      <p className="mt-6 text-center text-[15px] leading-[1.6] text-ink-3">
         Aprobado por ti el {shortDate(sp.approvedAt ?? s.today)} · <TextLink href="#/actualizar">Contar qué ha cambiado</TextLink>
       </p>
     </div>
@@ -219,32 +237,20 @@ export function ProjectsView() {
   const sp = s.sprint
   const inPlan = s.data.projects.filter((p) => pillarsOf(s.data, sp, p.id).length)
   const outside = s.data.projects.filter((p) => !pillarsOf(s.data, sp, p.id).length)
-  const row = (p: (typeof s.data.projects)[number]) => {
-    const pillars = pillarsOf(s.data, sp, p.id)
-    return (
-      <div key={p.id} className="flex items-center gap-2 border-b border-[var(--line)] last:border-b-0 [&>div>a]:border-b-0">
-        <div className="min-w-0 flex-1">
-      <Row
-        href={`#/proyecto/${encodeURIComponent(p.id)}`}
-        title={p.name}
-        testId="project-row"
-        sub={
-          <>
-            <span className="line-clamp-2">{p.objective ?? 'Propósito por definir'}</span>
-            {pillars.length > 0 && <span className="mt-0.5 block text-electric">Aporta a «{pillars.map((x) => x.name).join('» y «')}»</span>}
-          </>
-        }
-      />
-        </div>
-        <a href={mapHref(p.id)} aria-label={`Mapa de ${p.name}`} data-testid="project-row-map" className="hit pl-quieto flex shrink-0 flex-col items-center gap-0.5 active:opacity-70">
-          <span className="pl-orb grid size-10 place-items-center">
-            <Ilustracion project={p.name} className="size-6" />
-          </span>
-          <span className="text-[10.5px] text-ink-3">Mapa</span>
-        </a>
+  // Compact: the name and what the project is for, and its map one tap away.
+  const row = (p: (typeof s.data.projects)[number]) => (
+    <div key={p.id} className="flex items-center gap-2 border-b border-[var(--line)] last:border-b-0 [&>div>a]:border-b-0">
+      <div className="min-w-0 flex-1">
+        <Row big href={`#/proyecto/${encodeURIComponent(p.id)}`} title={p.name} testId="project-row" sub={<span className="line-clamp-2">{p.objective ?? 'Propósito por definir'}</span>} />
       </div>
-    )
-  }
+      <a href={mapHref(p.id)} aria-label={`Mapa de ${p.name}`} data-testid="project-row-map" className="hit pl-quieto flex min-h-14 min-w-14 shrink-0 flex-col items-center justify-center gap-1 active:opacity-70">
+        <span className="pl-orb grid size-11 place-items-center">
+          <Ilustracion project={p.name} className="size-7" />
+        </span>
+        <span className="text-[14px] text-ink-3">Mapa</span>
+      </a>
+    </div>
+  )
   return (
     <div data-testid="projects">
       {approved(sp) ? (
@@ -282,6 +288,8 @@ export function ProjectPage({ id }: { id: string }) {
   const blocked = tasks.filter((t) => stageOf(s.data, t) === 'bloqueada')
   const history = s.data.history.filter((h) => h.entity === 'task' && tasks.some((t) => t.id === h.id)).slice(-8).reverse()
   const imp = [...(s.data.imports ?? [])].reverse().find((r) => r.projectId === p.id)
+  const monthName = MONTHS.find((m) => m.key === month)!.label.toLowerCase()
+  const monthActions = thisMonth.filter((r) => r.task.id !== next?.id)
   return (
     <div data-testid="project">
       <Back href="#/proyectos" label="Mis proyectos" />
@@ -289,76 +297,79 @@ export function ProjectPage({ id }: { id: string }) {
         <H1>{p.name}</H1>
       </div>
 
-      <Section title="Qué buscamos conseguir" testId="project-goal">
-        <p className="text-[15px] leading-[1.5] text-ink">{p.objective ?? 'Objetivo por definir'}</p>
-        {pillars.length > 0 && <p className="mt-1 text-[13px] text-electric">Aporta a «{pillars.map((x) => x.name).join('» y «')}»</p>}
-      </Section>
-
-      <Section title={`Este mes${approved(sp) ? ` · ${MONTHS.find((m) => m.key === month)!.label.toLowerCase()}` : ''}`} testId="project-month">
-        {pillars.length > 0 ? (
-          <>
-            {pillars.map((x) => (
-              <p key={x.id} className="text-[15px] leading-[1.45] text-ink">
-                <span className="text-ink-3">Al final del mes: </span>
-                {x.results[month]}
-              </p>
-            ))}
-            {/* The next action has its own card below: listed once. */}
-            {thisMonth
-              .filter((r) => r.task.id !== next?.id)
-              .map((r) => (
-                <Row key={r.action.id} href={`#/tarea/${encodeURIComponent(r.task.id)}`} title={r.task.title} done={r.stage === 'cerrada'} right={r.stage !== 'cerrada' ? <KindTag kind={kindOf(r.stage)} label={KIND_LABEL[kindOf(r.stage)]} /> : undefined} />
-              ))}
-          </>
-        ) : (
-          <Muted>{!approved(sp) ? 'Se decide al aprobar el plan de 90 días.' : 'No participa en el plan de este trimestre.'}</Muted>
-        )}
-      </Section>
-
-      {decisions.length > 0 && (
-        <Section title="Necesita tu decisión" testId="project-decisions">
-          {decisions.slice(0, 2).map((d) => (
-            <Row key={d.text} href={`#/tarea/${encodeURIComponent(d.task.id)}`} title={d.text} />
-          ))}
-          {decisions.length > 2 && <p className="pt-1 text-[12.5px] text-ink-4">Y {decisions.length - 2} más, en «Todas las tareas».</p>}
-        </Section>
-      )}
+      <section className="mt-4" data-testid="project-goal">
+        <h2 className="text-[15px] font-medium text-ink-3">Qué buscamos conseguir</h2>
+        <p className="mt-1 text-[22px] leading-[1.35] text-ink">{p.objective ?? 'Objetivo por definir'}</p>
+        {pillars.length > 0 && <p className="mt-1.5 text-[16px] text-ink-3">Aporta a «{pillars.map((x) => x.name).join('» y «')}»</p>}
+      </section>
 
       {next && (
-        <Box tone="focus" className="mt-6" testId="project-next">
-          <p className="text-[12px] text-ink-3">Siguiente acción</p>
-          <p className="mt-1 text-[16px] leading-[1.35] text-ink">{next.title}</p>
-          {stageOf(s.data, next) !== 'lista' && <p className="mt-0.5 text-[12.5px] text-ink-3">Antes: {STAGE_LABEL[stageOf(s.data, next)].toLowerCase()}</p>}
+        <Box tone="focus" className="mt-5" testId="project-next">
+          <p className="text-[15px] font-medium text-ink-3">Siguiente acción</p>
+          <p className="mt-1 text-[20px] leading-[1.3] text-ink">{next.title}</p>
+          {stageOf(s.data, next) !== 'lista' && <p className="mt-1 text-[16px] text-ink-3">Antes: {STAGE_LABEL[stageOf(s.data, next)].toLowerCase()}</p>}
           <div className="mt-3">
             <Primary onClick={() => go(`#/tarea/${encodeURIComponent(next.id)}`)}>Abrir</Primary>
           </div>
         </Box>
       )}
 
-      <div className="mt-6">
+      {decisions.length > 0 && (
+        <Section title="Necesita tu decisión" testId="project-decisions">
+          {decisions.slice(0, 2).map((d) => (
+            <Row key={d.text} href={`#/tarea/${encodeURIComponent(d.task.id)}`} title={d.text} />
+          ))}
+          {decisions.length > 2 && <p className="pt-1 text-[15px] text-ink-3">Y {decisions.length - 2} más, en «Todas las tareas».</p>}
+        </Section>
+      )}
+
+      <div className="mt-6" data-testid="project-month">
         <Row href={mapHref(p.id)} title="Mapa del proyecto" sub={mapSummary(projectMap(s.data, p.id))} testId="project-map" />
-        <More title="Todas las tareas" count={tasks.length} testId="project-all">
+        <More
+          id={`proyecto:${p.id}:mes`}
+          title={`Este mes${approved(sp) ? ` · ${monthName}` : ''}`}
+          hint={pillars.length > 0 ? `${pillars.length === 1 ? 'Su resultado' : 'Sus resultados'} y ${monthActions.length === 1 ? '1 acción más' : `${monthActions.length} acciones más`}` : !approved(sp) ? 'Se decide al aprobar el plan de 90 días' : 'No participa en el plan de este trimestre'}
+          testId="project-month-more"
+        >
+          {pillars.length > 0 ? (
+            <>
+              {pillars.map((x) => (
+                <p key={x.id} className="text-[18px] leading-[1.45] text-ink">
+                  <span className="text-ink-3">Al final del mes: </span>
+                  {x.results[month]}
+                </p>
+              ))}
+              {/* The next action has its own card above: listed once. */}
+              {monthActions.map((r) => (
+                <Row key={r.action.id} href={`#/tarea/${encodeURIComponent(r.task.id)}`} title={r.task.title} done={r.stage === 'cerrada'} sub={r.stage !== 'cerrada' ? <KindTag kind={kindOf(r.stage)} label={KIND_LABEL[kindOf(r.stage)]} /> : undefined} />
+              ))}
+            </>
+          ) : (
+            <Muted>{!approved(sp) ? 'Se decide al aprobar el plan de 90 días.' : 'No participa en el plan de este trimestre.'}</Muted>
+          )}
+        </More>
+        <More id={`proyecto:${p.id}:todas`} title="Todas las tareas" count={tasks.length} testId="project-all">
           {tasks.map((t) => {
             const st = stageOf(s.data, t)
             return <Row key={t.id} href={`#/tarea/${encodeURIComponent(t.id)}`} title={t.title} done={st === 'cerrada'} sub={STAGE_LABEL[st]} />
           })}
         </More>
         {blocked.length > 0 && (
-          <More title="Bloqueos y dependencias" count={blocked.length} testId="project-blocked">
+          <More id={`proyecto:${p.id}:bloqueos`} title="Bloqueos y dependencias" count={blocked.length} testId="project-blocked">
             {blocked.map((t) => (
               <Row key={t.id} href={`#/tarea/${encodeURIComponent(t.id)}`} title={t.title} sub={needs(s.data, t)} />
             ))}
           </More>
         )}
-        <More title="Documentación original" testId="project-source">
-          <p className="text-[14px] leading-[1.5] text-ink-2">
-            Dossier «{p.dossier}»{imp ? `, importado el ${shortDate(imp.at)}` : ''}. Se conserva tal cual: los títulos, estados e IDs originales siguen en cada tarea, en «Más información».
+        <More id={`proyecto:${p.id}:docs`} title="Documentación original" testId="project-source">
+          <p className="text-[16px] leading-[1.5] text-ink-2">
+            Dossier «{p.dossier}»{imp ? `, importado el ${shortDate(imp.at)}` : ''}. Se conserva tal cual: los títulos, estados e IDs originales siguen en cada tarea, en «Documentación y seguimiento».
           </p>
         </More>
-        <More title="Historial" count={history.length} testId="project-history">
+        <More id={`proyecto:${p.id}:historial`} title="Historial" count={history.length} testId="project-history">
           {history.length ? (
             history.map((h, i) => (
-              <p key={i} className="py-1 text-[13px] leading-[1.4] text-ink-3">
+              <p key={i} className="py-1 text-[15px] leading-[1.45] text-ink-3">
                 {shortDate(h.at)} · {tasks.find((t) => t.id === h.id)?.title} · {String(h.field)}: {String(h.to ?? '—')}
               </p>
             ))
@@ -391,21 +402,21 @@ function Editable({ value, onSave, testId }: { value: string; onSave: (v: string
   const [text, setText] = useState(value)
   if (!editing)
     return (
-      <p className="mt-0.5 text-[14.5px] leading-[1.45] text-ink" data-testid={testId}>
+      <p className="mt-1 text-[17px] leading-[1.5] text-ink" data-testid={testId}>
         {value}{' '}
-        <button type="button" data-testid={`${testId}-edit`} onClick={() => { setText(value); setEditing(true) }} className="hit text-[13px] text-electric">
+        <button type="button" data-testid={`${testId}-edit`} onClick={() => { setText(value); setEditing(true) }} className="hit text-[15px] text-electric">
           Editar
         </button>
       </p>
     )
   return (
     <div className="mt-1" data-testid={`${testId}-editor`}>
-      <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} className="w-full rounded-xl border border-[var(--line)] bg-transparent p-2 text-[14.5px] leading-[1.45] text-ink" />
+      <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} className="w-full rounded-xl border border-[var(--line)] bg-transparent p-2 text-[16px] leading-[1.45] text-ink" />
       <div className="mt-1 flex gap-4">
-        <button type="button" data-testid={`${testId}-save`} onClick={() => { onSave(text.trim() || value); setEditing(false) }} className="hit text-[14px] text-electric">
+        <button type="button" data-testid={`${testId}-save`} onClick={() => { onSave(text.trim() || value); setEditing(false) }} className="hit text-[16px] text-electric">
           Guardar
         </button>
-        <button type="button" onClick={() => setEditing(false)} className="hit text-[14px] text-ink-3">
+        <button type="button" onClick={() => setEditing(false)} className="hit text-[16px] text-ink-3">
           Cancelar
         </button>
       </div>
@@ -413,19 +424,21 @@ function Editable({ value, onSave, testId }: { value: string; onSave: (v: string
   )
 }
 
+/** One question of the ficha, always visible: a clear label, then the answer. */
 function Item({ k, children, testId, at = 0 }: { k: React.ReactNode; children: React.ReactNode; testId?: string; at?: number }) {
   const reveal = useReveal()
   return (
-    <div {...reveal(at, 'border-b border-[var(--line)] py-3 last:border-b-0')} data-testid={testId}>
-      <p className="text-[12px] font-medium text-ink-3">{k}</p>
+    <div {...reveal(at, 'border-b border-[var(--line)] py-4 first:pt-1 last:border-b-0')} data-testid={testId}>
+      <h2 className="text-[15px] font-medium text-ink-3">{k}</h2>
       {children}
     </div>
   )
 }
-const P = ({ children }: { children: React.ReactNode }) => <p className="mt-0.5 text-[14.5px] leading-[1.5] text-ink">{children}</p>
+const P = ({ children }: { children: React.ReactNode }) => <p className="mt-1 text-[17px] leading-[1.5] text-ink">{children}</p>
+const Note = ({ children }: { children: React.ReactNode }) => <p className="mt-1.5 text-[15px] leading-[1.45] text-ink-3">{children}</p>
 
 const TaskLinks = ({ tasks }: { tasks: Task[] }) => (
-  <ul className="mt-1 space-y-0.5">
+  <ul className="mt-1 space-y-1">
     {tasks.map((w) => (
       <li key={w.id}>
         <TextLink href={`#/tarea/${encodeURIComponent(w.id)}`}>{w.title}</TextLink>
@@ -434,120 +447,19 @@ const TaskLinks = ({ tasks }: { tasks: Task[] }) => (
   </ul>
 )
 
-/**
- * The questions a task must answer before starting it, each with its source:
- * the dossier (confirmed), a local calculation, or a simulated AI suggestion
- * that can be edited and never invents people, amounts, times or requirements.
- */
-function TaskContext({ t, need, mapLink }: { t: Task; need: string; mapLink?: string }) {
-  const { s, set } = useProto()
-  const m = projectMap(s.data, t.projectId)
-  const block = blockOfTask(m, t.id)
-  const results = resultsOfTasks(s.data, [t.id])
-  const node = taskNode(s.data, t)
-  const note = s.notes[t.id] ?? {}
-  const brief = briefOf(s.data, t)
-  const track = trackOf(s.data, t)
-  const pending = (t.requirements ?? []).flatMap((r) => r.options.filter((o) => o.kind === 'condicion' && o.state !== 'cumplida').map((o) => (o as { literal: string }).literal))
-  const estimate = t.estimate?.literal ?? (t.estimateHours ? `${t.estimateHours} h` : undefined)
-  const save = (k: keyof Proto['notes'][string]) => (v: string) => set((x) => ({ ...x, notes: { ...x.notes, [t.id]: { ...x.notes[t.id], [k]: v } }, notice: 'Guardado solo en esta demostración.' }))
-  const aiTag = (k: keyof Proto['notes'][string]) => (note[k] ? <span className="ml-1.5 text-[11px] text-ink-4">editado por ti</span> : <AiTag />)
-  const reveal = useReveal()
-  // Revealed in the order it has to be read: do → why → implies → before starting → what it achieves.
-  const at = (i: number) => 0.1 + i * GAP
-  return (
-    <div data-testid="task-context">
-      <div {...reveal(at(0), 'mt-2')} data-testid="ctx-do">
-        <Editable value={note.hacer ?? brief.hacer} onSave={save('hacer')} testId="hacer" />
-        <p className="mt-0.5 text-[11px] text-ink-4">Descripción {note.hacer ? 'editada por ti' : 'sugerida a partir del título'}{!note.hacer && <AiTag />}</p>
-      </div>
-
-      {/* Where it sits: the same chain as on the map, small. */}
-      <div {...reveal(at(0.5), 'mt-3 flex flex-wrap items-center gap-1.5 text-[12px]')} data-testid="ctx-chain">
-        {block && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-[rgba(255,255,255,0.7)] px-2.5 py-1 text-ink-2">
-            <MapIcon name={block.icon} className="size-3.5" />
-            {block.name}
-          </span>
-        )}
-        {results.map((r) => (
-          <span key={r.id} className="inline-flex items-center gap-1 text-ink-2">
-            <span aria-hidden className="h-px w-3 bg-[linear-gradient(90deg,#a78bfa,#3a82f6)]" />
-            <span className="inline-flex items-center gap-1 rounded-full bg-[rgba(255,255,255,0.7)] px-2.5 py-1">
-              <MapIcon name={r.icon} className="size-3.5" />
-              {r.name}
-            </span>
-          </span>
-        ))}
-        {mapLink && (
-          <TextLink href={mapLink} testId="task-to-map">
-            Ver en el mapa
-          </TextLink>
-        )}
-      </div>
-
-      <Box className="mt-4" testId="task-card">
-        <Item at={at(1)} k={<>Por qué importa{aiTag('porque')}</>} testId="ctx-why">
-          <Editable value={note.porque ?? brief.porque} onSave={save('porque')} testId="porque" />
-          {results.length > 0 ? (
-            <p className="mt-1 text-[12.5px] leading-[1.4] text-ink-3">Contribuye a {results.map((r) => `«${r.name}»`).join(' y ')}, a través de su bloque.</p>
-          ) : (
-            <p className="mt-1 text-[12.5px] leading-[1.4] text-ink-3">Este proyecto aún no tiene resultados propuestos: no se inventa a cuál contribuye.</p>
-          )}
-        </Item>
-        <Item at={at(2)} k={<>Qué implica{aiTag('implies')}</>} testId="ctx-implies">
-          <Editable value={note.implies ?? brief.implica} onSave={save('implies')} testId="implies" />
-        </Item>
-        <Item at={at(3)} k={<>Qué necesito antes de empezar<LocalTag /></>} testId="ctx-before">
-          <P>{need}</P>
-          {node.waitsFor.length > 0 && <TaskLinks tasks={node.waitsFor} />}
-          {pending.length > 0 && <p className="mt-1 text-[12.5px] leading-[1.4] text-ink-3">Condiciones del dossier sin confirmar: {pending.map((x) => `«${x}»`).join(', ')}.</p>}
-        </Item>
-        <Item at={at(4)} k={t.deliverable || t.acceptance.length ? 'Qué debo conseguir · del dossier' : <>Qué debo conseguir{aiTag('deliver')}</>} testId="ctx-deliver">
-          {t.deliverable || t.acceptance.length ? (
-            <>
-              {t.deliverable && <P>{t.deliverable}</P>}
-              {t.acceptance.length > 0 && <p className="mt-1 text-[13px] leading-[1.45] text-ink-2">{t.acceptance.join(' · ')}</p>}
-            </>
-          ) : (
-            <Editable value={note.deliver ?? 'El dossier no lo dice. Propuesta: escribe aquí qué quedará hecho cuando la termines.'} onSave={save('deliver')} testId="deliver" />
-          )}
-        </Item>
-        <Item at={at(5)} k={<>Qué permite hacer después<LocalTag /></>} testId="ctx-after">
-          {node.unlocks.length ? (
-            <>
-              <P>{node.unlocks.length === 1 ? 'Esta tarea la espera:' : `La esperan ${node.unlocks.length} tareas:`}</P>
-              <TaskLinks tasks={node.unlocks} />
-              <p className="mt-1 text-[12px] text-ink-4">Podrían avanzar; puede que tengan otros requisitos.</p>
-            </>
-          ) : (
-            <P>Ninguna tarea registrada la espera.</P>
-          )}
-        </Item>
-        {estimate && (
-          <Item at={at(5.5)} k="Tiempo estimado · del dossier">
-            <P>{estimate}</P>
-          </Item>
-        )}
-      </Box>
-
-      {/* Execution, verification and approval stay three separate things. */}
-      <div {...reveal(at(6), 'mt-3 grid grid-cols-3 gap-1.5 text-center text-[11.5px] leading-[1.3]')} data-testid="ctx-track">
-        {[
-          ['Ejecución', TRACK_TEXT.executed[track.executed.state]],
-          ['Verificación', track.verified.state === 'sin-dato' ? 'Sin dato' : track.verified.state],
-          ['Aprobación', { 'sin-dato': 'Sin decidir', 'no-requiere': 'No requiere', pendiente: 'Pendiente', aprobada: 'Aprobada', devuelta: 'Devuelta' }[track.approved.state]],
-        ].map(([k, v]) => (
-          <div key={k} className="rounded-[12px] bg-[rgba(255,255,255,0.6)] px-1.5 py-1.5">
-            <p className="text-ink-4">{k}</p>
-            <p className="mt-0.5 text-ink-2">{v}</p>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
+/** «Queda hecho cuando …», without repeating the words when the dossier already starts with them. */
+const doneWhen = (a: string[]) => {
+  const text = a.join(' · ')
+  return /^queda hecho/i.test(text) ? text : `Queda hecho cuando: ${text}`
 }
 
+const APPROVAL_TEXT = { 'sin-dato': 'Sin decidir', 'no-requiere': 'No requiere', pendiente: 'Pendiente de ti', aprobada: 'Aprobada', devuelta: 'Devuelta' } as const
+
+/**
+ * The ficha: what to do, why it matters, what it delivers and what stops it, then the action.
+ * Everything else (what it implies, what comes before and after, documentation) is one tap away.
+ * Each answer keeps its source: the dossier, a local calculation, or a simulated AI suggestion.
+ */
 export function TaskPage({ id }: { id: string }) {
   const { s, set, ctx } = useProto()
   const t = s.data.tasks.find((x) => x.id === id)
@@ -568,17 +480,41 @@ export function TaskPage({ id }: { id: string }) {
     }
     return undefined
   })()
-  const result = t.deliverable ?? t.acceptance[0]
   const estimate = t.estimate?.literal ?? (t.estimateHours ? `${t.estimateHours} h` : undefined)
   const path = mapPathOf(s.data, t.id)
   const fromMap = s.mapFrom?.endsWith(`/${encodeURIComponent(t.id)}`) ? s.mapFrom : undefined
   const mapLink = path && !fromMap ? mapHref(path.projectId, path.resultId, path.blockId, t.id) : undefined
+  const m = projectMap(s.data, t.projectId)
+  const results = resultsOfTasks(s.data, [t.id])
+  const node = taskNode(s.data, t)
+  const note = s.notes[t.id] ?? {}
+  const brief = briefOf(s.data, t)
+  const pending = (t.requirements ?? []).flatMap((r) => r.options.filter((o) => o.kind === 'condicion' && o.state !== 'cumplida').map((o) => (o as { literal: string }).literal))
+  const save = (k: keyof Proto['notes'][string]) => (v: string) => set((x) => ({ ...x, notes: { ...x.notes, [t.id]: { ...x.notes[t.id], [k]: v } }, notice: 'Guardado solo en esta demostración.' }))
+  const aiTag = (k: keyof Proto['notes'][string]) => (note[k] ? <span className="ml-1.5 text-[14px] font-normal text-ink-3">editado por ti</span> : <AiTag />)
+  const open = stage !== 'cerrada' && stage !== 'en-aprobacion'
+  const stops = open && stage !== 'lista' ? need ?? STAGE_LABEL[stage] : undefined
+  void blockOfTask(m, t.id)
+
+  // Once marked done, bring the deliverable and its evidence into view: they come before the approval.
+  const showReview = () =>
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() =>
+        document.querySelector('[data-testid=task-review]')?.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }),
+      ),
+    )
 
   let action: React.ReactNode = null
   if (stage === 'lista') {
     action =
       wc === 'en-curso' ? (
-        <Primary testId="task-done" onClick={() => apply((d) => changeStatus(d, t.id, 'Ejecutada', ctx()), 'Marcada como hecha. Ahora espera tu visto bueno.')}>
+        <Primary
+          testId="task-done"
+          onClick={() => {
+            apply((d) => changeStatus(d, t.id, 'Ejecutada', ctx()), 'Marcada como hecha. Ahora espera tu visto bueno.')
+            showReview()
+          }}
+        >
           Marcar como hecha
         </Primary>
       ) : (
@@ -605,9 +541,9 @@ export function TaskPage({ id }: { id: string }) {
   } else if (stage === 'por-clasificar') {
     action = (
       <div data-testid="task-classify">
-        <p className="mb-2 text-[15px] leading-[1.45] text-ink">¿En qué punto está este trabajo?</p>
+        <p className="mb-2 text-[17px] leading-[1.45] text-ink">¿En qué punto está este trabajo?</p>
         <Segmented value={answer} onChange={setAnswer} options={WORK_CHOICES} />
-        <p className="mt-2 text-[12px] leading-[1.4] text-ink-4">En el dossier figura como «{t.status}». Tu respuesta cambia solo esta tarea; el dossier no se toca.</p>
+        <p className="mt-2 text-[15px] leading-[1.45] text-ink-3">En el dossier figura como «{t.status}». Tu respuesta cambia solo esta tarea; el dossier no se toca.</p>
         <div className="mt-3">
           <Primary testId="task-classify-save" onClick={() => apply((d) => changeStatus(d, t.id, answer, ctx()), answer === 'Ejecutada' ? 'Anotada como hecha. Tu visto bueno es aparte.' : 'Anotado.')}>
             Guardar
@@ -618,7 +554,7 @@ export function TaskPage({ id }: { id: string }) {
   } else if (stage === 'por-verificar' && firstCheck) {
     action = (
       <div data-testid="task-check">
-        <p className="mb-2 text-[14px] text-ink-2">¿Se cumple «{firstCheck.literal}»?</p>
+        <p className="mb-2 text-[17px] leading-[1.45] text-ink">¿Se cumple «{firstCheck.literal}»?</p>
         <div className="flex flex-col gap-2">
           <Primary onClick={() => apply((d) => setCondition(d, t.id, firstCheck.r.id, firstCheck.i, 'cumplida', ctx()), 'Confirmado.')}>Sí, se cumple</Primary>
           <Secondary onClick={() => apply((d) => setCondition(d, t.id, firstCheck.r.id, firstCheck.i, 'no-cumplida', ctx()), 'Anotado: no se cumple.')}>Todavía no</Secondary>
@@ -634,85 +570,177 @@ export function TaskPage({ id }: { id: string }) {
     )
   }
 
-  const lines: [string, string][] = []
-  if (stage === 'en-aprobacion') {
-    // Everything needed to judge the work, in one place: what was due, when it counts as done, and the evidence.
-    if (t.deliverable) lines.push(['Entregable', t.deliverable])
-    if (t.acceptance.length) lines.push(['Queda hecho cuando', t.acceptance.join(' · ')])
-    lines.push(['Evidencia', t.evidence.length ? t.evidence.map((e) => e.label).join(' · ') : 'No hay evidencia registrada. Revisa el entregable directamente o devuélvela pidiendo una.'])
-    lines.push(['Situación', `Ejecución: hecha · Verificación: ${track.verified.state === 'sin-dato' ? 'sin dato' : track.verified.state} · Aprobación: pendiente de ti`])
-  } else if (result) lines.push(['Resultado a entregar', result])
-  if (stage !== 'cerrada' && stage !== 'en-aprobacion') lines.push(['Para empezar', stage === 'lista' ? (wc === 'en-curso' ? 'Ya está en curso.' : 'Nada: puedes empezar ya.') : need ?? STAGE_LABEL[stage]])
-  if (estimate) lines.push(['Tiempo estimado', estimate])
+  // Revealed in the order it has to be read; the action is on screen in under a second.
+  const at = (i: number) => 0.1 + i * GAP
+  const contributes = results.length > 0 ? `Contribuye a ${results.map((r) => `«${r.name}»`).join(' y ')}, a través de su bloque.` : 'Este proyecto aún no tiene resultados propuestos: no se inventa a cuál contribuye.'
 
   return (
     <div data-testid="task">
-      <Sequence id={`ficha:${t.id}`} length={1.05}>
-      {fromMap ? <Back href={fromMap} label="Volver al mapa" /> : <Back href={`#/proyecto/${encodeURIComponent(p.id)}`} label={p.name} />}
-      <TaskTitle kicker={stage !== 'cerrada'} title={t.title} />
-      {mapLink && (stage === 'cerrada' || stage === 'en-aprobacion') && (
-        <p className="mt-2">
-          <TextLink href={mapLink} testId="task-to-map">
-            Ver en el mapa del proyecto
-          </TextLink>
-        </p>
-      )}
-      {stage === 'cerrada' && <p className="mt-2 text-[14px] text-ink-3">{wc === 'descartada' ? 'Descartada.' : 'Terminada y aprobada.'}</p>}
-      {t.owner?.kind === 'agente' && stage !== 'cerrada' && <p className="mt-2 text-[13.5px] text-electric">Delegada a un agente.</p>}
-      {stage !== 'cerrada' && stage !== 'en-aprobacion' ? (
-        <TaskContext t={t} mapLink={mapLink} need={stage === 'lista' ? (wc === 'en-curso' ? 'Ya está en curso.' : 'Nada: puedes empezar ya.') : need ?? STAGE_LABEL[stage]} />
-      ) : lines.length > 0 && (
-        <Box className="mt-4" testId={stage === 'en-aprobacion' ? 'task-review' : 'task-card'}>
-          {lines.map(([k, v]) => (
-            <div key={k} className="border-b border-[var(--line)] py-2 last:border-b-0">
-              <p className="text-[12px] text-ink-3">{k}</p>
-              <p className="mt-0.5 text-[14.5px] leading-[1.45] text-ink">{v}</p>
-            </div>
-          ))}
-        </Box>
-      )}
-      {action && <TaskAction at={0.1 + 7 * GAP}>{action}</TaskAction>}
-      <div className="mt-6">
-        <More title="Más información" testId="task-more">
-          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-[13.5px]">
-            {displayRef(t) && (
+      <Sequence id={`ficha:${t.id}`} length={1}>
+        {fromMap ? <Back href={fromMap} label="Volver al mapa" /> : <Back href={`#/proyecto/${encodeURIComponent(p.id)}`} label={p.name} />}
+        <TaskTitle kicker={stage !== 'cerrada'} title={t.title} />
+        {stage === 'cerrada' && <p className="mt-2 text-[17px] text-ink-3">{wc === 'descartada' ? 'Descartada.' : 'Terminada y aprobada.'}</p>}
+        {t.owner?.kind === 'agente' && stage !== 'cerrada' && <p className="mt-2 text-[16px] text-electric">Delegada a un agente.</p>}
+
+        {open ? (
+          <div data-testid="task-context">
+            {/* 1 · What to do, in plain words. */}
+            <TaskReveal at={at(0)} className="mt-2" testId="ctx-do">
+              <Editable value={note.hacer ?? brief.hacer} onSave={save('hacer')} testId="hacer" />
+              <p className="mt-1 text-[14px] text-ink-3">
+                Descripción {note.hacer ? 'editada por ti' : 'sugerida a partir del título'}
+                {!note.hacer && <AiTag />}
+              </p>
+            </TaskReveal>
+            <Box className="mt-4" testId="task-card">
+              {/* 2 · Why it matters. */}
+              <Item at={at(1)} k={<>Por qué importa{aiTag('porque')}</>} testId="ctx-why">
+                <Editable value={note.porque ?? brief.porque} onSave={save('porque')} testId="porque" />
+                <Note>
+                  {contributes}
+                  {mapLink && (
+                    <>
+                      {' '}
+                      <TextLink href={mapLink} testId="task-to-map">
+                        Ver en el mapa
+                      </TextLink>
+                    </>
+                  )}
+                </Note>
+              </Item>
+              {/* 3 · The expected result. */}
+              <Item at={at(2)} k={t.deliverable || t.acceptance.length ? 'Resultado esperado · del dossier' : <>Resultado esperado{aiTag('deliver')}</>} testId="ctx-deliver">
+                {t.deliverable || t.acceptance.length ? (
+                  <>
+                    {t.deliverable && <P>{t.deliverable}</P>}
+                    {t.acceptance.length > 0 && <Note>{doneWhen(t.acceptance)}</Note>}
+                  </>
+                ) : (
+                  <Editable value={note.deliver ?? 'El dossier no lo dice. Propuesta: escribe aquí qué quedará hecho cuando la termines.'} onSave={save('deliver')} testId="deliver" />
+                )}
+              </Item>
+              {/* 4 · What stops it from starting, only when something does. */}
+              {stops && (
+                <Item at={at(3)} k={<>Qué impide comenzar<LocalTag /></>} testId="ctx-stops">
+                  <P>{stops}</P>
+                </Item>
+              )}
+            </Box>
+          </div>
+        ) : (
+          <Box className="mt-4 scroll-mt-6" testId={stage === 'en-aprobacion' ? 'task-review' : 'task-card'}>
+            {stage === 'en-aprobacion' ? (
               <>
-                <dt className="text-ink-3">ID</dt>
-                <dd className="text-ink">{displayRef(t)}</dd>
+                {/* Before asking for approval: what was due and the evidence that it was done. */}
+                <Item at={at(0)} k="Entregable" testId="review-deliverable">
+                  <P>{t.deliverable ?? 'El dossier no define un entregable.'}</P>
+                  {t.acceptance.length > 0 && <Note>{doneWhen(t.acceptance)}</Note>}
+                </Item>
+                <Item at={at(1)} k="Evidencia" testId="review-evidence">
+                  <P>{t.evidence.length ? t.evidence.map((e) => e.label).join(' · ') : 'No hay evidencia registrada. Revisa el entregable directamente o devuélvela pidiendo una.'}</P>
+                </Item>
+                <Item at={at(2)} k="Situación">
+                  <P>Hecha · verificación: {track.verified.state === 'sin-dato' ? 'sin dato' : track.verified.state} · tu visto bueno: pendiente</P>
+                </Item>
               </>
+            ) : (
+              <Item at={at(0)} k="Resultado entregado">
+                <P>{t.deliverable ?? t.acceptance[0] ?? 'El dossier no lo describe.'}</P>
+                {mapLink && (
+                  <Note>
+                    <TextLink href={mapLink} testId="task-to-map">
+                      Ver en el mapa del proyecto
+                    </TextLink>
+                  </Note>
+                )}
+              </Item>
             )}
-            <dt className="text-ink-3">Estado en el dossier</dt>
-            <dd className="text-ink">«{t.status}»</dd>
-            <dt className="text-ink-3">Ejecución</dt>
-            <dd className="text-ink">{TRACK_TEXT.executed[track.executed.state]}</dd>
-            <dt className="text-ink-3">Verificación</dt>
-            <dd className="text-ink">{track.verified.state === 'sin-dato' ? 'Sin dato' : track.verified.state}</dd>
-            <dt className="text-ink-3">Aprobación</dt>
-            <dd className="text-ink">{{ 'sin-dato': 'Sin decidir', 'no-requiere': 'No requiere', pendiente: 'Pendiente', aprobada: 'Aprobada', devuelta: 'Devuelta' }[track.approved.state]}</dd>
-            {ex.waiters.length > 0 && (
+          </Box>
+        )}
+
+        {/* 5 · The action. */}
+        {action && <TaskAction at={at(4)}>{action}</TaskAction>}
+
+        {/* The rest, closed until needed. */}
+        <TaskReveal at={at(5)} className="mt-6" testId="task-more">
+          {open && (
+            <More id={`ficha:${t.id}:implica`} title="Qué implica" hint="Los pasos que lleva" testId="more-implies">
+              <div className="flex items-center gap-1 text-[14px] text-ink-3">Propuesta{aiTag('implies')}</div>
+              <Editable value={note.implies ?? brief.implica} onSave={save('implies')} testId="implies" />
+            </More>
+          )}
+          {open && (
+            <More
+              id={`ficha:${t.id}:antes`}
+              title="Qué necesito antes"
+              hint={node.waitsFor.length || pending.length ? `${node.waitsFor.length ? `${node.waitsFor.length} ${node.waitsFor.length === 1 ? 'tarea previa' : 'tareas previas'}` : ''}${node.waitsFor.length && pending.length ? ' · ' : ''}${pending.length ? `${pending.length} ${pending.length === 1 ? 'condición' : 'condiciones'} sin confirmar` : ''}` : 'Nada registrado'}
+              testId="more-before"
+            >
+              <div className="flex items-center gap-1 text-[14px] text-ink-3">Del dossier<LocalTag /></div>
+              {node.waitsFor.length > 0 && (
+                <>
+                  <P>{node.waitsFor.length === 1 ? 'Espera a esta tarea:' : `Espera a ${node.waitsFor.length} tareas:`}</P>
+                  <TaskLinks tasks={node.waitsFor} />
+                </>
+              )}
+              {pending.length > 0 && <P>Condiciones sin confirmar: {pending.map((x) => `«${x}»`).join(', ')}.</P>}
+              {!node.waitsFor.length && !pending.length && <P>Ni tareas previas ni condiciones registradas.</P>}
+            </More>
+          )}
+          <More id={`ficha:${t.id}:despues`} title="Qué permite hacer después" hint={node.unlocks.length ? `${node.unlocks.length} ${node.unlocks.length === 1 ? 'tarea la espera' : 'tareas la esperan'}` : 'Ninguna tarea la espera'} testId="more-after">
+            <div className="flex items-center gap-1 text-[14px] text-ink-3">Del dossier<LocalTag /></div>
+            {node.unlocks.length ? (
               <>
-                <dt className="text-ink-3">La esperan</dt>
-                <dd className="text-ink">{ex.waiters.length === 1 ? '1 tarea' : `${ex.waiters.length} tareas`}</dd>
+                <TaskLinks tasks={node.unlocks} />
+                <Note>Podrían avanzar; puede que tengan otros requisitos.</Note>
               </>
+            ) : (
+              <P>Ninguna tarea registrada la espera.</P>
             )}
-            {t.acceptance.length > 1 && (
-              <>
-                <dt className="text-ink-3">Criterios</dt>
-                <dd className="text-ink">{t.acceptance.join(' · ')}</dd>
-              </>
-            )}
-            {t.delegation?.literal && (
-              <>
-                <dt className="text-ink-3">Delegación</dt>
-                <dd className="text-ink">«{t.delegation.literal}»</dd>
-              </>
-            )}
-            <dt className="text-ink-3">Origen</dt>
-            <dd className="text-ink">{t.origin ? `Dossier «${t.origin.dossier}»` : 'Creada en ELYUM'}</dd>
-          </dl>
-        </More>
-      </div>
+          </More>
+          <More id={`ficha:${t.id}:docs`} title="Documentación y seguimiento" hint="Ejecución, verificación, aprobación y origen" testId="more-docs">
+            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-[16px] leading-[1.4]" data-testid="ctx-track">
+              {displayRef(t) && (
+                <>
+                  <dt className="text-ink-3">ID</dt>
+                  <dd className="text-ink">{displayRef(t)}</dd>
+                </>
+              )}
+              <dt className="text-ink-3">Estado en el dossier</dt>
+              <dd className="text-ink">«{t.status}»</dd>
+              <dt className="text-ink-3">Ejecución</dt>
+              <dd className="text-ink">{TRACK_TEXT.executed[track.executed.state]}</dd>
+              <dt className="text-ink-3">Verificación</dt>
+              <dd className="text-ink">{track.verified.state === 'sin-dato' ? 'Sin dato' : track.verified.state}</dd>
+              <dt className="text-ink-3">Aprobación</dt>
+              <dd className="text-ink">{APPROVAL_TEXT[track.approved.state]}</dd>
+              {estimate && (
+                <>
+                  <dt className="text-ink-3">Tiempo estimado</dt>
+                  <dd className="text-ink">{estimate}</dd>
+                </>
+              )}
+              {t.delegation?.literal && (
+                <>
+                  <dt className="text-ink-3">Delegación</dt>
+                  <dd className="text-ink">«{t.delegation.literal}»</dd>
+                </>
+              )}
+              <dt className="text-ink-3">Origen</dt>
+              <dd className="text-ink">{t.origin ? `Dossier «${t.origin.dossier}»` : 'Creada en ELYUM'}</dd>
+            </dl>
+          </More>
+        </TaskReveal>
       </Sequence>
+    </div>
+  )
+}
+
+function TaskReveal({ at, className = '', testId, children }: { at: number; className?: string; testId?: string; children: React.ReactNode }) {
+  const reveal = useReveal()
+  return (
+    <div {...reveal(at, className)} data-testid={testId}>
+      {children}
     </div>
   )
 }

@@ -8,6 +8,48 @@
  * With reduced movement the same composition stays, still.
  */
 
+/* ── Typography being tried in the prototype: IBM Plex Mono, local WOFF2 (SIL OFL 1.1, fuentes/OFL.txt) ──
+   400 reading · 500 actions and highlights · 600 titles and objectives. Sizes stay those of the last version:
+   a wider monospaced letter is answered by reorganising the content, never by smaller type. */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./fuentes/ibm-plex-mono-latin-400-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('./fuentes/ibm-plex-mono-latin-500-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('./fuentes/ibm-plex-mono-latin-600-normal.woff2') format('woff2');
+}
+.platino,
+.platino .font-display,
+.platino button,
+.platino input,
+.platino textarea,
+.platino select {
+  font-family: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+}
+.platino {
+  /* A word longer than the line breaks instead of pushing the page sideways (no hyphenation: it cuts too many words in a monospaced line). */
+  overflow-wrap: break-word;
+  letter-spacing: -0.01em;
+}
+/* Titles and objectives: 600. */
+.platino h1,
+.platino .pl-title { font-weight: 600; letter-spacing: -0.03em; }
+.platino .uppercase { letter-spacing: 0.02em; }
+
 .platino {
   /* Own stacking context: the ambient layer sits above the page background, below everything else. */
   isolation: isolate;
@@ -285,3 +327,92 @@
 @media (prefers-reduced-motion: reduce) {
   .platino details[data-anim='true'] > .pl-open > * { animation: none; }
 }
+
+/* ── Orb Experience (orbe.tsx): the main forward action of each scene ─────────────────── */
+.orbe {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 16px 14px;
+  border-radius: 32px;
+  text-align: center;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.orbe:focus-visible { outline: 2px solid var(--color-electric); outline-offset: 4px; }
+.orbe:disabled { opacity: 0.45; cursor: default; }
+.orbe-texto { font-size: 19px; line-height: 1.3; font-weight: 500; color: var(--color-ink); text-wrap: balance; }
+.orbe-pista { margin-top: -4px; font-size: 15px; line-height: 1.4; color: var(--ink-3); text-wrap: balance; }
+
+.orbe-cuerpo {
+  --near: 0;
+  position: relative;
+  display: grid;
+  place-items: center;
+  /* Proximity grows it (up to 12 %) and lifts it; a press compresses it at once. */
+  transform: translateY(calc(var(--near) * -3px)) scale(calc(1 + var(--near) * 0.12));
+  transition: transform 0.38s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.orbe-cuerpo[data-pressed='true'] {
+  transform: scale(0.92);
+  transition: transform 0.07s ease-out;
+}
+.orbe-esfera {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  /* Rest: a slow luminous breathing (scale and light, never blocking anything). */
+  animation: orbe-respira 4.8s ease-in-out infinite;
+}
+.orbe-halo {
+  position: absolute;
+  inset: -22%;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(var(--pl-lavender), 0.7) 0%, rgba(var(--pl-blue), 0.45) 38%, rgba(var(--pl-pink), 0.18) 58%, rgba(255, 255, 255, 0) 72%);
+  opacity: calc(0.35 + var(--near) * 0.65);
+  animation: orbe-halo 4.8s ease-in-out infinite;
+  pointer-events: none;
+}
+.orbe-cuerpo[data-pressed='true'] .orbe-halo { opacity: 1; }
+.orbe-cuerpo[data-pressed='true'] .orbe-esfera { filter: brightness(1.07); }
+@keyframes orbe-respira {
+  0%, 100% { scale: 1; filter: brightness(1); }
+  50% { scale: 1.035; filter: brightness(1.05); }
+}
+@keyframes orbe-halo {
+  0%, 100% { scale: 0.94; }
+  50% { scale: 1.06; }
+}
+/* Confirmation: a ring of light that leaves the orb while the next scene arrives. */
+.orbe-onda {
+  position: fixed;
+  z-index: 45;
+  border-radius: 9999px;
+  pointer-events: none;
+  transform: translate(-50%, -50%) scale(1);
+  border: 1.5px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 0 0 1px rgba(var(--pl-lavender), 0.6), 0 0 42px 10px rgba(var(--pl-lavender), 0.45), inset 0 0 32px rgba(var(--pl-blue), 0.45);
+  animation: orbe-onda 0.75s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+@keyframes orbe-onda {
+  from { opacity: 0.95; transform: translate(-50%, -50%) scale(1); }
+  to { opacity: 0; transform: translate(-50%, -50%) scale(5.5); }
+}
+/* Reduced movement: still orb, no ring; the press still answers with light. */
+.orbe[data-quieto='true'] .orbe-esfera,
+.orbe[data-quieto='true'] .orbe-halo { animation: none; }
+.orbe[data-quieto='true'] .orbe-cuerpo,
+.orbe[data-quieto='true'] .orbe-cuerpo[data-pressed='true'] { transform: none; transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  .orbe-esfera, .orbe-halo, .orbe-onda { animation: none !important; }
+  .orbe-onda { display: none; }
+  .orbe-cuerpo, .orbe-cuerpo[data-pressed='true'] { transform: none; transition: none; }
+}
+
+/* The paths: lines of light that grow from the north star to the pillars, and along the 90 days. */
+.pl-camino { stroke: url(#pl-camino-luz); stroke-width: 2; fill: none; stroke-linecap: round; }

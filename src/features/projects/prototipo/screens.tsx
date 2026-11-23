@@ -13,7 +13,8 @@ import { AiTag, Back, Box, H1, Kicker, KindTag, LocalTag, More, Primary, Row, Se
 import { briefOf } from './contexto'
 import { blockOfTask, mapHref, mapPathOf, projectMap, resultsOfTasks, taskNode } from './mapa-modelo'
 import { KIND_LABEL, MONTHS, SPRINT, daysUntil, kindOf, monthOf, projectsOfPillar, type Month } from './plan'
-import { GrokList } from './wizard'
+import { GrokList, SCENES, sceneHref } from './sprint'
+import { Orb } from './orbe'
 import { MapIcon } from './iconos'
 import { Ilustracion } from './ilustraciones'
 import { shortDate, useProto, type Proto } from './store'
@@ -35,38 +36,45 @@ const Muted = ({ children }: { children: React.ReactNode }) => <p className="tex
 export function PlanView() {
   const { s } = useProto()
   const sp = s.sprint
-  if (!approved(sp)) {
-    return (
-      <div data-testid="plan-empty">
-        <Kicker>Plan de 90 días · {SPRINT.label}</Kicker>
-        <div className="mt-2">
-          <H1>Todavía no hay un plan aprobado</H1>
-        </div>
-        <p className="mt-3 text-[17px] leading-[1.5] text-ink-2">
-          En tres momentos: pones al día tus proyectos, editas una propuesta completa de estrategia y la apruebas. La IA propone; nada cuenta hasta que tú lo apruebas.
-        </p>
-        <div className="mt-6">
-          {sp ? (
-            <Primary testId="plan-continue" onClick={() => go(`#/plan/${sp.step}`)}>
-              Continuar el borrador · momento {sp.step} de 3
-            </Primary>
-          ) : (
-            <Primary testId="plan-start" onClick={() => go('#/plan/1')}>
-              Preparar el plan
-            </Primary>
-          )}
-        </div>
-        <div className="mt-4 text-center">
-          <TextLink href="#/proyectos">O consulta tus proyectos</TextLink>
-        </div>
-      </div>
-    )
-  }
+  if (!approved(sp)) return <SprintInvite />
   // In order of importance: north star → this month's result → the next action; pillars and the full plan one tap away.
   return (
     <Sequence id="plan" length={0.9}>
       <ActivePlan key={s.today} />
     </Sequence>
+  )
+}
+
+/** Without an approved sprint: one question and one orb. Updating the projects is not a first step: it lives in «Mis proyectos» and the maps. */
+function SprintInvite() {
+  const { s } = useProto()
+  const draft = s.sprint && s.sprint.status !== 'aprobado' ? s.boceto : null
+  return (
+    <Sequence id="invitacion" length={0.7}>
+      <Invite draft={draft} />
+    </Sequence>
+  )
+}
+
+function Invite({ draft }: { draft: Proto['boceto'] | null }) {
+  const reveal = useReveal()
+  return (
+    <div data-testid="plan-empty">
+      <div {...reveal(0)}>
+        <Kicker>Plan de 90 días · 1 dic – 28 feb</Kicker>
+      </div>
+      <div {...reveal(0.08, 'mt-3')}>
+        <H1>¿Qué quieres hacer posible durante los próximos 90 días?</H1>
+      </div>
+      <p {...reveal(0.2, 'mt-3 text-[17px] leading-[1.5] text-ink-2')}>Lo diseñamos paso a paso, una decisión cada vez. Nada cuenta hasta que lo apruebes.</p>
+      <div {...reveal(0.3, 'mt-8')}>
+        {draft ? (
+          <Orb testId="plan-continue" size={104} label="Continuar mi sprint" hint={`Ibas por: ${SCENES[draft.scene - 1]}`} onPress={() => go(sceneHref(draft.scene))} />
+        ) : (
+          <Orb testId="plan-start" size={104} label="Diseñar mi sprint" onPress={() => go(sceneHref(1))} />
+        )}
+      </div>
+    </div>
   )
 }
 
@@ -265,7 +273,7 @@ export function ProjectsView() {
       )}
       <div className="mt-8">
         <Primary testId="go-update" onClick={() => go('#/actualizar')}>
-          Contar qué ha cambiado
+          Actualizar información
         </Primary>
       </div>
     </div>

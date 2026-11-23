@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import type { Ctx } from '../domain/ops'
 import type { ProjectsData } from '../domain/types'
 import DATOS from './datos-prototipo.json'
-import { exampleSprint, proposeStrategy, type Sprint } from './plan'
+import { exampleSprint, proposeStrategy, type Month, type Sprint } from './plan'
 
 /**
  * PROTOTYPE · Everything lives in this component's memory. No localStorage,
@@ -12,6 +12,27 @@ import { exampleSprint, proposeStrategy, type Sprint } from './plan'
 
 export const INITIAL = DATOS as unknown as ProjectsData
 export const TODAY = '2026-11-19'
+
+/** The sprint being designed, scene by scene (memory only: it lasts while the prototype is open). */
+export interface Boceto {
+  /** What the person wrote in scene 1, in their own words. */
+  intent: string
+  /** Which simulated north-star proposal is shown. */
+  idea: number
+  /** Scene to continue from (1…5), and the furthest one reached. */
+  scene: number
+  reached: number
+  /** The person confirmed their weekly hours (until then, 6 h is an assumption shown as a reserve). */
+  hoursOk: boolean
+  /** Prerequisites the person chose to leave out for now. */
+  dismissed: string[]
+  /** Month shown on «Mi camino de 90 días». */
+  month: Month
+  /** The person's own purpose for a pillar (replaces the simulated one). */
+  purposes: Record<string, string>
+}
+
+export const freshBoceto = (): Boceto => ({ intent: '', idea: 0, scene: 1, reached: 1, hoursOk: false, dismissed: [], month: 'dic', purposes: {} })
 
 export interface Proto {
   data: ProjectsData
@@ -32,6 +53,8 @@ export interface Proto {
   mapFrom?: string
   /** Liquid Platinum finish being compared: A satin silver, B iridescent liquid metal. */
   acabado: 'A' | 'B'
+  /** The sprint design in progress. */
+  boceto: Boceto
 }
 
 const prefersReduced = () => {
@@ -42,7 +65,7 @@ const prefersReduced = () => {
   }
 }
 
-const fresh = (): Proto => ({ data: INITIAL, sprint: null, today: TODAY, introSeen: [], motion: prefersReduced() ? 'reducido' : 'completo', notes: {}, confirmed: [], acabado: 'B' })
+const fresh = (): Proto => ({ data: INITIAL, sprint: null, today: TODAY, introSeen: [], motion: prefersReduced() ? 'reducido' : 'completo', notes: {}, confirmed: [], acabado: 'B', boceto: freshBoceto() })
 
 interface Store {
   s: Proto
@@ -71,10 +94,10 @@ export function useProto(): Store {
 
 /** The scenarios the prototype controls offer. */
 export const SCENARIOS = {
-  'sin-plan': (s: Proto): Proto => ({ ...s, data: INITIAL, sprint: null, today: TODAY, notes: {}, confirmed: [] }),
-  borrador: (s: Proto): Proto => ({ ...s, data: INITIAL, sprint: proposeStrategy(INITIAL, 6), today: TODAY }),
-  'aprobado-antes': (s: Proto): Proto => ({ ...s, data: INITIAL, sprint: exampleSprint(INITIAL, `${TODAY}T09:00:00-06:00`), today: TODAY }),
-  aprobado: (s: Proto): Proto => ({ ...s, data: INITIAL, sprint: exampleSprint(INITIAL, `${TODAY}T09:00:00-06:00`), today: s.today < '2026-12-01' ? '2026-12-10' : s.today }),
+  'sin-plan': (s: Proto): Proto => ({ ...s, data: INITIAL, sprint: null, today: TODAY, notes: {}, confirmed: [], boceto: freshBoceto() }),
+  borrador: (s: Proto): Proto => ({ ...s, data: INITIAL, sprint: proposeStrategy(INITIAL, 6), today: TODAY, boceto: { ...freshBoceto(), scene: 3, reached: 3 } }),
+  'aprobado-antes': (s: Proto): Proto => ({ ...s, data: INITIAL, sprint: exampleSprint(INITIAL, `${TODAY}T09:00:00-06:00`), today: TODAY, boceto: freshBoceto() }),
+  aprobado: (s: Proto): Proto => ({ ...s, data: INITIAL, sprint: exampleSprint(INITIAL, `${TODAY}T09:00:00-06:00`), today: s.today < '2026-12-01' ? '2026-12-10' : s.today, boceto: freshBoceto() }),
 }
 
 export const DATES = [

@@ -9,7 +9,7 @@ import { DATES, ProtoProvider, SCENARIOS, useNotice, useProto } from './store'
 import { UpdatePage } from './update'
 import { SmartMap } from './mapa'
 import { MetalLiquido, type Intensidad } from './metal-liquido'
-import { Moment, Part } from './wizard'
+import { Scene } from './sprint'
 
 /**
  * PROTOTYPE · prototipo-90.html, built for Vercel previews only (vite.config.ts), never for production.
@@ -19,7 +19,7 @@ import { Moment, Part } from './wizard'
 
 document.querySelectorAll('link[rel="manifest"]').forEach((l) => l.remove())
 
-type Route = { kind: 'plan' } | { kind: 'proyectos' } | { kind: 'proyecto'; id: string } | { kind: 'tarea'; id: string } | { kind: 'actualizar'; id?: string } | { kind: 'momento'; n: number } | { kind: 'paso'; n: number } | { kind: 'mapa'; id: string; result?: string; block?: string; task?: string }
+type Route = { kind: 'plan' } | { kind: 'proyectos' } | { kind: 'proyecto'; id: string } | { kind: 'tarea'; id: string } | { kind: 'actualizar'; id?: string } | { kind: 'escena'; n: number } | { kind: 'mapa'; id: string; result?: string; block?: string; task?: string }
 
 export function route(hash: string): Route {
   const h = hash.replace(/^#/, '')
@@ -29,18 +29,21 @@ export function route(hash: string): Route {
   if (map) return { kind: 'mapa', id: decodeURIComponent(map[1]), ...(map[2] ? { result: map[2] } : {}), ...(map[3] ? { block: map[3] } : {}), ...(map[4] ? { task: decodeURIComponent(map[4]) } : {}) }
   const up = h.match(/^\/actualizar(?:\/(.+))?$/)
   if (up) return { kind: 'actualizar', ...(up[1] ? { id: decodeURIComponent(up[1]) } : {}) }
+  const sc = h.match(/^\/sprint\/(\d)$/)
+  if (sc) return { kind: 'escena', n: Number(sc[1]) }
+  // Earlier links to the three moments and six parts land on the matching scene.
   const p = h.match(/^\/plan\/paso\/(\d)$/)
-  if (p) return { kind: 'paso', n: Number(p[1]) }
+  if (p) return { kind: 'escena', n: [1, 1, 2, 3, 4, 4, 5][Number(p[1])] ?? 1 }
   const mo = h.match(/^\/plan\/(\d)$/)
-  if (mo) return { kind: 'momento', n: Number(mo[1]) }
+  if (mo) return { kind: 'escena', n: [1, 1, 3, 5][Number(mo[1])] ?? 1 }
   if (h === '/proyectos') return { kind: 'proyectos' }
   return { kind: 'plan' }
 }
 
 /** Where each screen was left, in memory only: coming back from a task or the map finds the same place. */
 const positions = new Map<string, number>()
-/** A task always opens at its top; every other screen returns to where it was left. */
-const keepsPlace = (hash: string) => !/^#\/tarea\//.test(hash)
+/** A task and a scene of the sprint design always open at their top; every other screen returns to where it was left. */
+const keepsPlace = (hash: string) => !/^#\/(tarea|sprint)\//.test(hash)
 
 function useHash(): string {
   const [hash, setHash] = useState(() => window.location.hash)
@@ -138,7 +141,7 @@ function Controls() {
 }
 
 /** The metal's expression follows the experience: map = full, plan = focused, projects = clean, tasks = calm. */
-const intensityOf = (kind: Route['kind']): Intensidad => (kind === 'mapa' ? 'vivo' : kind === 'plan' || kind === 'momento' || kind === 'paso' ? 'enfoque' : kind === 'proyectos' || kind === 'proyecto' ? 'limpio' : 'calma')
+const intensityOf = (kind: Route['kind']): Intensidad => (kind === 'mapa' ? 'vivo' : kind === 'plan' || kind === 'escena' ? 'enfoque' : kind === 'proyectos' || kind === 'proyecto' ? 'limpio' : 'calma')
 
 /** Ambient light: strongest on the map, discreet on lists, calm where you read and decide. */
 function Ambient({ intensity }: { intensity: Intensidad }) {
@@ -166,11 +169,8 @@ function App() {
       <UpdatePage key={r.id ?? 'todo'} {...(r.id ? { projectId: r.id } : {})} />
     ) : r.kind === 'mapa' ? (
       <SmartMap key={r.id} projectId={r.id} {...(r.result ? { resultId: r.result } : {})} {...(r.block ? { blockId: r.block } : {})} {...(r.task ? { taskId: r.task } : {})} />
-    ) : r.kind === 'momento' ? (
-      <Moment key={r.n} n={r.n} />
-    ) : r.kind === 'paso' ? (
-      // The six-step method stays: steps 1 and 6 are the first and last moments.
-      r.n === 1 ? <Moment key={1} n={1} /> : r.n === 6 ? <Moment key={3} n={3} /> : <Part key={r.n} step={r.n} />
+    ) : r.kind === 'escena' ? (
+      <Scene key={r.n} n={r.n} />
     ) : (
       <PlanView />
     )

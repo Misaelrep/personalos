@@ -99,3 +99,43 @@ export function needs(data: ProjectsData, t: Task): string | undefined {
 }
 
 export const openCount = (data: ProjectsData, projectId: string) => data.tasks.filter((t) => t.projectId === projectId && !isClosed(data, t)).length
+
+/**
+ * «Continúa aquí»: one action or decision, chosen by explicit rules that can be checked against
+ * the plan, never by an invented priority. The rule used is returned to be shown as it is.
+ *  1. Before the sprint starts: a December decision that can be taken now (clarify a state,
+ *     confirm a condition), in plan order. December's tasks are not presented as doable today.
+ *  2. During the sprint, in the current month and in plan order: the first action that can be
+ *     done now; else the first that waits for the person's approval; else the first that needs
+ *     a decision; else the first blocked one, with what it waits for.
+ */
+export interface Focus {
+  kind: 'hacer' | 'visto-bueno' | 'decidir' | 'preparar' | 'esperar' | 'empieza' | 'nada'
+  item?: PlannedTask
+  month: Month
+  /** The rule that chose it, in plain words. */
+  rule: string
+}
+
+const DECIDE = new Set<Stage>(['por-clasificar', 'por-verificar'])
+
+export function focusNow(data: ProjectsData, s: Sprint, today: string): Focus {
+  const { month, before, after } = monthOf(today)
+  const label = MONTHS.find((m) => m.key === month)!.label.toLowerCase()
+  const open = planned(data, s, month).filter((p) => p.stage !== 'cerrada')
+  const noPriority = 'No hay una prioridad decidida entre tus acciones: sigo el orden del plan.'
+  if (after) return { kind: 'nada', month, rule: 'El sprint terminó el 28 de febrero.' }
+  if (before) {
+    const prep = open.find((p) => DECIDE.has(p.stage))
+    if (prep) return { kind: 'preparar', item: prep, month, rule: `Es la primera decisión pendiente de diciembre en el orden del plan. Puedes tomarla antes de empezar; las tareas de diciembre empiezan el 1 de diciembre. ${noPriority}` }
+    if (open[0]) return { kind: 'empieza', item: open[0], month, rule: `Es la primera acción de diciembre en el orden del plan. Empieza el 1 de diciembre, no hoy. ${noPriority}` }
+    return { kind: 'nada', month, rule: 'Diciembre no tiene acciones abiertas.' }
+  }
+  const pick = (kind: Focus['kind'], item: PlannedTask | undefined, rule: string): Focus | undefined => (item ? { kind, item, month, rule: `${rule} ${noPriority}` } : undefined)
+  return (
+    pick('hacer', open.find((p) => p.stage === 'lista'), `Es la primera acción de ${label} que se puede hacer ya.`) ??
+    pick('visto-bueno', open.find((p) => p.stage === 'en-aprobacion'), `Ninguna acción de ${label} se puede hacer ya; esta solo espera tu visto bueno.`) ??
+    pick('decidir', open.find((p) => DECIDE.has(p.stage)), `Ninguna acción de ${label} se puede hacer ya. Esta es la primera que necesita una decisión tuya.`) ??
+    pick('esperar', open[0], `Todas las acciones de ${label} esperan a otras tareas. Esta es la primera; resuelve antes lo que espera.`) ?? { kind: 'nada', month, rule: `Todas las acciones de ${label} están terminadas.` }
+  )
+}

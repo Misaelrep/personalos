@@ -5,7 +5,8 @@ import { workClassOf } from './domain/vocabulary'
 import { explain } from './ui/attention'
 import { stageOf } from './ui/view'
 import { areasOf } from './prototipo/areas'
-import { continueHere, decisionsOf, nextInProject, planned } from './prototipo/derive'
+import { continueHere, decisionsOf, focusNow, nextInProject, planned } from './prototipo/derive'
+import { categoriesOf, reviewPlan } from './prototipo/revision'
 import { MONTHS, applyProposals, approve, checkPlan, exampleSprint, grokReview, monthOf, projectsOfPillar, proposeChanges, proposeStrategy } from './prototipo/plan'
 import { INITIAL } from './prototipo/store'
 import { exampleText } from './prototipo/update'
@@ -231,5 +232,45 @@ describe('task context', () => {
     expect(projectMap(data, byName('Web de la tienda').id).why).toBeUndefined()
     for (const t of data.tasks) briefOf(data, t)
     expect(JSON.stringify(data)).toBe(before)
+  })
+})
+
+describe('refinement · review before approving and «Continúa aquí»', () => {
+  const draft = proposeStrategy(data, 6)
+  it('groups what to review by kind, keeps the three weights apart and adds nothing to the sprint', () => {
+    const before = JSON.stringify(draft)
+    const r = reviewPlan(data, draft, { hoursOk: false, kept: [] })
+    const cats = categoriesOf(r)
+    expect(new Set(cats.map((c) => c.id)).size).toBe(cats.length)
+    expect(cats.map((c) => `${c.id}:${c.severity}`)).toEqual(['fuera:corregir', 'decisiones:decision', 'estados:decision', 'horas:informativa'])
+    expect(JSON.stringify(draft)).toBe(before)
+    // Outside dependencies: open tasks not in the sprint, never presented as met.
+    const inPlan = new Set(draft.actions.map((a) => a.taskId))
+    for (const o of r.outside) for (const t of o.tasks) expect(inPlan.has(t.id) || isClosed(data, t)).toBe(false)
+  })
+  it('a dependency kept outside stays listed, as an accepted reserve', () => {
+    const r0 = reviewPlan(data, draft, { hoursOk: true, kept: [] })
+    const r1 = reviewPlan(data, draft, { hoursOk: true, kept: r0.outside.map((o) => o.key) })
+    expect(r1.outside).toHaveLength(r0.outside.length)
+    expect(categoriesOf(r1).find((c) => c.id === 'fuera')!.severity).toBe('informativa')
+    expect(categoriesOf(r1).some((c) => c.id === 'horas')).toBe(false)
+  })
+  it('the same weekly hours for the three months, without inventing estimates', () => {
+    const r = reviewPlan(data, proposeStrategy(data, 8), { hoursOk: true, kept: [] })
+    expect(new Set(r.loads.map((l) => l.capacity))).toEqual(new Set([Math.round(8 * 60 * 4.3)]))
+    for (const l of r.loads) expect(l.known).toBeLessThanOrEqual(checkPlan(data, proposeStrategy(data, 8)).months.find((m) => m.month === l.month)!.load)
+  })
+  it('«Continúa aquí» follows explicit rules and never shows a blocked task as doable', () => {
+    const s = exampleSprint(data, 'x')
+    const dic = focusNow(data, s, '2026-12-10')
+    expect(dic.kind).toBe('hacer')
+    expect(dic.item!.stage).toBe('lista')
+    expect(dic.rule).toContain('No hay una prioridad decidida')
+    const ene = focusNow(data, s, '2027-01-15')
+    expect(['decidir', 'visto-bueno', 'esperar']).toContain(ene.kind)
+    expect(ene.item!.stage).not.toBe('lista')
+    const pre = focusNow(data, s, '2026-11-19')
+    expect(pre.kind).toBe('preparar')
+    expect(['por-clasificar', 'por-verificar']).toContain(pre.item!.stage)
   })
 })

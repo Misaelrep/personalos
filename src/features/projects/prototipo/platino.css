@@ -175,11 +175,14 @@
     0 26px 44px -18px rgba(24, 28, 54, 0.5),
     0 4px 10px -4px rgba(24, 28, 54, 0.3);
 }
-/* Reflections inside the metal: a slow turn of coloured light under the surface. */
+/* Reflections inside the metal: a slow turn of coloured light under the surface. The layer is
+   itself a circle the size of the orb: turning it never shows a corner, even where Safari does not
+   clip an animated layer to the rounded edge (the square that appeared behind some orbs). */
 .pl-orb::before {
   content: '';
   position: absolute;
-  inset: -20%;
+  inset: 0;
+  border-radius: inherit;
   z-index: -1;
   background: conic-gradient(from 0deg, rgba(var(--pl-lavender), 0) 0deg, rgba(var(--pl-lavender), 0.85) 45deg, rgba(var(--pl-blue), 0.75) 90deg, rgba(255, 255, 255, 0) 140deg, rgba(var(--pl-pink), 0.8) 220deg, rgba(255, 255, 255, 0.7) 260deg, rgba(var(--pl-lavender), 0) 320deg);
   animation: pl-turn 13s linear infinite;

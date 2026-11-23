@@ -8,12 +8,12 @@ import type { ProjectsData, Task } from '../domain/types'
 import { explain } from '../ui/attention'
 import { STAGE_LABEL } from '../ui/labels'
 import { byRef, stageOf, trackOf } from '../ui/view'
-import { approved, continueHere, decisionsOf, needs, nextInProject, pillarsOf, planned } from './derive'
+import { approved, decisionsOf, focusNow, needs, nextInProject, pillarsOf, planned, type Focus } from './derive'
 import { AiTag, Back, Box, H1, Kicker, KindTag, LocalTag, More, Primary, Row, Secondary, Segmented, TextLink, go } from './kit'
 import { briefOf } from './contexto'
 import { blockOfTask, mapHref, mapPathOf, projectMap, resultsOfTasks, taskNode } from './mapa-modelo'
 import { KIND_LABEL, MONTHS, SPRINT, daysUntil, kindOf, monthOf, projectsOfPillar, type Month } from './plan'
-import { GrokList, SCENES, sceneHref } from './sprint'
+import { GrokList, SCENES, Timeline, sceneHref } from './sprint'
 import { Orb } from './orbe'
 import { MapIcon } from './iconos'
 import { Ilustracion } from './ilustraciones'
@@ -78,22 +78,44 @@ function Invite({ draft }: { draft: Proto['boceto'] | null }) {
   )
 }
 
+/** The month chosen in «Resultados del mes», kept while the prototype is open: coming back from an action finds it. */
+let exploreMonth: Month | null = null
+
+const FOCUS_HEAD: Record<Focus['kind'], string> = {
+  hacer: 'Qué necesitas hacer',
+  'visto-bueno': 'Qué necesitas decidir',
+  decidir: 'Qué necesitas decidir',
+  preparar: 'Qué puedes decidir ya',
+  esperar: 'Qué falta resolver primero',
+  empieza: 'Lo primero, el 1 de diciembre',
+  nada: 'Nada pendiente',
+}
+const FOCUS_ORB: Record<Focus['kind'], string> = {
+  hacer: 'Abrir esta acción',
+  'visto-bueno': 'Dar mi visto bueno',
+  decidir: 'Tomar esta decisión',
+  preparar: 'Tomar esta decisión',
+  esperar: 'Ver qué espera',
+  empieza: 'Ver esta acción',
+  nada: 'Ver el plan completo',
+}
+
 function ActivePlan() {
-  const { s } = useProto()
+  const { s, set } = useProto()
   const sp = s.sprint!
   const now = monthOf(s.today)
   const current = MONTHS.find((m) => m.key === now.month)!
-  // The rest of the plan: the months the summary does not show, so nothing is repeated.
-  const others = MONTHS.filter((m) => m.key !== now.month)
-  const [month, setMonth] = useState<Month>(others[0].key)
-  const here = continueHere(s.data, sp, s.today)
+  const [month, setMonthState] = useState<Month>(() => exploreMonth ?? now.month)
+  const setMonth = (m: Month) => {
+    exploreMonth = m
+    setMonthState(m)
+  }
+  const [starOpen, setStarOpen] = useState(false)
+  const [reopen, setReopen] = useState(false)
+  const focus = focusNow(s.data, sp, s.today)
   const startsIn = now.before ? daysUntil(s.today, SPRINT.start) : 0
-  // Before the start: what December needs from the person, so the first day is not lost.
-  const prep = now.before ? planned(s.data, sp, 'dic').filter((r) => kindOf(r.stage) === 'decision') : []
   const reveal = useReveal()
-  // North star → this month's result → the next action, which is on screen in under half a second.
-  const RESULT = 0.16
-  const NEXT = 0.3
+  const pillarIndex = (id: string) => sp.pillars.findIndex((p) => p.id === id)
   const actions = (key: Month, pillarId: string) => planned(s.data, sp, key).filter((r) => r.pillar.id === pillarId)
   const actionRows = (key: Month, pillarId: string) => {
     const mine = actions(key, pillarId)
@@ -106,85 +128,107 @@ function ActivePlan() {
       <p className="py-2 text-[16px] text-[#5f3a00]">Sin acciones este mes: falta planificarlo.</p>
     )
   }
-  const next = prep.length > 0 ? (
-    <Box tone="focus" className={`mt-4 ${reveal(NEXT).className}`} style={reveal(NEXT).style} testId="before-start">
-      <p className="text-[15px] font-medium text-ink-3">Antes de empezar</p>
-      <p className="mt-1 text-[18px] leading-[1.4] text-ink">
-        {prep.length === 1 ? 'Una acción de diciembre necesita' : `${prep.length} acciones de diciembre necesitan`} antes una decisión tuya.
-      </p>
-      <div className="mt-1">
-        {prep.slice(0, 3).map((r) => (
-          <Row key={r.action.id} href={`#/tarea/${encodeURIComponent(r.task.id)}`} title={r.task.title} sub={STAGE_LABEL[r.stage]} />
-        ))}
-      </div>
-      <div className="mt-3">
-        <Primary testId="before-start-open" onClick={() => go(`#/tarea/${encodeURIComponent(prep[0].task.id)}`)}>
-          Resolver la primera
-        </Primary>
-      </div>
-    </Box>
-  ) : (
-    here && (
-      <Box tone="focus" className={`mt-4 ${reveal(NEXT).className}`} style={reveal(NEXT).style} testId="continue-here">
-        <p className="text-[15px] font-medium text-ink-3">{now.before ? 'Lo primero, el 1 de diciembre' : 'Siguiente acción'}</p>
-        <p className="mt-1 text-[20px] leading-[1.3] text-ink">{here.task.title}</p>
-        <div className="mt-2">
-          <KindTag kind={kindOf(here.stage)} label={KIND_LABEL[kindOf(here.stage)]} />
-        </div>
-        <div className="mt-3">
-          <Primary testId="continue-open" onClick={() => go(`#/tarea/${encodeURIComponent(here.task.id)}`)}>
-            Abrir
-          </Primary>
-        </div>
-      </Box>
-    )
-  )
+  const it = focus.item
+  const missing = it && focus.kind !== 'hacer' ? needs(s.data, it.task) : undefined
   return (
     <div data-testid="plan-active" className="flex flex-col">
       <div {...reveal(0)}>
         <Kicker>{now.before ? `Empieza el 1 de diciembre, en ${startsIn} días` : now.after ? 'Plan terminado' : `${current.label}, mes ${MONTHS.indexOf(current) + 1} de 3`}</Kicker>
       </div>
-      {/* 1 · The north star: the one sentence everything answers to. */}
-      <section {...reveal(0.04, 'surface relative mt-3 overflow-hidden rounded-[26px] px-4 pt-3.5 pb-4')} data-testid="north-star">
-        <div className="flex items-center gap-2.5">
-          <span className="pl-orb pl-orb-hero grid size-9 shrink-0 place-items-center text-[#5634c4]" aria-hidden>
-            <MapIcon name="estrella" className="size-[18px]" />
+
+      {/* The north star, always at hand but compact: one tap shows it whole. */}
+      <button type="button" aria-expanded={starOpen} onClick={() => setStarOpen(!starOpen)} {...reveal(0.04, 'hit surface-quiet mt-3 flex w-full items-start gap-3 rounded-[20px] px-3 py-2.5 text-left')} data-testid="north-star">
+        <span className="pl-orb pl-orb-hero mt-0.5 grid size-8 shrink-0 place-items-center text-[#5634c4]" aria-hidden>
+          <MapIcon name="estrella" className="size-4" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[14px] font-medium text-[#5634c4]">Estrella polar</span>
+          <span className={`text-[16px] leading-[1.45] text-ink ${starOpen ? 'block' : 'line-clamp-2'}`} data-testid="north-star-text">
+            {sp.northStar}
           </span>
-          <p className="text-[15px] font-medium text-[#5634c4]">Estrella polar</p>
-        </div>
-        <h1 className="font-display mt-2 text-[24px] leading-[1.3] font-medium tracking-[-0.015em] text-ink">{sp.northStar}</h1>
-      </section>
+        </span>
+      </button>
 
-      {/* 2 · This month's result, one per pillar; each opens the actions that lead to it. */}
-      <section {...reveal(RESULT, 'surface-quiet mt-4 rounded-[24px] px-4 pt-4 pb-1')} data-testid="month-result">
-        <h2 className="flex items-center gap-2 text-[15px] font-medium text-ink-3">
-          <span aria-hidden className="size-2 rotate-45 bg-[#8b6fe0]" />
-          Resultado del mes · al final de {current.label.toLowerCase()}
-        </h2>
-        <div className="mt-1" data-testid="month-body">
+      {/* A · Este mes: the result being sought, in brief. */}
+      <section {...reveal(0.12, 'mt-5')} data-testid="this-month">
+        <h2 className="text-[15px] font-medium text-ink-3">{now.before ? 'Para diciembre' : `Este mes · ${current.label}`}</h2>
+        <ol className="mt-1">
           {sp.pillars.map((p, pi) => (
-            <More
-              key={p.id}
-              id={`plan:mes:${now.month}:${p.id}`}
-              testId="month-result-item"
-              lead={<span className="pl-node grid size-8 shrink-0 place-items-center self-start text-[15px] font-medium text-[#3e4560]" aria-label={`Pilar ${pi + 1}`}>{pi + 1}</span>}
-              title={<span className="block text-[20px] leading-[1.35] font-normal">{p.results[now.month]}</span>}
-            >
-              <p className="text-[15px] text-ink-3">
-                Pilar {pi + 1} · {p.name} · {actions(now.month, p.id).length === 1 ? '1 acción' : `${actions(now.month, p.id).length} acciones`} este mes
-              </p>
-              {actionRows(now.month, p.id)}
-            </More>
+            <li key={p.id} className="flex items-start gap-2.5 py-0.5" data-testid="this-month-result">
+              <span className="pl-node mt-0.5 grid size-6 shrink-0 place-items-center text-[14px] font-semibold text-[#2c3350]" aria-label={`Pilar ${pi + 1}`}>
+                {pi + 1}
+              </span>
+              <span className="text-[17px] leading-[1.4] text-ink">{p.results[now.month]}</span>
+            </li>
           ))}
-        </div>
+        </ol>
       </section>
 
-      {/* 3 · The next action or decision. */}
-      {next}
+      {/* B · Continúa aquí: one action or decision, why it matters, what is missing, and the rule that chose it. */}
+      <section {...reveal(0.24, 'surface mt-4 rounded-[24px] px-4 pt-4 pb-3 shadow-[0_0_0_1px_color-mix(in_srgb,var(--color-electric)_28%,transparent),0_24px_46px_-24px_rgba(58,130,246,0.4)]')} data-testid="continue-here" data-kind={focus.kind}>
+        <h2 className="text-[15px] font-medium text-ink-3">
+          Continúa aquí{it && <span className="font-normal"> · {FOCUS_HEAD[focus.kind].toLowerCase()}</span>}
+        </h2>
+        {it ? (
+          <>
+            <p className="mt-1 text-[20px] leading-[1.35] font-medium text-ink" data-testid="continue-title">
+              {it.task.title} <KindTag kind={kindOf(it.stage)} label={KIND_LABEL[kindOf(it.stage)]} />
+            </p>
+            <dl className="mt-2 text-[16px] leading-[1.45]">
+              <div data-testid="continue-why">
+                <dt className="inline font-medium text-ink-3">Por qué importa: </dt>
+                <dd className="inline text-ink">
+                  acerca «{it.pillar.results[focus.month]}» (pilar {pillarIndex(it.pillar.id) + 1}).
+                </dd>
+              </div>
+              {focus.kind !== 'hacer' && (
+                <div className="mt-1" data-testid="continue-missing">
+                  <dt className="inline font-medium text-ink-3">Qué falta: </dt>
+                  <dd className="inline text-ink">{focus.kind === 'empieza' ? `que empiece el sprint.${missing ? ` ${missing}` : ''}` : (missing ?? 'nada más.')}</dd>
+                </div>
+              )}
+            </dl>
+            <div className="mt-2">
+              <Orb testId="continue-open" label={FOCUS_ORB[focus.kind]} onPress={() => go(`#/tarea/${encodeURIComponent(it.task.id)}`)} />
+            </div>
+            <p className="mt-1 text-[14px] leading-[1.45] text-ink-3" data-testid="continue-rule">
+              Por qué esta: {focus.rule.charAt(0).toLowerCase() + focus.rule.slice(1)}
+            </p>
+          </>
+        ) : (
+          <p className="mt-2 text-[17px] leading-[1.45] text-ink" data-testid="continue-rule">
+            {focus.rule}
+          </p>
+        )}
+      </section>
 
-      {/* The rest, one tap away and closed until needed. */}
-      <section {...reveal(NEXT + GAP, 'mt-6')} data-testid="plan-more">
-        <More id="plan:pilares" testId="pillars" title="Los tres pilares" hint={sp.pillars.map((p) => p.name).join(' · ')}>
+      {/* C · Explorar: everything else, one tap away and closed until asked for. */}
+      <section {...reveal(0.36, 'mt-6')} data-testid="explore">
+        <h2 className="text-[15px] font-medium text-ink-3">Explorar</h2>
+        <More id="plan:resultados" testId="explore-results" title="Resultados del mes" hint="Elige un mes y abre un resultado">
+          <Timeline month={month} onPick={setMonth} testId="plan-months" />
+          <div className="mt-2" data-testid="month-body">
+            {sp.pillars.map((p, pi) => (
+              <More
+                key={`${month}-${p.id}`}
+                id={`plan:mes:${month}:${p.id}`}
+                testId="month-result-item"
+                lead={
+                  <span className="pl-node grid size-8 shrink-0 place-items-center self-start text-[15px] font-medium text-[#3e4560]" aria-label={`Pilar ${pi + 1}`}>
+                    {pi + 1}
+                  </span>
+                }
+                title={<span className="block text-[19px] leading-[1.35] font-normal">{p.results[month]}</span>}
+              >
+                <p className="text-[15px] text-ink-3">
+                  {p.name} · {actions(month, p.id).length === 1 ? '1 acción' : `${actions(month, p.id).length} acciones`}
+                </p>
+                {actionRows(month, p.id)}
+              </More>
+            ))}
+          </div>
+        </More>
+        <More id="plan:pilares" testId="pillars" title="Mis tres pilares" hint="Su resultado en cada mes y sus mapas">
           {sp.pillars.map((p, pi) => (
             <div key={p.id} className="flex items-start gap-3 border-b border-[var(--line)] py-3 last:border-b-0" data-testid="pillar">
               <span className="pl-node grid size-8 shrink-0 place-items-center text-[15px] font-medium text-[#3e4560]" aria-hidden>
@@ -192,6 +236,15 @@ function ActivePlan() {
               </span>
               <div className="min-w-0 flex-1">
                 <h3 className="text-[19px] leading-[1.3] font-medium text-ink">{p.name}</h3>
+                {s.boceto.purposes[p.id] && <p className="mt-1 text-[16px] leading-[1.45] text-ink-2">{s.boceto.purposes[p.id]}</p>}
+                <ul className="mt-1">
+                  {MONTHS.map((m) => (
+                    <li key={m.key} className="text-[16px] leading-[1.5] text-ink-2">
+                      <span className="text-ink-3">{m.short} · </span>
+                      {p.results[m.key]}
+                    </li>
+                  ))}
+                </ul>
                 <p className="mt-1 text-[16px] leading-[1.6] text-ink-3" data-testid="pillar-projects">
                   Mapa de{' '}
                   {projectsOfPillar(s.data, sp, p.id).map((id, k) => (
@@ -207,30 +260,64 @@ function ActivePlan() {
             </div>
           ))}
         </More>
-        <More id="plan:completo" testId="plan-full" title="Plan completo" hint={`${others.map((m) => m.label).join(' y ')}, con sus resultados y acciones`}>
-          <p className="mb-3 text-[15px] leading-[1.45] text-ink-3">{current.label} está arriba, en el resumen.</p>
-          <Segmented testId="months" value={month} onChange={setMonth} options={others.map((m) => ({ value: m.key, label: m.label }))} />
-          <div className="mt-2">
-            {sp.pillars.map((p, pi) => (
-              <div key={p.id} className="border-b border-[var(--line)] py-3 last:border-b-0" data-testid="full-pillar">
-                <p className="text-[15px] font-medium text-ink-3">
-                  Pilar {pi + 1} · {p.name}
+        <More id="plan:completo" testId="plan-full" title="Plan completo" hint="Las acciones de los tres meses">
+          {MONTHS.map((m) => {
+            const all = planned(s.data, sp, m.key)
+            return (
+              <div key={m.key} className="mt-4 first:mt-0" data-testid="full-month">
+                <p className="pl-title text-[19px] text-ink">
+                  {m.label} <span className="text-[15px] font-normal text-ink-3">· {all.length === 1 ? '1 acción' : `${all.length} acciones`}</span>
                 </p>
-                <p className="mt-1 text-[18px] leading-[1.4] text-ink" data-testid="full-result">
-                  {p.results[month]}
-                </p>
-                <div className="mt-1">{actionRows(month, p.id)}</div>
+                {sp.pillars.map((p, pi) => (
+                  <div key={p.id} className="mt-2 border-l-2 border-[var(--line)] pl-3" data-testid="full-pillar">
+                    <p className="text-[15px] font-medium text-ink-3">
+                      Pilar {pi + 1} · {p.name}
+                    </p>
+                    <p className="text-[17px] leading-[1.4] text-ink" data-testid="full-result">
+                      {p.results[m.key]}
+                    </p>
+                    {actionRows(m.key, p.id)}
+                  </div>
+                ))}
               </div>
-            ))}
+            )
+          })}
+        </More>
+        <More id="plan:ajustar" testId="adjust" title="Ajustar estrategia" hint="Contar cambios, revisar el plan u opinión de Grok">
+          <p className="text-[16px] leading-[1.5] text-ink-2">Aprobado por ti el {shortDate(sp.approvedAt ?? s.today)}.</p>
+          <div className="mt-2">
+            <TextLink href="#/actualizar" testId="adjust-update">
+              Contar qué ha cambiado
+            </TextLink>
+          </div>
+          <div className="mt-3" data-testid="adjust-reopen">
+            {!reopen ? (
+              <Secondary testId="adjust-reopen-start" onClick={() => setReopen(true)}>
+                Revisar la estrategia
+              </Secondary>
+            ) : (
+              <div className="surface rounded-[18px] px-3 py-3">
+                <p className="text-[16px] leading-[1.45] text-ink">El sprint volverá a ser un borrador hasta que lo apruebes otra vez. Se conservan tu estrella polar, tus pilares y tus acciones.</p>
+                <div className="mt-2 flex flex-col gap-2">
+                  <Primary
+                    testId="adjust-reopen-confirm"
+                    onClick={() => {
+                      set((st) => ({ ...st, sprint: { ...sp, status: 'borrador', approvedAt: undefined }, boceto: { ...st.boceto, scene: 4, reached: 5, hoursOk: true, month: now.month }, notice: 'El sprint vuelve a ser un borrador.' }))
+                      go(sceneHref(4))
+                    }}
+                  >
+                    Sí, revisarla
+                  </Primary>
+                  <Secondary onClick={() => setReopen(false)}>Todavía no</Secondary>
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="mt-4">
+            <GrokList sp={sp} />
           </div>
         </More>
-        <More id="plan:grok" title="Grok, asesor opcional" hint="Observaciones simuladas; no cambia el plan" testId="grok">
-          <GrokList sp={sp} />
-        </More>
       </section>
-      <p className="mt-6 text-center text-[15px] leading-[1.6] text-ink-3">
-        Aprobado por ti el {shortDate(sp.approvedAt ?? s.today)} · <TextLink href="#/actualizar">Contar qué ha cambiado</TextLink>
-      </p>
     </div>
   )
 }

@@ -1,5 +1,5 @@
 import { motion, MotionConfig } from 'framer-motion'
-import { StrictMode, useEffect, useLayoutEffect, useState } from 'react'
+import { StrictMode, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import '../../../styles/index.css'
 import './platino.css'
@@ -42,15 +42,21 @@ export function route(hash: string): Route {
 
 /** Where each screen was left, in memory only: coming back from a task or the map finds the same place. */
 const positions = new Map<string, number>()
-/** A task and a scene of the sprint design always open at their top; every other screen returns to where it was left. */
-const keepsPlace = (hash: string) => !/^#\/(tarea|sprint)\//.test(hash)
+/**
+ * A task always opens at its top, and so does a scene of the sprint design reached from another
+ * scene. Every other screen, and a scene the person comes back to from a task or a map, returns
+ * to where it was left.
+ */
+const keepsPlace = (hash: string, from: string) => !/^#\/(tarea|sprint)\//.test(hash) || (/^#\/sprint\//.test(hash) && /^#\/(tarea|mapa)\//.test(from))
 
 function useHash(): string {
   const [hash, setHash] = useState(() => window.location.hash)
+  const from = useRef('')
   useEffect(() => {
     let current = window.location.hash
     const onScroll = () => positions.set(current, window.scrollY)
     const on = () => {
+      from.current = current
       current = window.location.hash
       setHash(current)
     }
@@ -62,7 +68,7 @@ function useHash(): string {
     }
   }, [])
   useLayoutEffect(() => {
-    window.scrollTo(0, keepsPlace(hash) ? (positions.get(hash) ?? 0) : 0)
+    window.scrollTo(0, keepsPlace(hash, from.current) ? (positions.get(hash) ?? 0) : 0)
   }, [hash])
   return hash
 }

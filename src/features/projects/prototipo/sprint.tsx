@@ -1,11 +1,12 @@
 import { motion } from 'framer-motion'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { changeStatus } from '../domain/operations'
-import { indexTasks } from '../domain/derive'
 import type { Task } from '../domain/types'
+import { STAGE_LABEL } from '../ui/labels'
 import { stageOf } from '../ui/view'
 import { GAP, Sequence, useReveal, useSequence } from './aparicion'
 import { AiTag, H1, KindTag, LocalTag, More, Primary, Secondary, go } from './kit'
+import { needs } from './derive'
 import { mapHref } from './mapa-modelo'
 import { Orb, PillarNode, StarOrb } from './orbe'
 import {
@@ -14,7 +15,6 @@ import {
   TONE_LABEL,
   approve,
   candidatesFor,
-  checkPlan,
   emptySprint,
   grokReview,
   hours,
@@ -25,6 +25,7 @@ import {
   type PlannedItem,
   type Sprint,
 } from './plan'
+import { SEVERITY_LABEL, categoriesOf, monthOrientation, needText, reviewPlan, type Category, type MonthLoad, type OutsideDep, type Review, type Severity } from './revision'
 import { useProto, type Boceto } from './store'
 
 /**
@@ -55,7 +56,6 @@ function useSprint() {
 
 const field = 'w-full rounded-[16px] border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 text-[18px] leading-[1.45] text-ink focus:outline-2 focus:outline-[var(--color-electric)]'
 const chip = 'hit inline-flex min-h-11 items-center justify-center rounded-full border border-[rgba(255,255,255,0.85)] bg-[linear-gradient(180deg,rgba(255,255,255,0.9),rgba(236,238,245,0.75))] px-4 text-[16px] font-medium text-ink shadow-[inset_0_1px_0_#fff,0_6px_14px_-10px_rgba(30,34,60,0.45),0_0_0_1px_rgba(120,128,156,0.14)]'
-const amber = 'rounded-[22px] border border-[rgba(135,82,0,0.28)] bg-[#fbf3e4] px-4 py-4'
 
 /** «Escrita por ti»: the north star the person wrote (not a decision yet: that is the approval). */
 const MineTag = () => <span className="ml-1.5 inline-flex min-h-6 items-center rounded-full bg-[#dff1e8] px-2 py-0.5 align-middle text-[14px] leading-[1.2] font-medium whitespace-nowrap text-[#094d33]">Escrita por ti</span>
@@ -376,7 +376,12 @@ function TresPilares() {
       </ol>
       <p {...reveal(1, 'mt-3 text-[15px] leading-[1.45] text-ink-3')}>En este prototipo la IA simulada propone siempre estos tres caminos, escribas lo que escribas.</p>
       <div {...reveal(0.5, 'mt-5')}>
-        <Orb testId="scene-next" label="Ordenar en 90 días" hint="Diciembre, enero y febrero" onPress={() => go(sceneHref(4))} />
+        <Orb testId="scene-next" label="Ordenar en 90 días" hint="Diciembre, enero y febrero" onPress={() => {
+            // The path always opens on the panorama with December selected.
+            draft((x) => ({ ...x, month: 'dic' }))
+            go(sceneHref(4))
+          }}
+        />
       </div>
     </div>
   )
@@ -391,23 +396,43 @@ const WORK_CHOICES = [
   { value: 'Descartada', label: 'No se hará' },
 ]
 
-/** December → January → February as three metal nodes on one line of light. */
-function Timeline({ month, onPick }: { month: Month; onPick: (m: Month) => void }) {
+/**
+ * December → January → February as three metal orbs on one line of light: the panorama of the
+ * 90 days and the month selector. With `loads`, each month shows its estimated work and hours.
+ */
+export function Timeline({ month, onPick, loads, testId = 'timeline' }: { month: Month; onPick: (m: Month) => void; loads?: MonthLoad[]; testId?: string }) {
   const reveal = useReveal()
   return (
-    <div className="relative" data-testid="timeline" role="group" aria-label="Meses del sprint">
+    <div className="relative" data-testid={testId} role="group" aria-label="Meses del sprint">
       <span aria-hidden {...reveal(0.05, 'pl-linea absolute top-[29px] right-[16.6%] left-[16.6%] h-[2px] rounded-full bg-[linear-gradient(90deg,rgb(214,206,240),rgb(150,176,226),rgb(226,190,200))]')} />
       <div className="relative grid grid-cols-3">
         {MONTHS.map((m, i) => {
           const on = m.key === month
+          const l = loads?.find((x) => x.month === m.key)
+          const over = l && l.known > l.capacity
           return (
-            <button key={m.key} type="button" aria-pressed={on} onClick={() => onPick(m.key)} data-testid="timeline-month" className="hit flex min-h-11 flex-col items-center gap-1.5 py-0.5">
+            <button
+              key={m.key}
+              type="button"
+              aria-pressed={on}
+              aria-label={l ? `${m.label}: ${hours(l.known)} de trabajo estimado para ${hours(l.capacity)} disponibles` : m.label}
+              onClick={() => onPick(m.key)}
+              data-testid="timeline-month"
+              className="hit flex min-h-11 flex-col items-center gap-1 py-0.5"
+            >
               <span {...reveal(0.1 + i * GAP, 'grid h-[58px] place-items-center')}>
                 <span className="pl-node grid place-items-center text-[15px] font-semibold text-[#2c3350] transition-[width,height] duration-300" data-on={on ? 'true' : 'false'} style={{ width: on ? 56 : 42, height: on ? 56 : 42 }}>
                   {m.short}
                 </span>
               </span>
               <span className={`text-[16px] ${on ? 'font-semibold text-ink' : 'text-ink-3'}`}>{m.label}</span>
+              {l && (
+                <span className={`tabular text-center text-[14px] leading-[1.35] ${over ? 'text-[#5f3a00]' : 'text-ink-3'}`} data-testid="timeline-load">
+                  {hours(l.known)}
+                  <br />
+                  de {hours(l.capacity)}
+                </span>
+              )}
             </button>
           )
         })}
@@ -416,137 +441,265 @@ function Timeline({ month, onPick }: { month: Month; onPick: (m: Month) => void 
   )
 }
 
-function Camino() {
-  const { s, set, ctx, sp, b, patch, draft } = useSprint()
-  const reveal = useReveal()
-  const check = checkPlan(s.data, sp)
-  const month = b.month
-  const label = MONTHS.find((m) => m.key === month)!.label
-  const mc = check.months.find((m) => m.month === month)!
-  const over = mc.load > mc.capacity
-  const prereqs = check.prerequisites.filter((p) => p.month === month && !b.dismissed.includes(p.task.id))
-  const count = mc.results.reduce((a, r) => a + r.items.length, 0)
-  const [askHours, setAskHours] = useState(false)
-  const [pendingHours, setPendingHours] = useState<number | null>(null)
+/**
+ * The one fact the plan needs and does not have: weekly availability. Asked once, in the scene
+ * where the months are laid out; the same hours apply to the three months. Until it is answered
+ * the plan keeps an explicit, editable assumption, never presented as confirmed.
+ */
+function HoursPicker({ onDone }: { onDone?: () => void }) {
+  const { s, set, sp, b, patch, draft } = useSprint()
+  const [pending, setPending] = useState<number | null>(null)
+  const [other, setOther] = useState(false)
+  const [value, setValue] = useState('')
   const edited = sp.actions.some((a) => a.from === 'tuya')
+  const done = () => {
+    setPending(null)
+    setOther(false)
+    onDone?.()
+  }
   const reshape = (h: number) => {
     patch((x) => ({ ...proposeStrategy(s.data, h), northStar: x.northStar, northStarFrom: x.northStarFrom, pillars: x.pillars }))
     draft((x) => ({ ...x, hoursOk: true }))
-    set((st) => ({ ...st, notice: `Acciones ajustadas a ${h} h por semana.` }))
-    setPendingHours(null)
-    setAskHours(false)
+    set((st) => ({ ...st, notice: `Recalculado con ${h} h por semana en los tres meses.` }))
+    done()
   }
-  const answerHours = (h: number) => {
+  const answer = (h: number) => {
     if (h === sp.hoursPerWeek) {
       draft((x) => ({ ...x, hoursOk: true }))
-      setAskHours(false)
-    } else if (edited) setPendingHours(h)
+      set((st) => ({ ...st, notice: `Confirmado: ${h} h por semana.` }))
+      done()
+    } else if (edited) setPending(h)
     else reshape(h)
   }
-  const showQuestion = !b.hoursOk || askHours
+  const typed = Number(value.replace(',', '.'))
+  const valid = Number.isFinite(typed) && typed >= 1 && typed <= 60
+  return (
+    <section className="surface mt-4 rounded-[22px] px-4 py-4" data-testid="hours-question">
+      <p className="text-[17px] leading-[1.45] text-ink">¿Cuánto tiempo quieres dedicar a estos proyectos cada semana?</p>
+      <p className="mt-1 text-[15px] leading-[1.45] text-ink-3">Se aplica igual a diciembre, enero y febrero.</p>
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        {[3, 6, 10].map((h) => (
+          <button key={h} type="button" aria-pressed={b.hoursOk && h === sp.hoursPerWeek} className={`${chip} ${b.hoursOk && h === sp.hoursPerWeek ? 'ring-2 ring-[var(--color-electric)]' : ''}`} onClick={() => answer(h)} data-testid="hours-choice">
+            {h} h
+          </button>
+        ))}
+      </div>
+      {!other ? (
+        <button type="button" className={`${chip} mt-2 w-full`} onClick={() => setOther(true)} data-testid="hours-other">
+          Otra cantidad
+        </button>
+      ) : (
+        <form
+          className="mt-2 flex items-end gap-2"
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (valid) answer(Math.round(typed * 2) / 2)
+          }}
+        >
+          <label className="min-w-0 flex-1">
+            <span className="block text-[15px] text-ink-3">Horas por semana</span>
+            <input autoFocus inputMode="decimal" className={`${field} mt-1`} value={value} onChange={(e) => setValue(e.target.value)} data-testid="hours-other-input" aria-describedby="hours-other-help" />
+          </label>
+          <button type="submit" disabled={!valid} className={`${chip} shrink-0 disabled:opacity-45`} data-testid="hours-other-use">
+            Usar
+          </button>
+        </form>
+      )}
+      {other && (
+        <p id="hours-other-help" className="mt-1 text-[14px] text-ink-3">
+          Entre 1 y 60 h.
+        </p>
+      )}
+      {pending !== null && (
+        <div className="mt-3" data-testid="hours-reshape">
+          <p className="text-[16px] leading-[1.45] text-ink-2">Con {pending} h cambian las acciones propuestas de los tres meses y se pierden tus cambios en ellas.</p>
+          <div className="mt-2 flex flex-col gap-2">
+            <Secondary onClick={() => reshape(pending)}>Ajustar las acciones a {pending} h</Secondary>
+            <button
+              type="button"
+              className="hit min-h-11 text-[16px] text-ink-2 underline underline-offset-4"
+              onClick={() => {
+                patch((x) => ({ ...x, hoursPerWeek: pending }))
+                draft((x) => ({ ...x, hoursOk: true }))
+                done()
+              }}
+            >
+              Mantener mis acciones
+            </button>
+          </div>
+        </div>
+      )}
+    </section>
+  )
+}
+
+/** The availability, said once: an assumption until answered, then the person's figure. */
+function HoursLine({ review, onChange }: { review: Review; onChange: () => void }) {
+  const { sp, b } = useSprint()
+  const unest = review.loads.reduce((a, l) => a + l.unestimated, 0)
+  return (
+    <p className="mt-3 text-[16px] leading-[1.5] text-ink-2" data-testid="hours-line" data-assumed={b.hoursOk ? 'false' : 'true'}>
+      {b.hoursOk ? `Con ${sp.hoursPerWeek} h por semana, las mismas en los tres meses.` : `Calculado con un supuesto de ${sp.hoursPerWeek} h por semana, sin confirmar.`}
+      {unest > 0 && ` ${unest === 1 ? 'Una acción no tiene' : `${unest} acciones no tienen`} estimación: no la cuento.`}
+      <LocalTag />
+      {b.hoursOk && (
+        <>
+          {' '}
+          <button type="button" className="hit inline-flex min-h-11 items-center text-[16px] text-electric underline underline-offset-4" onClick={onChange} data-testid="hours-change">
+            Cambiar
+          </button>
+        </>
+      )}
+    </p>
+  )
+}
+
+/** A task outside the sprint that a planned action needs: mandatory or one of several alternatives. Never added on its own. */
+function OutsideRow({ dep }: { dep: OutsideDep }) {
+  const { s, patch, draft } = useSprint()
+  const month = MONTHS.find((m) => m.key === dep.month)!.label.toLowerCase()
+  const include = (t: Task) => patch((x) => ({ ...x, actions: [...x.actions, { id: `${dep.pillarId}-${t.id}`, pillarId: dep.pillarId, taskId: t.id, month: dep.month, from: 'tuya' }] }))
+  const keep = (on: boolean) => draft((x) => ({ ...x, dismissed: on ? [...x.dismissed, dep.key] : x.dismissed.filter((k) => k !== dep.key) }))
+  return (
+    <div className="mt-2 rounded-[18px] border border-[rgba(135,82,0,0.28)] bg-[#fbf3e4] px-3 py-3" data-testid="outside-dep" data-mode={dep.mode}>
+      <p className="text-[16px] leading-[1.45] text-ink">
+        {dep.mode === 'todas' ? (
+          <>
+            Necesita «{dep.tasks[0].title}», que no está en el sprint.
+          </>
+        ) : (
+          <>Necesita una de estas, y ninguna está en el sprint: {dep.tasks.map((t) => `«${t.title}»`).join(' o ')}.</>
+        )}
+      </p>
+      <p className="mt-1 text-[15px] font-medium text-[#5f3a00]" data-testid="outside-mode">
+        {dep.mode === 'todas' ? 'Requisito obligatorio' : 'Alternativas: basta con una'}
+      </p>
+      {dep.tasks.map((t) => {
+        const st = stageOf(s.data, t)
+        const why = needs(s.data, t)
+        return (
+          <p key={t.id} className="mt-1 text-[15px] leading-[1.45] text-ink-2">
+            {dep.tasks.length > 1 && `«${t.title}»: `}
+            {STAGE_LABEL[st]}.{why && ` ${why}`}
+            {st !== 'lista' && ' Incluirla no la desbloquea.'}
+          </p>
+        )
+      })}
+      {dep.kept ? (
+        <p className="mt-2 text-[15px] leading-[1.45] text-ink-2" data-testid="outside-kept">
+          La mantienes fuera: queda como reserva aceptada.{' '}
+          <button type="button" className="hit inline-flex min-h-11 items-center text-electric underline underline-offset-4" onClick={() => keep(false)}>
+            Deshacer
+          </button>
+        </p>
+      ) : (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          {dep.tasks.map((t) => (
+            <button key={t.id} type="button" className={chip} data-testid="prereq-add" onClick={() => include(t)}>
+              {dep.tasks.length > 1 ? `Incluir «${t.title}»` : `Incluirla en ${month}`}
+            </button>
+          ))}
+          <button type="button" className="hit min-h-11 px-2 text-[16px] text-ink-2 underline underline-offset-4" data-testid="prereq-keep" onClick={() => keep(true)}>
+            Mantenerla fuera
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** One expected result, opened: its actions, what each one needs, and what waits outside the sprint. */
+function ResultDetail({ review, month, pillarId }: { review: Review; month: Month; pillarId: string }) {
+  const { s, sp } = useSprint()
+  const i = sp.pillars.findIndex((p) => p.id === pillarId)
+  const items = review.check.months.find((m) => m.month === month)!.results.find((r) => r.pillarId === pillarId)?.items ?? []
+  return (
+    <div data-testid="result-detail">
+      <p className="text-[15px] text-ink-3">
+        Pilar {i + 1} · {sp.pillars[i].name}
+      </p>
+      {!items.length && <p className="mt-2 text-[16px] leading-[1.45] text-[#5f3a00]">Falta planificarlo: no hay ninguna acción para este resultado. Añádela en «Ver acciones del mes».</p>}
+      {items.map((it) => {
+        const why = it.kind === 'terminada' ? undefined : needs(s.data, it.task)
+        return (
+          <div key={it.action.id} className="border-b border-[var(--line)] py-3 last:border-b-0" data-testid="result-action">
+            <a href={`#/tarea/${encodeURIComponent(it.task.id)}`} className={`hit block text-[17px] leading-[1.4] ${it.kind === 'terminada' ? 'text-ink-4 line-through' : 'text-ink'}`} data-testid="result-action-open">
+              {it.task.title}
+            </a>
+            <div className="mt-1">
+              <KindTag kind={it.kind} label={KIND_LABEL[it.kind]} />
+            </div>
+            {why && <p className="mt-1 text-[15px] leading-[1.45] text-ink-2">{why}</p>}
+            {review.outside
+              .filter((o) => o.forTask.id === it.task.id)
+              .map((o) => (
+                <OutsideRow key={o.key} dep={o} />
+              ))}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+const useReview = () => {
+  const { s, sp, b } = useSprint()
+  return reviewPlan(s.data, sp, { hoursOk: b.hoursOk, kept: b.dismissed })
+}
+
+function Camino() {
+  const { set, ctx, sp, b, draft } = useSprint()
+  const reveal = useReveal()
+  const review = useReview()
+  const month = b.month
+  const label = MONTHS.find((m) => m.key === month)!.label
+  const mc = review.check.months.find((m) => m.month === month)!
+  const count = mc.results.reduce((a, r) => a + r.items.length, 0)
+  const [changing, setChanging] = useState(false)
   return (
     <div data-testid="scene-path">
-      <Timeline month={month} onPick={(m) => draft((x) => ({ ...x, month: m }))} />
+      {/* First the panorama: the three months, December selected, each with its work and hours. */}
+      <Timeline month={month} onPick={(m) => draft((x) => ({ ...x, month: m }))} loads={review.loads} />
+      <div {...reveal(0.3)}>
+        <HoursLine review={review} onChange={() => setChanging(true)} />
+      </div>
+      {(!b.hoursOk || changing) && (
+        <div {...reveal(0.36)}>
+          <HoursPicker onDone={() => setChanging(false)} />
+        </div>
+      )}
 
-      <section className="mt-4" data-testid="month-results" aria-live="polite">
-        <h2 {...reveal(0.3, 'text-[15px] font-medium text-ink-3')}>
+      {/* The month: its three results, each one opens on its own. */}
+      <section className="mt-5" data-testid="month-results" aria-live="polite">
+        <h2 {...reveal(0.42, 'text-[15px] font-medium text-ink-3')}>
           Al final de {label.toLowerCase()}
           <AiTag />
         </h2>
-        <ol>
-          {sp.pillars.map((p, i) => {
-            const note = mc.results.find((r) => r.pillarId === p.id)?.note
-            return (
-              <li key={p.id} {...reveal(0.36 + i * GAP, 'flex gap-3 border-b border-[var(--line)] py-3 last:border-b-0')} data-testid="month-result">
-                <span className="mt-0.5">
+        <div {...reveal(0.48, 'mt-1')}>
+          {sp.pillars.map((p, i) => (
+            <More
+              key={`${month}-${p.id}`}
+              id={`camino:${month}:${p.id}`}
+              testId="month-result"
+              lead={
+                <span className="self-start">
                   <PillarNode i={i} size={32} />
                 </span>
-                <div className="min-w-0">
-                  <p className="pl-title text-[22px] leading-[1.3] text-ink">{p.results[month]}</p>
-                  <p className="mt-0.5 text-[15px] leading-[1.4] text-ink-3">{p.name}</p>
-                  {note && <p className="mt-1 text-[16px] leading-[1.45] text-[#5f3a00]">{note}</p>}
-                </div>
-              </li>
-            )
-          })}
-        </ol>
+              }
+              title={<span className="pl-title block text-[20px] leading-[1.3]">{p.results[month]}</span>}
+            >
+              <ResultDetail review={review} month={month} pillarId={p.id} />
+            </More>
+          ))}
+        </div>
+        {/* One orientation for the month, instead of the same warning under every result. */}
+        <p {...reveal(0.6, 'mt-3 border-l-2 border-[color-mix(in_srgb,var(--color-electric)_40%,transparent)] pl-3 text-[16px] leading-[1.5] text-ink-2')} data-testid="month-orientation">
+          {monthOrientation(review, month, sp.pillars.length)}
+        </p>
       </section>
 
-      <p {...reveal(0.7, `mt-3 text-[16px] leading-[1.5] ${over ? 'text-[#5f3a00]' : 'text-ink-2'}`)} data-testid="month-load">
-        {label}: {hours(mc.load)} de trabajo para {hours(mc.capacity)} disponibles
-        {mc.unestimated > 0 && ` · ${mc.unestimated} sin estimar, cuento 2 h cada una`}
-        <LocalTag />
-        {b.hoursOk && !askHours && (
-          <>
-            {' '}
-            <button type="button" className="hit inline-flex min-h-11 items-center text-[16px] text-electric underline underline-offset-4" onClick={() => setAskHours(true)} data-testid="hours-change">
-              Cambiar horas
-            </button>
-          </>
-        )}
-      </p>
-
-      {/* The one fact the plan needs and does not have: asked here, nothing else. */}
-      {showQuestion && (
-        <section {...reveal(0.76, 'surface mt-4 rounded-[22px] px-4 py-4')} data-testid="hours-question">
-          <p className="text-[17px] leading-[1.45] text-ink">Solo me falta un dato: ¿cuántas horas a la semana tienes para estos proyectos?</p>
-          {!b.hoursOk && <p className="mt-1 text-[15px] leading-[1.45] text-ink-3">Mientras no lo digas, calculo con {sp.hoursPerWeek} h y lo dejo como reserva.</p>}
-          <div className="mt-3 grid grid-cols-3 gap-2">
-            {[3, 6, 10].map((h) => (
-              <button key={h} type="button" className={`${chip} ${h === sp.hoursPerWeek ? 'ring-2 ring-[var(--color-electric)]' : ''}`} onClick={() => answerHours(h)} data-testid="hours-choice">
-                {h} h
-              </button>
-            ))}
-          </div>
-          {pendingHours !== null && (
-            <div className="mt-3" data-testid="hours-reshape">
-              <p className="text-[16px] leading-[1.45] text-ink-2">Con {pendingHours} h cambian las acciones propuestas y se pierden tus cambios en ellas.</p>
-              <div className="mt-2 flex flex-col gap-2">
-                <Secondary onClick={() => reshape(pendingHours)}>Ajustar las acciones a {pendingHours} h</Secondary>
-                <button
-                  type="button"
-                  className="hit min-h-11 text-[16px] text-ink-2 underline underline-offset-4"
-                  onClick={() => {
-                    patch((x) => ({ ...x, hoursPerWeek: pendingHours }))
-                    draft((x) => ({ ...x, hoursOk: true }))
-                    setPendingHours(null)
-                    setAskHours(false)
-                  }}
-                >
-                  Mantener mis acciones
-                </button>
-              </div>
-            </div>
-          )}
-        </section>
-      )}
-
-      {prereqs.length > 0 && (
-        <section {...reveal(0.8, `${amber} mt-4`)} data-testid="month-prereqs">
-          <h3 className="text-[17px] font-medium text-[#5f3a00]">Falta algo para empezar en {label.toLowerCase()}</h3>
-          {prereqs.map((r) => {
-            const pid = sp.actions.find((a) => a.taskId === r.forTask.id)!.pillarId
-            return (
-              <div key={r.task.id} className="border-t border-[rgba(135,82,0,0.18)] py-3 first:border-t-0" data-testid="month-prereq">
-                <p className="text-[17px] leading-[1.45] text-ink">
-                  «{r.forTask.title}» espera a «{r.task.title}», que no está en el sprint.
-                </p>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <button type="button" className={chip} data-testid="prereq-add" onClick={() => patch((x) => ({ ...x, actions: [...x.actions, { id: `${pid}-${r.task.id}`, pillarId: pid, taskId: r.task.id, month: r.month, from: 'tuya' }] }))}>
-                    Incluirla en {label.toLowerCase()}
-                  </button>
-                  <button type="button" className="hit min-h-11 px-2 text-[16px] text-ink-2 underline underline-offset-4" onClick={() => draft((x) => ({ ...x, dismissed: [...x.dismissed, r.task.id] }))}>
-                    No por ahora
-                  </button>
-                </div>
-              </div>
-            )
-          })}
-        </section>
-      )}
-
-      <section {...reveal(0.84, 'mt-4')}>
-        <More key={month} id={`camino:${month}`} title={`Acciones de ${label.toLowerCase()}`} count={count} hint="Cambiar de mes, quitar o añadir" testId="month-actions">
+      <section {...reveal(0.66, 'mt-3')}>
+        <More key={month} id={`camino:${month}`} title="Ver acciones del mes" count={count} hint="Cambiar de mes, quitar, añadir o aclarar" testId="month-actions">
           {sp.pillars.map((p) => {
             const items = mc.results.find((r) => r.pillarId === p.id)?.items ?? []
             return (
@@ -650,152 +803,345 @@ function AddAction({ pillarId, month }: { pillarId: string; month: Month }) {
   )
 }
 
+
 // ── 5 · Revisar y aprobar ───────────────────────────────────────────────────
 
-function Revisar() {
-  const { s, set, sp, b, draft } = useSprint()
-  const reveal = useReveal()
-  const [grok, setGrok] = useState(false)
-  const [confirming, setConfirming] = useState(false)
-  const check = checkPlan(s.data, sp)
-  const index = indexTasks(s.data)
-  const pillar = (id: string) => sp.pillars.find((p) => p.id === id)!
+const SEVERITY_STYLE: Record<Severity, string> = {
+  informativa: 'bg-[#e7e9ef] text-[#343c50]',
+  decision: 'bg-[#fbf0dc] text-[#5f3a00]',
+  corregir: 'bg-[#fbe6e6] text-[#7f1d1d]',
+}
+const SeverityTag = ({ s }: { s: Severity }) => (
+  <span className={`inline-flex min-h-6 items-center rounded-full px-2 py-0.5 text-[14px] leading-[1.2] font-medium whitespace-nowrap ${SEVERITY_STYLE[s]}`} data-testid="severity">
+    {SEVERITY_LABEL[s]}
+  </span>
+)
+
+/** Which category of the review is open: one at a time, remembered while the prototype is open. */
+let openCategory: Category['id'] | null = null
+
+const actions = (n: number) => (n === 1 ? '1 acción' : `${n} acciones`)
+
+/** Qué sucede · Por qué importa · Qué decisión puedo tomar. */
+function Explain({ what, why, decide }: { what: ReactNode; why: ReactNode; decide: ReactNode }) {
+  const row = (k: string, v: ReactNode, id: string) => (
+    <div className="mt-2 first:mt-0" data-testid={`explain-${id}`}>
+      <dt className="text-[15px] font-medium text-ink-3">{k}</dt>
+      <dd className="text-[17px] leading-[1.45] text-ink">{v}</dd>
+    </div>
+  )
+  return (
+    <dl>
+      {row('Qué sucede', what, 'what')}
+      {row('Por qué importa', why, 'why')}
+      {row('Qué decisión puedes tomar', decide, 'decide')}
+    </dl>
+  )
+}
+
+function CategoryBody({ c, review, toMonth }: { c: Category; review: Review; toMonth: (m: Month) => void }) {
+  const { set, ctx, sp } = useSprint()
+  const [asking, setAsking] = useState<string | null>(null)
   const label = (k: Month) => MONTHS.find((x) => x.key === k)!.label
-  const over = check.months.filter((m) => m.load > m.capacity)
-  // «Needs N decisions first» is grouped per month (one line, not one per result); other notes stay as they are.
-  const decides = /^Necesita antes/
-  const notes = check.months.flatMap((m) => m.results.filter((r) => r.note && !decides.test(r.note)).map((r) => ({ month: m.month, pillarId: r.pillarId, note: r.note! })))
-  const many = (note: string) => (/^Necesita antes una /.test(note) ? 1 : Number(note.match(/^Necesita antes (\d+)/)?.[1] ?? 0))
-  const waiting = check.months
-    .map((m) => {
-      const results = m.results.filter((r) => r.note && decides.test(r.note))
-      return { month: m.month, results: results.length, decisions: results.reduce((a, r) => a + many(r.note!), 0) }
-    })
-    .filter((w) => w.results > 0)
-  const prereqs = check.prerequisites.filter((p) => !b.dismissed.includes(p.task.id))
-  const unclear = sp.actions.filter((a) => {
-    const t = index.get(a.taskId)
-    return t && stageOf(s.data, t, index) === 'por-clasificar'
-  })
+  const pillar = (id?: string) => sp.pillars.find((p) => p.id === id)
+  const byMonth = <T extends { month: Month }>(xs: T[]) => MONTHS.map((m) => ({ month: m.key, items: xs.filter((x) => x.month === m.key) })).filter((g) => g.items.length)
+  const taskLink = (t: Task) => (
+    <a href={`#/tarea/${encodeURIComponent(t.id)}`} className="hit block text-[17px] leading-[1.4] text-ink underline decoration-[var(--line)] underline-offset-4">
+      {t.title}
+    </a>
+  )
+  const monthHead = (m: Month) => <p className="mt-4 text-[15px] font-medium text-ink-3 first:mt-3">{label(m)}</p>
+
+  if (c.id === 'horas')
+    return (
+      <>
+        <Explain what={`Calculo con un supuesto de ${sp.hoursPerWeek} h por semana que no has confirmado.`} why="El reparto de los tres meses depende de esa cifra. Con menos tiempo, algún mes no cabría." decide="Responder aquí la pregunta, o aprobar aceptando el supuesto como reserva." />
+        <HoursPicker />
+      </>
+    )
+
+  if (c.id === 'plan')
+    return (
+      <>
+        <Explain
+          what={
+            <span className="block">
+              {review.gaps.map((g, i) => {
+                const l = review.loads.find((x) => x.month === g.month)!
+                const p = pillar(g.pillarId)
+                return (
+                  <span key={i} className="block" data-testid="gap">
+                    {g.kind === 'sobrecarga'
+                      ? `${label(g.month)}: ${hours(l.known)} de trabajo estimado para ${hours(l.capacity)} disponibles.`
+                      : g.kind === 'sin-acciones'
+                        ? `${label(g.month)}: «${p?.results[g.month]}» no tiene ninguna acción.`
+                        : `${label(g.month)}: todas las acciones de «${p?.results[g.month]}» están bloqueadas.`}
+                  </span>
+                )
+              })}
+            </span>
+          }
+          why="Tal como está, ese resultado no se alcanzará en su mes."
+          decide="Corregirlo en el mes: mover o quitar acciones, añadir una o cambiar tu disponibilidad. También puedes aprobar aceptándolo."
+        />
+        <div className="mt-2 flex flex-wrap gap-2">
+          {[...new Set(review.gaps.map((g) => g.month))].map((m) => (
+            <button key={m} type="button" className={chip} onClick={() => toMonth(m)} data-testid="fix-month">
+              Corregir {label(m).toLowerCase()}
+            </button>
+          ))}
+        </div>
+      </>
+    )
+
+  if (c.id === 'fuera') {
+    const alt = review.outside.filter((o) => o.mode === 'alguna').length
+    return (
+      <>
+        <Explain
+          what={`${review.outside.length === 1 ? 'Una acción espera' : `${review.outside.length} acciones esperan`} a tareas que no están en el sprint.${alt ? ` En ${alt === 1 ? 'una' : alt} basta con una de varias alternativas.` : ''}`}
+          why="Esas acciones no podrán empezar mientras lo que esperan no se termine. Nada se añade solo al sprint."
+          decide="Incluir la tarea en el mes de la acción, o mantenerla fuera y aceptar que esa acción quizá no llegue."
+        />
+        {byMonth(review.outside).map((g) => (
+          <div key={g.month}>
+            {monthHead(g.month)}
+            {g.items.map((o) => (
+              <div key={o.key} className="mt-2" data-testid="outside-item">
+                {taskLink(o.forTask)}
+                <OutsideRow dep={o} />
+              </div>
+            ))}
+          </div>
+        ))}
+      </>
+    )
+  }
+
+  if (c.id === 'decisiones') {
+    const has = (k: string) => review.decisions.filter((d) => d.causes.some((x) => x.kind === k)).length
+    const kinds = [
+      has('comprobar') && `${actions(has('comprobar'))} con una condición sin comprobar`,
+      has('visto-bueno') && `${actions(has('visto-bueno'))} esperando tu visto bueno`,
+      has('no-cumplido') && `${actions(has('no-cumplido'))} con una condición que marcaste como no cumplida`,
+      has('descartada') && `${actions(has('descartada'))} que dependía de algo descartado`,
+    ].filter(Boolean) as string[]
+    const dec = review.decisions.filter((d) => d.month === 'dic').length
+    return (
+      <>
+        <Explain
+          what={`${kinds.join('; ')}.`}
+          why={`Mientras no lo confirmes, esas acciones no cuentan como listas para empezar.${dec ? ` En diciembre son ${dec}.` : ''}`}
+          decide="Confirmar en cada tarea si la condición se cumple o no. También puedes aprobar ya y dedicar a esto el principio de cada mes."
+        />
+        {byMonth(review.decisions).map((g) => (
+          <div key={g.month}>
+            {monthHead(g.month)}
+            {g.items.map((d) => (
+              <div key={d.task.id} className="border-b border-[var(--line)] py-2.5 last:border-b-0" data-testid="decision-item">
+                {taskLink(d.task)}
+                <p className="mt-0.5 text-[15px] leading-[1.45] text-ink-2">{needText(d)}</p>
+              </div>
+            ))}
+          </div>
+        ))}
+      </>
+    )
+  }
+
+  // estados
+  const example = review.unclear[0]?.causes[0]
+  return (
+    <>
+      <Explain
+        what={`${review.unclear.length === 1 ? 'Una acción tiene' : `${review.unclear.length} acciones tienen`} en el dossier un estado que no está claro${example?.kind === 'estado' ? `, como «${example.literal}»` : ''}.`}
+        why="El sprint no las da por empezadas ni por terminadas. Si alguna ya está hecha, el plan cuenta trabajo de más."
+        decide="Decir en qué punto está cada una. Tu respuesta cambia solo esa tarea."
+      />
+      {byMonth(review.unclear).map((g) => (
+        <div key={g.month}>
+          {monthHead(g.month)}
+          {g.items.map((d) => (
+            <div key={d.task.id} className="border-b border-[var(--line)] py-2.5 last:border-b-0" data-testid="unclear-item">
+              {taskLink(d.task)}
+              <p className="mt-0.5 text-[15px] leading-[1.45] text-ink-2">{needText(d)}</p>
+              {asking !== d.task.id ? (
+                <button type="button" className="hit inline-flex min-h-11 items-center text-[16px] text-electric underline underline-offset-4" onClick={() => setAsking(d.task.id)} data-testid="clarify-open">
+                  ¿En qué punto está?
+                </button>
+              ) : (
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  {WORK_CHOICES.map((w) => (
+                    <button
+                      key={w.value}
+                      type="button"
+                      className={chip}
+                      data-testid="clarify-choice"
+                      onClick={() => {
+                        set((st) => ({ ...st, data: changeStatus(st.data, d.task.id, w.value, ctx()), notice: 'Anotado solo en esta tarea.' }))
+                        setAsking(null)
+                      }}
+                    >
+                      {w.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      ))}
+    </>
+  )
+}
+
+function Revisar() {
+  const { set, sp, draft } = useSprint()
+  const reveal = useReveal()
+  const review = useReview()
+  const cats = categoriesOf(review)
+  const [open, setOpen] = useState<Category['id'] | null>(() => (cats.some((c) => c.id === openCategory) ? openCategory : null))
+  const [shown, setShown] = useState<Month | null>(null)
+  const [confirming, setConfirming] = useState(false)
+  const toggle = (id: Category['id']) => {
+    const next = open === id ? null : id
+    openCategory = next
+    setOpen(next)
+  }
   const toMonth = (m: Month) => {
     draft((x) => ({ ...x, month: m }))
     go(sceneHref(4))
   }
-  const reserves: { key: string; text: ReactNode; action?: ReactNode }[] = [
-    ...(!b.hoursOk ? [{ key: 'horas', text: `Horas por semana sin confirmar: calculo con ${sp.hoursPerWeek} h.`, action: <ResLink onClick={() => toMonth(b.month)}>Confirmarlas</ResLink> }] : []),
-    ...over.map((m) => ({ key: `over-${m.month}`, text: `${label(m.month)}: ${hours(m.load)} de trabajo para ${hours(m.capacity)} disponibles.`, action: <ResLink onClick={() => toMonth(m.month)}>Ajustar {label(m.month).toLowerCase()}</ResLink> })),
-    ...notes.map((n) => ({ key: `note-${n.month}-${n.pillarId}`, text: `${label(n.month)} · ${pillar(n.pillarId).name}: ${n.note}` })),
-    ...waiting.map((w) => ({
-      key: `dec-${w.month}`,
-      text: `${label(w.month)}: ${w.results === 1 ? 'un resultado necesita' : `${w.results} de ${sp.pillars.length} resultados necesitan`} antes ${w.decisions === 1 ? 'una decisión tuya' : `${w.decisions} decisiones tuyas`}.`,
-      action: <ResLink onClick={() => toMonth(w.month)}>Ver {label(w.month).toLowerCase()}</ResLink>,
-    })),
-    ...(prereqs.length ? [{ key: 'req', text: `${prereqs.length === 1 ? 'Una acción espera' : `${prereqs.length} acciones esperan`} a tareas que no están en el sprint.`, action: <ResLink onClick={() => toMonth(prereqs[0].month)}>Resolverlo</ResLink> }] : []),
-    ...(unclear.length ? [{ key: 'unclear', text: `${unclear.length === 1 ? 'Una acción tiene' : `${unclear.length} acciones tienen`} el estado por aclarar. El sprint no las da por empezadas.` }] : []),
-  ]
+  const fix = cats.filter((c) => c.severity === 'corregir')
+  const count = (c: Category) => (c.id === 'horas' ? `${sp.hoursPerWeek} h sin confirmar` : c.id === 'plan' ? (c.count === 1 ? '1 punto' : `${c.count} puntos`) : actions(c.count))
   return (
     <div data-testid="scene-review">
-      <div {...reveal(0, 'flex items-center gap-4')}>
-        <StarOrb size={60} />
-        <p className="pl-title min-w-0 flex-1 text-[22px] leading-[1.35] text-ink" data-testid="summary-star">
+      <div {...reveal(0)}>
+        <H1>Tu estrategia está preparada</H1>
+      </div>
+
+      <div {...reveal(0.1, 'mt-5 flex items-center gap-4')}>
+        <StarOrb size={52} />
+        <p className="min-w-0 flex-1 text-[19px] leading-[1.45] font-medium text-ink" data-testid="summary-star">
           {sp.northStar}
         </p>
       </div>
 
-      <ol {...reveal(0.14, 'mt-5')} data-testid="summary-pillars">
+      {/* The three pillars, compact, each with where it leads by the end of February. */}
+      <ol {...reveal(0.2, 'mt-4')} data-testid="summary-pillars">
         {sp.pillars.map((p, i) => (
-          <li key={p.id} className="flex gap-3 border-b border-[var(--line)] py-3 last:border-b-0">
-            <PillarNode i={i} size={32} />
+          <li key={p.id} className="flex gap-3 border-b border-[var(--line)] py-2.5 last:border-b-0">
+            <PillarNode i={i} size={28} />
             <div className="min-w-0">
-              <p className="pl-title text-[19px] leading-[1.3] text-ink">{p.name}</p>
-              <p className="mt-0.5 text-[16px] leading-[1.45] text-ink-2">En febrero: {p.results.feb}</p>
+              <p className="text-[18px] leading-[1.3] font-medium text-ink">{p.name}</p>
+              <p className="mt-0.5 text-[15px] leading-[1.45] text-ink-2">Al final: {p.results.feb}</p>
             </div>
           </li>
         ))}
       </ol>
 
-      <div {...reveal(0.26, 'mt-3 grid grid-cols-3 gap-2')} data-testid="summary-months">
-        {check.months.map((m) => (
-          <button key={m.month} type="button" onClick={() => toMonth(m.month)} className="hit surface-quiet flex min-h-14 flex-col items-center justify-center rounded-[16px] px-1 py-2">
-            <span className="text-[15px] font-semibold text-ink">{MONTHS.find((x) => x.key === m.month)!.short}</span>
-            <span className={`tabular text-[15px] ${m.load > m.capacity ? 'text-[#5f3a00]' : 'text-ink-2'}`}>{Math.round(m.load / 60)} h</span>
-            <span className="tabular text-[14px] text-ink-3">de {Math.round(m.capacity / 60)}</span>
-          </button>
-        ))}
+      {/* The three months: work and hours at a glance; a tap shows that month's results. */}
+      <div {...reveal(0.3, 'mt-3 grid grid-cols-3 gap-2')} data-testid="summary-months">
+        {review.loads.map((l) => {
+          const on = shown === l.month
+          return (
+            <button key={l.month} type="button" aria-expanded={on} onClick={() => setShown(on ? null : l.month)} className={`hit surface-quiet flex min-h-14 flex-col items-center justify-center rounded-[16px] px-1 py-2 ${on ? 'ring-2 ring-[var(--color-electric)]' : ''}`} data-testid="summary-month">
+              <span className="text-[15px] font-semibold text-ink">{MONTHS.find((x) => x.key === l.month)!.short}</span>
+              <span className={`tabular text-[15px] ${l.known > l.capacity ? 'text-[#5f3a00]' : 'text-ink-2'}`}>{hours(l.known)}</span>
+              <span className="tabular text-[14px] text-ink-3">de {hours(l.capacity)}</span>
+            </button>
+          )
+        })}
       </div>
-      <p {...reveal(0.3, 'mt-1 text-[14px] text-ink-3')}>
-        Horas de trabajo y disponibles por mes
-        <LocalTag />
-      </p>
-
-      {/* What can make the sprint unviable stays in view, before the approval. */}
-      {reserves.length ? (
-        <section {...reveal(0.38, `${amber} mt-5`)} data-testid="reserves">
-          <h2 className="text-[17px] font-medium text-[#5f3a00]">Antes de aprobar, ten en cuenta</h2>
-          {reserves.map((r) => (
-            <div key={r.key} className="border-t border-[rgba(135,82,0,0.18)] py-3 first:border-t-0" data-testid="reserve">
-              <p className="text-[17px] leading-[1.45] text-ink">{r.text}</p>
-              {r.action}
-            </div>
+      {shown ? (
+        <ol className="mt-2" data-testid="summary-month-results">
+          {sp.pillars.map((p, i) => (
+            <li key={p.id} className="flex items-start gap-2.5 py-1.5">
+              <span className="pl-node grid size-6 shrink-0 place-items-center text-[14px] font-semibold text-[#2c3350]" aria-hidden>
+                {i + 1}
+              </span>
+              <span className="text-[17px] leading-[1.4] text-ink">{p.results[shown]}</span>
+            </li>
           ))}
-        </section>
+        </ol>
       ) : (
-        <p {...reveal(0.38, 'mt-5 text-[17px] text-[#094d33]')} data-testid="reserves-none">
-          Sin reservas: horas confirmadas, ningún mes sobrecargado y nada esperando fuera del sprint.
+        <p {...reveal(0.34, 'mt-1 text-[14px] text-ink-3')}>
+          {review.hoursConfirmed ? 'Trabajo estimado y horas por mes.' : 'Trabajo estimado y horas por mes, con el supuesto sin confirmar.'} Toca un mes para ver sus resultados.
         </p>
       )}
 
-      <section {...reveal(0.46, 'mt-4')}>
-        <More id="revision:detalle" title="Ver el detalle por mes" hint="Resultados y acciones de cada mes" testId="summary-detail">
-          {check.months.map((m) => (
-            <div key={m.month} className="mt-4 first:mt-0" data-testid="detail-month">
-              <p className="pl-title text-[19px] text-ink">{label(m.month)}</p>
-              {m.results.map((r) => (
-                <div key={r.pillarId} className="mt-2 border-l-2 border-[var(--line)] pl-3">
-                  <p className="text-[15px] font-medium text-ink-3">{pillar(r.pillarId).name}</p>
-                  <p className="text-[17px] leading-[1.4] text-ink">{r.result}</p>
-                  {r.items.map((it) => (
-                    <p key={it.action.id} className="mt-1 text-[16px] leading-[1.45] text-ink-2">
-                      · {it.task.title}
-                    </p>
-                  ))}
+      {/* One review, by kind of problem. Each category opens on its own; nothing is hidden or dropped. */}
+      <section {...reveal(0.42, 'mt-6')} data-testid="review">
+        <h2 className="pl-title text-[22px] leading-[1.3] text-ink">Qué conviene revisar antes de comenzar</h2>
+        {cats.length ? (
+          <>
+            <p className="mt-1 text-[16px] leading-[1.45] text-ink-3">{cats.length === 1 ? 'Un tema. Ábrelo para ver qué hacer.' : `${cats.length} temas. Ábrelos de uno en uno.`}</p>
+            <div className="mt-2">
+              {cats.map((c) => (
+                <div key={c.id} className="border-b border-[var(--line)] last:border-b-0" data-testid="review-category" data-kind={c.id} data-severity={c.severity}>
+                  <button type="button" aria-expanded={open === c.id} onClick={() => toggle(c.id)} className="hit flex min-h-14 w-full items-center gap-3 py-3 text-left" data-testid="review-category-open">
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[17px] leading-[1.35] font-medium text-ink">{c.title}</span>
+                      <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <SeverityTag s={c.severity} />
+                        <span className="text-[15px] text-ink-3">{count(c)}</span>
+                      </span>
+                    </span>
+                    <svg aria-hidden viewBox="0 0 16 16" className={`size-5 shrink-0 text-ink-3 transition-transform duration-200 ${open === c.id ? 'rotate-90' : ''}`}>
+                      <path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                  {open === c.id && (
+                    <div className="pl-open pb-4" data-testid="review-category-body">
+                      <CategoryBody c={c} review={review} toMonth={toMonth} />
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
-          ))}
-        </More>
-      </section>
-
-      <section {...reveal(0.54, 'mt-5')} data-testid="grok">
-        {!grok ? (
-          <Secondary testId="ask-grok" onClick={() => setGrok(true)}>
-            Pedir la opinión de Grok (opcional)
-          </Secondary>
+          </>
         ) : (
-          <GrokList sp={sp} />
+          <p className="mt-2 text-[17px] leading-[1.45] text-[#094d33]" data-testid="reserves-none">
+            Nada pendiente: disponibilidad confirmada, cada resultado con acciones y nada esperando fuera del sprint.
+          </p>
         )}
       </section>
 
-      {/* The approval is explicit: a clear button, then a confirmation that says what it means. */}
-      <section {...reveal(0.6, 'mt-6')} data-testid="approval">
+      {/* The approval is explicit and says which pending reserves it accepts. */}
+      <section {...reveal(0.5, 'mt-6')} data-testid="approval">
         {!confirming ? (
           <Primary testId="approve-start" onClick={() => setConfirming(true)}>
             Aprobar mi sprint
           </Primary>
         ) : (
           <div className="surface rounded-[22px] px-4 py-4" data-testid="approve-confirm">
-            <p className="text-[17px] leading-[1.5] text-ink">
-              ¿Apruebas este sprint{reserves.length ? ` con ${reserves.length === 1 ? 'una reserva' : `${reserves.length} reservas`}` : ''}? Desde ese momento será tu decisión, no una sugerencia.
-            </p>
+            {cats.length ? (
+              <>
+                <p className="text-[17px] leading-[1.5] text-ink">Al aprobar, aceptas {cats.length === 1 ? 'esta reserva pendiente' : `estas ${cats.length} reservas pendientes`}:</p>
+                <ul className="mt-2" data-testid="approve-reserves">
+                  {cats.map((c) => (
+                    <li key={c.id} className="border-b border-[var(--line)] py-2 last:border-b-0" data-testid="approve-reserve">
+                      <p className="text-[16px] leading-[1.4] text-ink">{c.title}</p>
+                      <div className="mt-1">
+                        <SeverityTag s={c.severity} />
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+                {fix.length > 0 && <p className="mt-2 text-[16px] leading-[1.45] text-[#7f1d1d]" data-testid="approve-warning">Lo marcado «Corrige el plan» sigue sin corregir: tal como está, esas acciones o resultados no llegarán.</p>}
+              </>
+            ) : (
+              <p className="text-[17px] leading-[1.5] text-ink">¿Apruebas este sprint? Desde ese momento será tu decisión, no una sugerencia.</p>
+            )}
             <div className="mt-3 flex flex-col gap-2">
               <Primary
                 testId="approve"
                 onClick={() => {
-                  set((st) => ({ ...st, sprint: approve(sp, `${st.today}T12:00:00-06:00`), notice: 'Sprint aprobado. Desde ahora es tu decisión.' }))
+                  set((st) => ({ ...st, sprint: approve(sp, `${st.today}T12:00:00-06:00`), notice: cats.length ? `Sprint aprobado con ${cats.length === 1 ? 'una reserva aceptada' : `${cats.length} reservas aceptadas`}.` : 'Sprint aprobado. Desde ahora es tu decisión.' }))
                   go('#/')
                 }}
               >
-                Sí, aprobar mi sprint
+                {cats.length ? 'Sí, aprobar con estas reservas' : 'Sí, aprobar mi sprint'}
               </Primary>
               <Secondary testId="approve-cancel" onClick={() => setConfirming(false)}>
                 Todavía no
@@ -804,15 +1150,14 @@ function Revisar() {
           </div>
         )}
       </section>
-    </div>
-  )
-}
 
-function ResLink({ onClick, children }: { onClick: () => void; children: ReactNode }) {
-  return (
-    <button type="button" onClick={onClick} className="hit mt-1 inline-flex min-h-11 items-center text-[16px] font-medium text-electric underline underline-offset-4">
-      {children}
-    </button>
+      {/* Grok stays optional and out of the main flow. */}
+      <section className="mt-6">
+        <More id="revision:grok" title="Opinión de Grok" hint="Opcional y simulada; no cambia el plan" testId="grok">
+          <GrokList sp={sp} />
+        </More>
+      </section>
+    </div>
   )
 }
 
